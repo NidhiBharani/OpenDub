@@ -1,0 +1,19 @@
+# Production-ish single-container deployment. GPU passthrough enabled for local OSS models
+# (requires nvidia-container-toolkit; remove the `deploy` block for CPU-only).
+services:
+  opendub:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./configs:/app/configs
+    environment:
+      - OPENDUB_ROOT=/app
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

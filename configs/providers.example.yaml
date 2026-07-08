@@ -1,0 +1,65 @@
+# OpenDub provider settings — copy to configs/settings.yaml (or configure in the web UI, which
+# writes that file for you). Any value can also come from an environment variable that wins over
+# this file: OPENDUB_<PROVIDER_ID with dots as underscores, uppercased>_<FIELD>
+#   e.g. OPENDUB_TRANSLATION_ANTHROPIC_API_KEY=sk-ant-...
+
+# Default provider per pipeline stage for NEW projects (existing projects keep their own choice,
+# editable per-project in Settings while the project is open).
+defaults:
+  separation: separation.demucs          # or separation.passthrough (no GPU needed)
+  asr: asr.faster_whisper                # or asr.openai_whisper / asr.mock
+  diarization: diarization.single_speaker # or diarization.pyannote
+  translation: translation.openai_compatible
+  tts: tts.xtts                          # or tts.elevenlabs / tts.mock
+  lipsync: lipsync.none                  # or lipsync.wav2lip / lipsync.latentsync
+
+providers:
+  # ---- self-hosted OSS ----
+  asr.faster_whisper:
+    model: large-v3-turbo                # large-v3 | large-v3-turbo | medium | small | base
+    device: auto
+    vad: true
+
+  separation.demucs:
+    model: htdemucs
+    device: auto
+
+  diarization.pyannote:
+    hf_token: ""                         # HuggingFace token with pyannote/speaker-diarization-3.1 access
+
+  translation.openai_compatible:         # Ollama / vLLM / LM Studio / any OpenAI-compatible endpoint
+    base_url: http://localhost:11434/v1
+    model: qwen2.5:14b
+    temperature: 0.3
+
+  tts.xtts:
+    device: auto
+    segment_style: true                  # use each line's own source audio as the emotion reference
+
+  lipsync.wav2lip:
+    repo_dir: ""                         # path to a cloned https://github.com/Rudrabha/Wav2Lip
+    checkpoint: ""                       # path to wav2lip_gan.pth
+    python_bin: python3
+
+  lipsync.latentsync:
+    repo_dir: ""                         # path to a cloned https://github.com/bytedance/LatentSync
+    python_bin: python3
+
+  # ---- cloud APIs ----
+  translation.anthropic:
+    api_key: ""
+    model: claude-sonnet-4-5
+
+  translation.openai:
+    api_key: ""
+    model: gpt-4o-mini
+
+  translation.deepl:
+    api_key: ""
+
+  asr.openai_whisper:
+    api_key: ""
+
+  tts.elevenlabs:
+    api_key: ""
+    model: eleven_multilingual_v2
