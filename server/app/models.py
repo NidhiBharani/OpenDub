@@ -78,9 +78,11 @@ class Speaker(BaseModel):
     reference_path: str | None = None  # speakers/<id>/reference.wav
 
 
+# NOTE: deliberately avoids the UI accent (#e8604c) so speaker colors never collide with the
+# selection highlight.
 SPEAKER_PALETTE = [
-    "#e8604c", "#4c9be8", "#50c878", "#e8b84c",
-    "#b47ce8", "#4ccfe8", "#e87cb0", "#a3e84c",
+    "#4c9be8", "#50c878", "#e8b84c", "#b47ce8",
+    "#4ccfe8", "#e87cb0", "#a3e84c", "#e89a4c",
 ]
 
 

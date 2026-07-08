@@ -13,7 +13,7 @@ from typing import Any
 
 import yaml
 
-ROOT = Path(os.environ.get("OPENDUB_ROOT", Path(__file__).resolve().parents[2].parent))
+ROOT = Path(os.environ.get("OPENDUB_ROOT", Path(__file__).resolve().parents[2]))
 DATA_DIR = Path(os.environ.get("OPENDUB_DATA_DIR", ROOT / "data"))
 PROJECTS_DIR = DATA_DIR / "projects"
 CONFIGS_DIR = Path(os.environ.get("OPENDUB_CONFIGS_DIR", ROOT / "configs"))

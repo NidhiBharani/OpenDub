@@ -328,6 +328,20 @@ function drawRuler(rc: RC, dur: number, step: number): void {
   }
 }
 
+/** Display auto-gain: scale so the 98th-percentile |peak| fills ~90% of the lane (quiet dialog
+ * stays readable, like real editors). Cached per Waveform object. */
+const gainCache = new WeakMap<Waveform, number>()
+function displayGain(wf: Waveform): number {
+  let g = gainCache.get(wf)
+  if (g === undefined) {
+    const abs = wf.peaks.map(Math.abs).sort((a, b) => a - b)
+    const p98 = abs[Math.min(abs.length - 1, Math.floor(abs.length * 0.98))] || 0
+    g = p98 > 0.001 ? Math.min(8, 0.9 / p98) : 1
+    gainCache.set(wf, g)
+  }
+  return g
+}
+
 /** Min/max waveform fill: one column per CSS pixel over the visible time range. */
 function drawWaveLane(rc: RC, top: number, height: number, wf: Waveform | null, baseColor: string): void {
   const { ctx, dpr, w } = rc
@@ -338,6 +352,7 @@ function drawWaveLane(rc: RC, top: number, height: number, wf: Waveform | null, 
   ctx.fillRect(0, Math.round(mid * dpr) / dpr, w, 1 / dpr)
   if (!wf || wf.peaks.length < 2 || wf.sample_rate <= 0) return
 
+  const gain = displayGain(wf)
   const amp = Math.max(2, height / 2 - 4)
   const sr = wf.sample_rate
   const total = wf.peaks.length >> 1
@@ -360,8 +375,8 @@ function drawWaveLane(rc: RC, top: number, height: number, wf: Waveform | null, 
       if (hi > mx) mx = hi
     }
     if (mn > mx) continue
-    const y0 = mid - Math.min(1, Math.max(-1, mx)) * amp
-    const y1 = mid - Math.min(1, Math.max(-1, mn)) * amp
+    const y0 = mid - Math.min(1, Math.max(-1, mx * gain)) * amp
+    const y1 = mid - Math.min(1, Math.max(-1, mn * gain)) * amp
     ctx.fillRect(x, y0, 1, Math.max(minH, y1 - y0))
   }
 }
