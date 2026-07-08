@@ -1,0 +1,147 @@
+"""Provider abstraction — every model integration (OSS-local or cloud-API) implements one of the
+kind-specific ABCs below and registers itself. The server must import this module and every provider
+module WITHOUT any optional ML dependency installed: do heavy imports lazily inside methods, and keep
+`available()` cheap (import probe / key presence check — no model loading, no network unless `deep=True`).
+"""
+from __future__ import annotations
+
+import importlib
+import pkgutil
+from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import Any, Awaitable, Callable, Literal
+
+from pydantic import BaseModel, Field
+
+from ..models import ASRSegment, ProviderKind, TranslationRequest, TTSRequest
+
+# progress(fraction 0..1, message)
+ProgressFn = Callable[[float, str], None]
+
+
+class ConfigField(BaseModel):
+    key: str
+    label: str
+    type: Literal["string", "secret", "number", "boolean", "select"] = "string"
+    default: Any = None
+    options: list[str] = Field(default_factory=list)  # for type=select
+    placeholder: str = ""
+    help: str = ""
+
+
+class ProviderMeta(BaseModel):
+    id: str  # "<kind>.<slug>", e.g. "tts.xtts"
+    kind: ProviderKind
+    name: str  # display name, e.g. "Coqui XTTS-v2"
+    description: str = ""
+    runtime: Literal["local", "cloud"] = "local"
+    fields: list[ConfigField] = Field(default_factory=list)
+
+
+class Provider(ABC):
+    meta: ProviderMeta  # class attribute on every subclass
+
+    def __init__(self, options: dict[str, Any] | None = None):
+        merged: dict[str, Any] = {f.key: f.default for f in self.meta.fields}
+        merged.update({k: v for k, v in (options or {}).items() if v not in (None, "")})
+        self.options = merged
+
+    def opt(self, key: str, default: Any = None) -> Any:
+        v = self.options.get(key)
+        return default if v in (None, "") else v
+
+    def available(self, deep: bool = False) -> tuple[bool, str]:
+        """(is_usable, human_reason). Cheap by default; `deep=True` may hit the network/API."""
+        return True, "ready"
+
+    @staticmethod
+    def _can_import(*modules: str) -> tuple[bool, str]:
+        for m in modules:
+            if importlib.util.find_spec(m) is None:
+                return False, f"python package '{m}' is not installed"
+        return True, "ready"
+
+
+class SeparationProvider(Provider):
+    @abstractmethod
+    async def separate(
+        self, audio: Path, vocals_out: Path, background_out: Path, progress: ProgressFn
+    ) -> None: ...
+
+
+class ASRProvider(Provider):
+    @abstractmethod
+    async def transcribe(
+        self, audio: Path, language: str, progress: ProgressFn
+    ) -> list[ASRSegment]: ...
+
+
+class DiarizationProvider(Provider):
+    @abstractmethod
+    async def diarize(
+        self, audio: Path, segments: list[ASRSegment], progress: ProgressFn
+    ) -> list[str]:
+        """Return one opaque speaker label (e.g. 'S0', 'S1') per input segment, same order."""
+        ...
+
+
+class TranslationProvider(Provider):
+    @abstractmethod
+    async def translate(
+        self,
+        requests: list[TranslationRequest],
+        source_lang: str,
+        target_lang: str,
+        progress: ProgressFn,
+    ) -> list[str]:
+        """Return one translation per request, same order. Respect req.duration: translations are
+        spoken dubs and should fit the slot (roughly ≤ duration * 15 chars/sec for English)."""
+        ...
+
+
+class TTSProvider(Provider):
+    @abstractmethod
+    async def synthesize(self, req: TTSRequest, out_wav: Path, progress: ProgressFn) -> None:
+        """Write mono or stereo wav (any sample rate; pipeline resamples) to out_wav."""
+        ...
+
+
+class LipSyncProvider(Provider):
+    @abstractmethod
+    async def sync(self, video: Path, audio: Path, out_video: Path, progress: ProgressFn) -> None: ...
+
+
+KIND_ABCS: dict[ProviderKind, type[Provider]] = {
+    "separation": SeparationProvider,
+    "asr": ASRProvider,
+    "diarization": DiarizationProvider,
+    "translation": TranslationProvider,
+    "tts": TTSProvider,
+    "lipsync": LipSyncProvider,
+}
+
+REGISTRY: dict[str, type[Provider]] = {}
+
+
+def register(cls: type[Provider]) -> type[Provider]:
+    REGISTRY[cls.meta.id] = cls
+    return cls
+
+
+def providers_for(kind: ProviderKind) -> list[type[Provider]]:
+    return [c for c in REGISTRY.values() if c.meta.kind == kind]
+
+
+def get_provider_class(provider_id: str) -> type[Provider]:
+    if provider_id not in REGISTRY:
+        raise KeyError(f"unknown provider '{provider_id}'")
+    return REGISTRY[provider_id]
+
+
+def load_all() -> None:
+    """Import every module in the kind sub-packages so @register side effects run."""
+    from . import asr, diarization, lipsync, separation, translation, tts  # noqa: F401
+
+    for pkg in (asr, diarization, lipsync, separation, translation, tts):
+        for mod in pkgutil.iter_modules(pkg.__path__):
+            importlib.import_module(f"{pkg.__name__}.{mod.name}")

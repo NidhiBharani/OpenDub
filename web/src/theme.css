@@ -1,0 +1,82 @@
+/* OpenDub design tokens — dark-first, minimal, video-editor feel. */
+:root {
+  --bg: #0d0f13;
+  --bg-raised: #14171d;
+  --bg-overlay: #1a1e26;
+  --border: #232833;
+  --border-strong: #313848;
+  --text: #e8eaf0;
+  --text-dim: #8b93a7;
+  --text-faint: #5a6175;
+  --accent: #e8604c;
+  --accent-hover: #f0715e;
+  --accent-dim: rgb(232 96 76 / 0.15);
+  --ok: #50c878;
+  --warn: #e8b84c;
+  --err: #e8604c;
+  --running: #4c9be8;
+
+  --font: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
+
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  --ease: 150ms ease-out;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+button, input, select, textarea {
+  font: inherit;
+  color: inherit;
+}
+
+::selection { background: var(--accent-dim); }
+
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-corner { background: transparent; }
+
+.timecode {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+/* focus rings — keyboard only */
+:focus { outline: none; }
+:focus-visible {
+  outline: 1.5px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@keyframes od-spin { to { transform: rotate(360deg); } }
+@keyframes od-pulse { 50% { opacity: 0.45; } }
+@keyframes od-slide-up {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
