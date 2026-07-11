@@ -5,6 +5,13 @@ run concurrently), supports cancellation of queued and running jobs, and keeps a
 finished jobs. The bus fans job/project updates out to per-project SSE subscribers through bounded
 queues (drop-oldest) so a stalled client can never block a job.
 
+Cancellation semantics: cancelling a running job cancels its runner task; awaited subprocesses
+(ffmpeg, demucs, wav2lip, latentsync) kill their child process on CancelledError, but work inside
+``asyncio.to_thread`` (whisper/xtts/pyannote inference) cannot be interrupted — the thread runs to
+completion in the background. Such abandoned work never persists anything (only the cancelled
+runner saved manifests, and provider temp filenames are unique per call), and its late progress
+callbacks are dropped by ``publish_job`` once the job is finished.
+
 This module is one of the two allowed global-mutable-state singletons (see ARCHITECTURE.md).
 """
 from __future__ import annotations
@@ -64,8 +71,13 @@ class EventBus:
     def publish_job(self, job: Job, *, throttle: bool = False) -> None:
         """Emit a ``job`` event. With ``throttle=True`` rate-limit to ~4/sec per job
         (used by high-frequency progress callbacks; state transitions publish unthrottled)."""
-        if throttle and not self._should_publish(job.id):
-            return
+        if throttle:
+            if job.status in _FINISHED_STATUSES:
+                # Orphaned progress callback from abandoned (uncancellable) work: don't emit
+                # events for a finished job or resurrect its throttling entry after forget().
+                return
+            if not self._should_publish(job.id):
+                return
         self._dispatch(job.project_id, "job", job.model_dump_json())
 
     def publish_project(self, project: Project) -> None:
@@ -118,6 +130,7 @@ class JobEngine:
         self.bus = EventBus()
         self._jobs: dict[str, Job] = {}  # insertion order == creation order
         self._runners: dict[str, Runner] = {}
+        self._cleanups: dict[str, Callable[[Job], None]] = {}  # run if the job never starts
         self._queues: dict[str, deque[str]] = {}  # project_id -> pending job ids
         self._workers: dict[str, asyncio.Task] = {}  # project_id -> drain task
         self._running: dict[str, asyncio.Task] = {}  # job_id -> runner task
@@ -146,9 +159,12 @@ class JobEngine:
             await asyncio.gather(*leftovers, return_exceptions=True)
         for job in list(self._jobs.values()):
             if job.status in ("queued", "running"):
+                never_ran = job.status == "queued"
                 job.status = "cancelled"
                 job.message = "server shutting down"
                 job.finished_at = now()
+                if never_ran:
+                    self._run_cleanup(job)
                 self.bus.publish_job(job)
                 self.bus.forget(job.id)
         self._queues.clear()
@@ -157,8 +173,12 @@ class JobEngine:
 
     # -- public API --------------------------------------------------------------------------
 
-    def submit(self, job: Job, runner: Runner) -> Job:
-        """Queue a job. Runners execute sequentially per project; projects run concurrently."""
+    def submit(
+        self, job: Job, runner: Runner, *, cleanup: Callable[[Job], None] | None = None
+    ) -> Job:
+        """Queue a job. Runners execute sequentially per project; projects run concurrently.
+        ``cleanup`` (optional) runs if the job dies without its runner ever starting —
+        cancelled while still queued, or discarded at shutdown."""
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError as exc:  # pragma: no cover - programming error
@@ -171,6 +191,8 @@ class JobEngine:
         job.status = "queued"
         self._jobs[job.id] = job
         self._runners[job.id] = runner
+        if cleanup is not None:
+            self._cleanups[job.id] = cleanup
         self._queues.setdefault(job.project_id, deque()).append(job.id)
         self.bus.publish_job(job)
         worker = self._workers.get(job.project_id)
@@ -198,6 +220,7 @@ class JobEngine:
             job.status = "cancelled"
             job.message = "cancelled"
             job.finished_at = now()
+            self._run_cleanup(job)  # runner never ran: restore whatever submit persisted
             self.bus.publish_job(job)
             self._finalize(job)
         elif job.status == "running":
@@ -235,6 +258,7 @@ class JobEngine:
 
     async def _run_job(self, job: Job) -> None:
         runner = self._runners.get(job.id)
+        self._cleanups.pop(job.id, None)  # runner is starting: it owns cleanup from here on
         job.status = "running"
         job.started_at = now()
         self.bus.publish_job(job)
@@ -280,7 +304,18 @@ class JobEngine:
         self.bus.publish_job(job)
         self._finalize(job)
 
+    def _run_cleanup(self, job: Job) -> None:
+        """Best-effort cleanup for a job whose runner never started."""
+        cleanup = self._cleanups.pop(job.id, None)
+        if cleanup is None:
+            return
+        try:
+            cleanup(job)
+        except Exception:  # pragma: no cover - cleanup must never break engine state
+            pass
+
     def _finalize(self, job: Job) -> None:
+        self._cleanups.pop(job.id, None)
         self.bus.forget(job.id)
         self._prune()
 
@@ -290,6 +325,7 @@ class JobEngine:
         for jid in finished[: max(0, len(finished) - _FINISHED_KEEP)]:
             self._jobs.pop(jid, None)
             self._runners.pop(jid, None)
+            self._cleanups.pop(jid, None)
             self.bus.forget(jid)
 
 

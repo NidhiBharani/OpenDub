@@ -1,6 +1,6 @@
 // Global keyboard shortcuts for the Editor view.
 import { useEffect } from 'react'
-import { useStore } from '../state/store'
+import { stageStatus, useStore } from '../state/store'
 
 const ZOOM_FACTOR = 1.3
 
@@ -64,7 +64,8 @@ export function useEditorKeyboard(): void {
           break
         }
         case '2': {
-          state.setAudioTrack('dub')
+          // mirror the header button: the dub track only exists once mix is done
+          if (stageStatus(state.project, 'mix') === 'done') state.setAudioTrack('dub')
           break
         }
         case 'Escape': {

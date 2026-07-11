@@ -40,8 +40,11 @@ def load_settings() -> dict[str, Any]:
 
 def save_settings(settings: dict[str, Any]) -> None:
     _ensure_dirs()
-    with _lock, SETTINGS_PATH.open("w") as f:
-        yaml.safe_dump(settings, f, sort_keys=True, allow_unicode=True)
+    with _lock:
+        SETTINGS_PATH.touch(exist_ok=True)
+        SETTINGS_PATH.chmod(0o600)  # may hold API keys
+        with SETTINGS_PATH.open("w") as f:
+            yaml.safe_dump(settings, f, sort_keys=True, allow_unicode=True)
 
 
 def _env_key(provider_id: str, field_key: str) -> str:

@@ -52,12 +52,25 @@ def _load_segment_or_404(project: Project, sid: str) -> Segment:
 
 @router.patch("/projects/{pid}/segments/{sid}")
 async def update_segment(pid: str, sid: str, body: SegmentPatchBody) -> Segment:
+    async with store.lock(pid):
+        segment, project = _update_segment_locked(pid, sid, body)
+    engine.bus.publish_project(project)
+    return segment
+
+
+def _update_segment_locked(pid: str, sid: str, body: SegmentPatchBody) -> tuple[Segment, Project]:
     project = _load_project_or_404(pid)
     segment = _load_segment_or_404(project, sid)
 
     data = body.model_dump(exclude_unset=True)
 
     # --- validation (before any mutation) ---------------------------------
+    # Explicit JSON nulls are only meaningful for active_take_id; on any other field they would
+    # write None into a non-nullable str/float field and brick the manifest on the next load.
+    for field in ("source_text", "translated_text", "speaker_id", "start", "end", "emotion", "notes"):
+        if field in data and data[field] is None:
+            raise HTTPException(400, f"'{field}' cannot be null")
+
     if "speaker_id" in data and data["speaker_id"] and project.speaker(data["speaker_id"]) is None:
         raise HTTPException(400, f"unknown speaker '{data['speaker_id']}'")
 
@@ -115,8 +128,7 @@ async def update_segment(pid: str, sid: str, body: SegmentPatchBody) -> Segment:
         segment.notes = data["notes"]
 
     store.save(project)
-    engine.bus.publish_project(project)
-    return segment
+    return segment, project
 
 
 @router.post("/projects/{pid}/segments/{sid}/regenerate")
@@ -137,16 +149,17 @@ async def regenerate_segment(pid: str, sid: str, body: RegenerateBody) -> Job:
 
 @router.patch("/projects/{pid}/speakers/{spid}")
 async def update_speaker(pid: str, spid: str, body: SpeakerPatchBody) -> Speaker:
-    project = _load_project_or_404(pid)
-    speaker = project.speaker(spid)
-    if speaker is None:
-        raise HTTPException(404, f"speaker '{spid}' not found in project '{pid}'")
+    async with store.lock(pid):
+        project = _load_project_or_404(pid)
+        speaker = project.speaker(spid)
+        if speaker is None:
+            raise HTTPException(404, f"speaker '{spid}' not found in project '{pid}'")
 
-    if body.name is not None:
-        speaker.name = body.name
-    if body.color is not None:
-        speaker.color = body.color
+        if body.name is not None:
+            speaker.name = body.name
+        if body.color is not None:
+            speaker.color = body.color
 
-    store.save(project)
+        store.save(project)
     engine.bus.publish_project(project)
     return speaker

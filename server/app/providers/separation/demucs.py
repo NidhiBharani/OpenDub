@@ -36,26 +36,32 @@ async def _run_streaming(
     buf = b""
     tail: list[str] = []
     last_frac = 0.0
-    while True:
-        chunk = await proc.stdout.read(4096)
-        if not chunk:
-            break
-        buf += chunk
-        while b"\n" in buf or b"\r" in buf:
-            n_idx = buf.find(b"\n")
-            r_idx = buf.find(b"\r")
-            idx = min(i for i in (n_idx, r_idx) if i != -1)
-            raw, buf = buf[:idx], buf[idx + 1 :]
-            line = raw.decode("utf-8", errors="replace").strip()
-            if not line:
-                continue
-            tail.append(line)
-            if len(tail) > tail_len:
-                tail.pop(0)
-            m = _PERCENT_RE.search(line)
-            if m:
-                last_frac = max(0.0, min(0.99, int(m.group(1)) / 100.0))
-            progress(last_frac, line)
+    try:
+        while True:
+            chunk = await proc.stdout.read(4096)
+            if not chunk:
+                break
+            buf += chunk
+            while b"\n" in buf or b"\r" in buf:
+                n_idx = buf.find(b"\n")
+                r_idx = buf.find(b"\r")
+                idx = min(i for i in (n_idx, r_idx) if i != -1)
+                raw, buf = buf[:idx], buf[idx + 1 :]
+                line = raw.decode("utf-8", errors="replace").strip()
+                if not line:
+                    continue
+                tail.append(line)
+                if len(tail) > tail_len:
+                    tail.pop(0)
+                m = _PERCENT_RE.search(line)
+                if m:
+                    last_frac = max(0.0, min(0.99, int(m.group(1)) / 100.0))
+                progress(last_frac, line)
+    except asyncio.CancelledError:
+        # Job cancellation: kill the child so it stops burning GPU/CPU and writing outputs.
+        if proc.returncode is None:
+            proc.kill()
+        raise
     remainder = buf.decode("utf-8", errors="replace").strip()
     if remainder:
         tail.append(remainder)

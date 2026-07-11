@@ -89,7 +89,8 @@ class OpenAICompatibleTranslationProvider(TranslationProvider):
     ) -> list[str]:
         base_url = str(self.opt("base_url", "http://localhost:11434/v1")).rstrip("/")
         model = self.opt("model", "qwen2.5:14b")
-        temperature = float(self.opt("temperature", 0.3) or 0.3)
+        # opt_float (not `or 0.3`): an explicitly configured temperature of 0 must be honored.
+        temperature = self.opt_float("temperature", 0.3)
         headers = _auth_headers(self.opt("api_key"))
 
         async with httpx.AsyncClient() as client:

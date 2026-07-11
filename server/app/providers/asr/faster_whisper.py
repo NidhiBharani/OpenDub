@@ -11,21 +11,6 @@ from ...models import ASRSegment
 from ..base import ASRProvider, ConfigField, ProgressFn, ProviderMeta, register
 
 
-def _as_bool(value: object, default: bool = True) -> bool:
-    if isinstance(value, bool):
-        return value
-    if value is None:
-        return default
-    if isinstance(value, (int, float)):
-        return bool(value)
-    text = str(value).strip().lower()
-    if text in ("1", "true", "yes", "on"):
-        return True
-    if text in ("0", "false", "no", "off"):
-        return False
-    return default
-
-
 @register
 class FasterWhisperASR(ASRProvider):
     meta = ProviderMeta(
@@ -81,7 +66,7 @@ class FasterWhisperASR(ASRProvider):
         model_name = self.opt("model", "large-v3-turbo")
         device = self.opt("device", "auto")
         compute_type = self.opt("compute_type", "auto")
-        vad = _as_bool(self.opt("vad", True))
+        vad = self.opt_bool("vad", True)
         lang = None if language in ("", "auto") else language
 
         duration = await wav_duration(audio)

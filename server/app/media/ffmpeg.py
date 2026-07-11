@@ -8,6 +8,7 @@ directly. Every async helper here runs the subprocess via `asyncio.create_subpro
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import shutil
 import uuid
@@ -41,7 +42,13 @@ async def _run(binary: str, *args: str) -> bytes:
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await proc.communicate()
+    try:
+        stdout, stderr = await proc.communicate()
+    except asyncio.CancelledError:
+        # Job cancellation: don't leave an orphaned ffmpeg/ffprobe writing artifacts.
+        with contextlib.suppress(ProcessLookupError):
+            proc.kill()
+        raise
     if proc.returncode != 0:
         excerpt = stderr.decode("utf-8", "replace").strip()[-4000:]
         raise RuntimeError(f"{binary} failed (exit {proc.returncode}): {excerpt}")
@@ -144,7 +151,17 @@ async def make_playback(video: Path, out_mp4: Path) -> None:
     data = json.loads(out or b"{}")
     fmt = data.get("format", {}) or {}
     streams = data.get("streams", []) or []
-    vstream = next((s for s in streams if s.get("codec_type") == "video"), None)
+    # Ignore attached_pic "video" streams (embedded cover art): they are not playable video and
+    # copying their disposition into an mp4 makes ffmpeg fail outright.
+    vstream = next(
+        (
+            s
+            for s in streams
+            if s.get("codec_type") == "video"
+            and not (s.get("disposition") or {}).get("attached_pic")
+        ),
+        None,
+    )
     astream = next((s for s in streams if s.get("codec_type") == "audio"), None)
 
     if vstream is None:
@@ -159,22 +176,37 @@ async def make_playback(video: Path, out_mp4: Path) -> None:
     format_tags = set((fmt.get("format_name") or "").split(","))
     is_h264 = vstream.get("codec_name") == "h264"
     mp4_friendly = bool(format_tags & _MP4_FRIENDLY_FORMAT_TAGS)
+    # Browsers only decode 8-bit 4:2:0 H.264 — Hi10P/yuv444p (common anime encodes) must be
+    # re-encoded or the playback.mp4 silently shows nothing in the editor's <video>.
+    browser_safe = vstream.get("pix_fmt") == "yuv420p"
     height = int(vstream.get("height") or 0)
 
     args = ["-i", str(video)]
-    if is_h264 and mp4_friendly:
+    if is_h264 and mp4_friendly and browser_safe:
         args += ["-c:v", "copy"]
     else:
         args += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p"]
         if height > 1080:
-            args += ["-vf", "scale=-2:1080"]
+            args += ["-vf", "scale=-2:1080"]  # already mod-2 safe
+        else:
+            # libx264 + yuv420p rejects odd dimensions; force even width/height.
+            args += ["-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2"]
     args += ["-c:a", "aac", "-b:a", "192k"] if astream is not None else ["-an"]
     args += ["-movflags", "+faststart", str(out_mp4)]
     await _ffmpeg(*args)
 
 
-async def slice_audio(wav: Path, out_wav: Path, start: float, end: float, pad: float = 0.0) -> None:
-    """Extract [start-pad, end+pad] (clamped to >=0) from `wav`, standardized to 48k s16 stereo."""
+async def slice_audio(
+    wav: Path,
+    out_wav: Path,
+    start: float,
+    end: float,
+    pad: float = 0.0,
+    sample_rate: int = _STD_SAMPLE_RATE,
+    channels: int = _STD_CHANNELS,
+) -> None:
+    """Extract [start-pad, end+pad] (clamped to >=0) from `wav`, standardized to 48k s16 stereo
+    by default (callers may override the rate/channels, e.g. for upload-size-limited APIs)."""
     out_wav.parent.mkdir(parents=True, exist_ok=True)
     s = max(0.0, start - pad)
     dur = max(0.01, (end + pad) - s)
@@ -182,8 +214,8 @@ async def slice_audio(wav: Path, out_wav: Path, start: float, end: float, pad: f
         "-ss", f"{s:.3f}",
         "-i", str(wav),
         "-t", f"{dur:.3f}",
-        "-ar", str(_STD_SAMPLE_RATE),
-        "-ac", str(_STD_CHANNELS),
+        "-ar", str(sample_rate),
+        "-ac", str(channels),
         "-c:a", "pcm_s16le",
         str(out_wav),
     )
@@ -283,12 +315,15 @@ async def atempo(wav: Path, out_wav: Path, factor: float) -> None:
 
 
 async def mux(video: Path, audio: Path, out_path: Path) -> None:
-    """Replace the video's audio track with `audio`; -shortest."""
+    """Replace the video's audio track with `audio`; -shortest.
+
+    The video map is optional (``0:v:0?``) so audio-only sources — which make_playback
+    deliberately supports — render to an audio-only mp4 instead of crashing the render stage."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     await _ffmpeg(
         "-i", str(video),
         "-i", str(audio),
-        "-map", "0:v:0",
+        "-map", "0:v:0?",
         "-map", "1:a:0",
         "-c:v", "copy",
         "-c:a", "aac",

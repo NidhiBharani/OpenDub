@@ -81,6 +81,12 @@ async def generate_peaks(audio: Path, out_json: Path, pairs_per_second: int = 50
                     bucket_min = 32767
                     bucket_max = -32768
                     count_in_bucket = 0
+    except asyncio.CancelledError:
+        # Job cancellation: kill the decoder instead of leaving it blocked on a full pipe.
+        # (The finally block then drains stderr and reaps the killed process quickly.)
+        if proc.returncode is None:
+            proc.kill()
+        raise
     finally:
         stderr_data = await stderr_task
         returncode = await proc.wait()

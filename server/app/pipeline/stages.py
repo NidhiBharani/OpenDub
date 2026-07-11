@@ -128,9 +128,10 @@ def _sub(progress: ProgressFn, lo: float, hi: float) -> ProgressFn:
 
 
 async def _checkpoint(project: Project) -> None:
-    """Persist + broadcast the project mid-stage (e.g. after each synthesized segment)."""
+    """Persist + broadcast the project mid-stage (e.g. after each synthesized segment).
+    Uses store.save_merged so user edits made on disk while the stage ran are preserved."""
     async with store.lock(project.id):
-        await asyncio.to_thread(store.save, project)
+        await asyncio.to_thread(store.save_merged, project)
     engine.bus.publish_project(project)
 
 

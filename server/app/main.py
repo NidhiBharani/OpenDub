@@ -25,9 +25,11 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     app = FastAPI(title="OpenDub", version=VERSION, lifespan=lifespan)
+    # The UI is served same-origin in production; CORS exists only for the Vite dev server.
+    # Keep it scoped so arbitrary websites can't read a locally-hosted instance's data.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origin_regex=r"http://(localhost|127\.0\.0\.1)(:\d+)?",
         allow_methods=["*"],
         allow_headers=["*"],
     )

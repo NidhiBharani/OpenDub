@@ -83,6 +83,26 @@ function commitOnCmdEnter(e: KeyboardEvent<HTMLTextAreaElement>) {
   }
 }
 
+/** Local text draft that follows its server value: reset when the segment changes,
+ *  and re-seeded when the server value changes externally (e.g. after Re-translate) —
+ *  but never while the user has unsaved local edits (draft !== last-seen base). */
+function useSyncedDraft(segmentId: string, serverValue: string): [string, (v: string) => void] {
+  const [state, setState] = useState({ segmentId, base: serverValue, draft: serverValue })
+  if (state.segmentId !== segmentId) {
+    // segment switched: always reset
+    setState({ segmentId, base: serverValue, draft: serverValue })
+  } else if (state.base !== serverValue) {
+    // server value changed under us: adopt it unless the user has typed something
+    setState({
+      segmentId,
+      base: serverValue,
+      draft: state.draft === state.base ? serverValue : state.draft,
+    })
+  }
+  const setDraft = (draft: string) => setState((s) => ({ ...s, draft }))
+  return [state.draft, setDraft]
+}
+
 function Section({ label, extra, children }: { label: string; extra?: ReactNode; children: ReactNode }) {
   return (
     <div>
@@ -171,8 +191,7 @@ function HeaderSection({ segment, project, commit }: {
 // ---- source text ------------------------------------------------------------
 
 function SourceTextSection({ segment, commit }: { segment: Segment; commit: (p: SegmentPatch) => void }) {
-  const [draft, setDraft] = useState(segment.source_text)
-  useEffect(() => { setDraft(segment.source_text) }, [segment.id])
+  const [draft, setDraft] = useSyncedDraft(segment.id, segment.source_text)
 
   const save = () => {
     if (draft !== segment.source_text) commit({ source_text: draft })
@@ -195,8 +214,7 @@ function SourceTextSection({ segment, commit }: { segment: Segment; commit: (p: 
 // ---- translation (with chars-per-second budget) ----------------------------
 
 function TranslationSection({ segment, commit }: { segment: Segment; commit: (p: SegmentPatch) => void }) {
-  const [draft, setDraft] = useState(segment.translated_text)
-  useEffect(() => { setDraft(segment.translated_text) }, [segment.id])
+  const [draft, setDraft] = useSyncedDraft(segment.id, segment.translated_text)
 
   const save = () => {
     if (draft !== segment.translated_text) commit({ translated_text: draft })
@@ -235,8 +253,7 @@ function TranslationSection({ segment, commit }: { segment: Segment; commit: (p:
 // ---- emotion hint ------------------------------------------------------------
 
 function EmotionSection({ segment, commit }: { segment: Segment; commit: (p: SegmentPatch) => void }) {
-  const [draft, setDraft] = useState(segment.emotion)
-  useEffect(() => { setDraft(segment.emotion) }, [segment.id])
+  const [draft, setDraft] = useSyncedDraft(segment.id, segment.emotion)
 
   const save = () => {
     if (draft !== segment.emotion) commit({ emotion: draft })

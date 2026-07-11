@@ -58,7 +58,16 @@ function buildPayload(fields: ConfigField[], draft: Draft): Record<string, unkno
       continue
     }
     const str = typeof value === 'string' ? value : String(value ?? '')
-    if (str === '') continue // omit — let the server clear/leave this field
+    if (field.type === 'secret') {
+      // A blank secret means "leave unchanged" (the saved key is never echoed back
+      // into the form), so it must be omitted rather than sent as a clear.
+      if (str !== '') payload[field.key] = str
+      continue
+    }
+    if (str === '') {
+      payload[field.key] = '' // explicit empty — the server deletes the saved key
+      continue
+    }
     if (field.type === 'number') {
       const n = parseFloat(str)
       if (!Number.isNaN(n)) payload[field.key] = n

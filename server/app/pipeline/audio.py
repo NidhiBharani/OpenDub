@@ -7,6 +7,7 @@ graphs for shows with hundreds of segments.
 """
 from __future__ import annotations
 
+import asyncio
 import wave
 from pathlib import Path
 
@@ -62,7 +63,16 @@ async def assemble_track(
     buffer of `total_duration` seconds is preallocated and each clip's frames are copied in at its
     start offset, overwriting whatever was there — later entries in `placements` win on overlap.
     Clips extending past `total_duration` are clamped (truncated).
+
+    The assembly (large allocation, per-clip reads, full-track disk write) is blocking CPU/IO
+    work, so it runs in a worker thread rather than on the event loop.
     """
+    await asyncio.to_thread(_assemble_track_sync, placements, total_duration, out_wav)
+
+
+def _assemble_track_sync(
+    placements: list[tuple[float, Path]], total_duration: float, out_wav: Path
+) -> None:
     out_wav.parent.mkdir(parents=True, exist_ok=True)
     total_frames = max(1, round(max(0.0, total_duration) * SAMPLE_RATE))
     buf = bytearray(total_frames * _FRAME_SIZE)  # all-zero == silence for signed PCM
@@ -98,7 +108,9 @@ async def assemble_track(
         wf.setnchannels(CHANNELS)
         wf.setsampwidth(SAMPLE_WIDTH)
         wf.setframerate(SAMPLE_RATE)
-        wf.writeframes(bytes(buf))
+        # Write the bytearray directly — bytes(buf) would materialize a second full-track copy
+        # and double peak memory (~GBs on feature-length sources).
+        wf.writeframes(buf)
 
 
 async def mix_tracks(

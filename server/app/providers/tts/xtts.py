@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import os
 import threading
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -98,7 +99,9 @@ class XTTSProvider(TTSProvider):
         text = req.text.strip() or " "
         language = (req.language or "en")[:2].lower()
         speed = float(self.opt("speed", 1.0) or 1.0)
-        tmp_out = out_wav.with_name(f"{out_wav.stem}.xtts_raw.wav")
+        # Unique per call: an abandoned (uncancellable) synthesis thread from a cancelled job
+        # must never share a tmp path with a later job's write.
+        tmp_out = out_wav.with_name(f"{out_wav.stem}.xtts_raw.{uuid.uuid4().hex[:8]}.wav")
         await asyncio.to_thread(_run_tts, model, text, reference, language, speed, tmp_out)
 
         progress(0.9, "standardizing audio")
@@ -107,7 +110,7 @@ class XTTSProvider(TTSProvider):
         progress(1.0, "done")
 
     async def _pick_reference(self, req: TTSRequest) -> str:
-        use_segment = bool(self.opt("segment_style", True))
+        use_segment = self.opt_bool("segment_style", True)
         if use_segment and req.segment_reference:
             try:
                 duration = await ffmpeg.wav_duration(Path(req.segment_reference))

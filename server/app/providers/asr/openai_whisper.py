@@ -12,6 +12,10 @@ from ..base import ASRProvider, ConfigField, ProgressFn, ProviderMeta, register
 
 _MAX_BYTES = 24 * 1024 * 1024  # OpenAI's hard limit is 25 MB; split before we hit it
 _CHUNK_SECONDS = 600.0  # 10 minutes
+# Chunks are re-encoded to Whisper's native 16 kHz mono s16 (32 kB/s): a 600 s chunk is ~19.2 MB,
+# safely under the limit — at the pipeline's 48 kHz stereo it would be ~115 MB and always rejected.
+_CHUNK_SAMPLE_RATE = 16000
+_CHUNK_CHANNELS = 1
 
 
 @register
@@ -72,7 +76,14 @@ class OpenAIWhisperASR(ASRProvider):
                 if chunk_end <= chunk_start:
                     continue
                 chunk_path = tmp_dir / f"chunk_{i:03d}.wav"
-                await slice_audio(audio, chunk_path, chunk_start, chunk_end)
+                await slice_audio(
+                    audio,
+                    chunk_path,
+                    chunk_start,
+                    chunk_end,
+                    sample_rate=_CHUNK_SAMPLE_RATE,
+                    channels=_CHUNK_CHANNELS,
+                )
                 progress(i / n_chunks, f"transcribing chunk {i + 1}/{n_chunks}")
                 chunk_segments = await self._call(base_url, api_key, model, chunk_path, lang)
                 for seg in chunk_segments:

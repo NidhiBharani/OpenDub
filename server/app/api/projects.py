@@ -126,29 +126,39 @@ async def delete_project(pid: str) -> dict[str, bool]:
 
 @router.patch("/projects/{pid}")
 async def update_project(pid: str, body: ProjectPatchBody) -> Project:
-    project = _load_or_404(pid)
+    async with store.lock(pid):
+        project = _load_or_404(pid)
 
-    if body.name is not None:
-        project.name = body.name
-    if body.source_lang is not None:
-        project.source_lang = body.source_lang
-    if body.target_lang is not None:
-        project.target_lang = body.target_lang
+        if body.name is not None:
+            project.name = body.name
+        if body.source_lang is not None:
+            project.source_lang = body.source_lang
+        if body.target_lang is not None:
+            project.target_lang = body.target_lang
 
-    if body.pipeline:
-        for kind, choice in body.pipeline.items():
-            current = project.pipeline.choice(kind)
-            if current.provider_id == choice.provider_id and current.options == choice.options:
-                continue
-            setattr(project.pipeline, kind, choice)
-            stage_key = KIND_STAGE[kind]
-            stage = project.stage(stage_key)
-            if stage.status == "done":
-                stage.status = "dirty"
-                stage.updated_at = now()
-            project.mark_downstream_dirty(stage_key)
+        if body.pipeline:
+            for kind, choice in body.pipeline.items():
+                current = project.pipeline.choice(kind)
+                if current.provider_id == choice.provider_id and current.options == choice.options:
+                    continue
+                setattr(project.pipeline, kind, choice)
+                stage_key = KIND_STAGE[kind]
+                stage = project.stage(stage_key)
+                if stage.status == "done":
+                    stage.status = "dirty"
+                    stage.updated_at = now()
+                project.mark_downstream_dirty(stage_key)
+                # translate/synthesize only process segments carrying their dirty flag, so a
+                # provider change must also flag every segment — otherwise the re-run is a no-op
+                # that flips the stage back to "done" without re-processing anything.
+                if kind == "translation":
+                    for seg in project.segments:
+                        seg.translate_dirty = True
+                elif kind == "tts":
+                    for seg in project.segments:
+                        seg.synth_dirty = True
 
-    store.save(project)
+        store.save(project)
     engine.bus.publish_project(project)
     return project
 

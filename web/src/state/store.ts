@@ -151,15 +151,21 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   updateSegment: async (sid, patch) => {
-    const p = get().project
-    if (!p) return
-    const seg = await api.updateSegment(p.id, sid, patch)
-    set({
-      project: {
-        ...p,
-        segments: p.segments.map((s) => (s.id === sid ? seg : s)),
-      },
-    })
+    const pid = get().project?.id
+    if (!pid) return
+    const seg = await api.updateSegment(pid, sid, patch)
+    // Merge into the *current* project (it may have been replaced by an SSE
+    // event while the PATCH was in flight) — never a pre-request snapshot.
+    set((s) =>
+      s.project && s.project.id === pid
+        ? {
+            project: {
+              ...s.project,
+              segments: s.project.segments.map((x) => (x.id === sid ? seg : x)),
+            },
+          }
+        : {},
+    )
   },
 
   selectSegment: (sid, doSeek = false) => {

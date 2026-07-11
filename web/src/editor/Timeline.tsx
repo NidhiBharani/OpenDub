@@ -40,6 +40,9 @@ export function Timeline() {
   /** Trim result kept as a draw override until the server confirms (avoids a snap-back flash). */
   const pendingRef = useRef<DragOverride | null>(null)
   const hoverRef = useRef<{ x: number; y: number } | null>(null)
+  /** True after a wheel pan/zoom during playback: pauses playhead auto-follow
+   *  until the playhead scrolls back into view, the user seeks, or playback stops. */
+  const userPannedRef = useRef(false)
   const suppressClickRef = useRef(false)
   /** Bumped whenever a ref that affects drawing changes; part of the redraw snapshot. */
   const versionRef = useRef(0)
@@ -257,24 +260,34 @@ export function Timeline() {
         const d = Math.abs(dx) > Math.abs(dy) ? dx : dy
         st.setScrollX(st.scrollX + d / st.zoom)
       }
+      // a deliberate viewport change during playback pauses auto-follow
+      if (st.playing) userPannedRef.current = true
     }
     canvas.addEventListener('wheel', onWheel, { passive: false })
 
     const ctx = canvas.getContext('2d', { alpha: false })
     let raf = 0
+    let lastSeekNonce = useStore.getState().seekRequest?.nonce ?? 0
     const frame = (): void => {
       raf = requestAnimationFrame(frame)
       const { w, h } = sizeRef.current
       if (w < 2 || h < 2 || !ctx || !themeRef.current) return
       const dpr = window.devicePixelRatio || 1
 
-      // auto-follow during playback (paused while the user is dragging)
+      // auto-follow during playback (paused while the user is dragging or has wheel-panned away)
       const pre = useStore.getState()
+      if (pre.seekRequest && pre.seekRequest.nonce !== lastSeekNonce) {
+        lastSeekNonce = pre.seekRequest.nonce
+        userPannedRef.current = false // an explicit seek re-enables following
+      }
       if (pre.playing && pre.project?.media && !dragRef.current) {
         const px = (pre.playhead - pre.scrollX) * pre.zoom
-        if (px > 0.82 * w || px < 0) {
+        if (px >= 0 && px <= 0.82 * w) userPannedRef.current = false // playhead back in view
+        if ((px > 0.82 * w || px < 0) && !userPannedRef.current) {
           pre.setScrollX(pre.playhead - (0.15 * w) / pre.zoom)
         }
+      } else if (!pre.playing) {
+        userPannedRef.current = false
       }
       const st = useStore.getState() // re-read: auto-follow may have moved scrollX
 

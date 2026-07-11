@@ -11,7 +11,8 @@ mix/lipsync/render dirty (it does NOT auto-run mix).
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
+import contextlib
+from collections.abc import Callable, Sequence
 
 from .. import store
 from ..jobs import Runner, engine
@@ -34,7 +35,7 @@ def start_pipeline_job(project_id: str, stages: list[StageKey] | None = None) ->
         raise KeyError(f"unknown project '{project_id}'")
 
     if stages is None:
-        selected = [k for k in STAGE_ORDER if project.stage(k).status != "done"]
+        selected = [k for k in STAGE_ORDER if _stage_needs_run(project, k)]
         if not selected:
             raise ValueError("all stages are already done; pass explicit stages to re-run")
     else:
@@ -59,7 +60,11 @@ def start_pipeline_job(project_id: str, stages: list[StageKey] | None = None) ->
     store.save(project)
     engine.bus.publish_project(project)
 
-    engine.submit(job, _pipeline_runner(project_id, prior))
+    engine.submit(
+        job,
+        _pipeline_runner(project_id, prior),
+        cleanup=_abandoned_cleanup(project_id, selected, prior),
+    )
     return job
 
 
@@ -92,65 +97,83 @@ def start_segment_job(project_id: str, segment_id: str, stages: list[str]) -> Jo
 def _pipeline_runner(project_id: str, prior: dict[StageKey, StageStatus]) -> Runner:
     async def run(job: Job) -> None:
         total = len(job.stages)
-        for index, key in enumerate(job.stages):
-            # Reload per stage so edits made between stages are picked up, and so each stage
-            # persists against the freshest manifest.
-            project = store.load(project_id)
-            if project is None:
-                raise RuntimeError("project was deleted while the job was running")
+        project: Project | None = None
+        try:
+            for index, key in enumerate(job.stages):
+                # Reload per stage so edits made between stages are picked up, and so each stage
+                # persists against the freshest manifest.
+                project = store.load(project_id, track=True)
+                if project is None:
+                    raise RuntimeError("project was deleted while the job was running")
 
-            state = project.stage(key)
-            job.stage = key
-            job.progress = index / total
-            job.message = f"running {key}"
-            state.status = "running"
-            state.detail = ""
-            state.updated_at = now()
-            await _checkpoint(project)
-            engine.bus.publish_job(job)
-
-            progress = _stage_progress(job, index, total)
-            try:
-                if key == "lipsync" and (
-                    project.pipeline.choice("lipsync").provider_id == "lipsync.none"
-                ):
-                    raise StageSkipped("lipsync provider is set to 'none'")
-                detail = await stage_impl.STAGE_RUNNERS[key](project, job, progress)
-                state.status = "done"
-                state.detail = detail or ""
-            except StageSkipped as skip:
-                state.status = "skipped"
-                state.detail = str(skip)
-            except asyncio.CancelledError:
-                state.status = "error"
-                state.detail = "cancelled"
+                state = project.stage(key)
+                job.stage = key
+                job.progress = index / total
+                job.message = f"running {key}"
+                state.status = "running"
+                state.detail = ""
                 state.updated_at = now()
-                _restore_queued(project, job.stages[index + 1 :], prior)
                 await _checkpoint(project)
-                raise
-            except Exception as exc:
-                message = str(exc) or type(exc).__name__
-                state.status = "error"
-                state.detail = message
-                state.updated_at = now()
-                _restore_queued(project, job.stages[index + 1 :], prior)
-                await _checkpoint(project)
-                # A failing stage stops the run; later stages keep their restored status.
-                raise RuntimeError(f"stage '{key}' failed: {message}") from exc
+                engine.bus.publish_job(job)
 
-            state.updated_at = now()
-            job.progress = (index + 1) / total
-            job.message = f"{key}: {state.status}"
-            await _checkpoint(project)
-            engine.bus.publish_job(job)
-        job.message = f"completed {total} stage(s)"
+                progress = _stage_progress(job, index, total)
+                try:
+                    if key == "lipsync" and (
+                        project.pipeline.choice("lipsync").provider_id == "lipsync.none"
+                    ):
+                        raise StageSkipped("lipsync provider is set to 'none'")
+                    detail = await stage_impl.STAGE_RUNNERS[key](project, job, progress)
+                    state.status = "done"
+                    state.detail = detail or ""
+                except StageSkipped as skip:
+                    state.status = "skipped"
+                    state.detail = str(skip)
+                except asyncio.CancelledError:
+                    raise  # stage/queued statuses restored + persisted by the outer handler
+                except Exception as exc:
+                    message = str(exc) or type(exc).__name__
+                    state.status = "error"
+                    state.detail = message
+                    state.updated_at = now()
+                    # A failing stage stops the run; the outer handler restores + persists.
+                    raise RuntimeError(f"stage '{key}' failed: {message}") from exc
+
+                state.updated_at = now()
+                job.progress = (index + 1) / total
+                job.message = f"{key}: {state.status}"
+                await _checkpoint(project)
+                engine.bus.publish_job(job)
+            job.message = f"completed {total} stage(s)"
+        except BaseException as exc:
+            # Single cleanup point: a cancel/error landing ANYWHERE in the loop (including the
+            # inter-stage checkpoints) must not leave stages stuck on "running"/"queued".
+            if project is not None:
+                if job.stage is not None:
+                    state = project.stage(job.stage)
+                    if state.status == "running":
+                        state.status = "error"
+                        state.detail = (
+                            "cancelled"
+                            if isinstance(exc, asyncio.CancelledError)
+                            else (str(exc) or type(exc).__name__)
+                        )
+                        state.updated_at = now()
+                _restore_queued(project, job.stages, prior)
+                # Shield the persist so a second cancel (e.g. engine shutdown while this handler
+                # runs) can't skip it — the save completes in the background regardless.
+                try:
+                    await asyncio.shield(_checkpoint(project))
+                except asyncio.CancelledError:
+                    if not isinstance(exc, asyncio.CancelledError):
+                        raise
+            raise
 
     return run
 
 
 def _segment_runner(project_id: str, segment_id: str) -> Runner:
     async def run(job: Job) -> None:
-        project = store.load(project_id)
+        project = store.load(project_id, track=True)
         if project is None:
             raise RuntimeError("project was deleted while the job was running")
         segment = project.segment(segment_id)
@@ -179,7 +202,9 @@ def _segment_runner(project_id: str, segment_id: str) -> Runner:
         except asyncio.CancelledError:
             if completed:
                 project.mark_downstream_dirty("synthesize")
-            await _checkpoint(project)
+            # Shielded so a second cancel can't skip persisting what was already produced.
+            with contextlib.suppress(asyncio.CancelledError):
+                await asyncio.shield(_checkpoint(project))
             raise
         except Exception:
             if completed:
@@ -199,10 +224,44 @@ def _segment_runner(project_id: str, segment_id: str) -> Runner:
 
 
 async def _checkpoint(project: Project) -> None:
-    """Persist and broadcast the project under its lock."""
+    """Persist and broadcast the project under its lock, re-applying any user edits that
+    landed on disk since the job loaded this copy (see store.save_merged)."""
     async with store.lock(project.id):
-        await asyncio.to_thread(store.save, project)
+        await asyncio.to_thread(store.save_merged, project)
     engine.bus.publish_project(project)
+
+
+def _stage_needs_run(project: Project, key: StageKey) -> bool:
+    """Default 'Run pipeline' selection: any non-done stage, plus a 'done' translate/synthesize
+    that still owes per-segment work (segment edits set translate_dirty/synth_dirty without
+    flipping the stage status itself)."""
+    if project.stage(key).status != "done":
+        return True
+    if key == "translate":
+        return any(s.translate_dirty for s in project.segments)
+    if key == "synthesize":
+        return any(s.synth_dirty for s in project.segments)
+    return False
+
+
+def _abandoned_cleanup(
+    project_id: str, selected: Sequence[StageKey], prior: dict[StageKey, StageStatus]
+) -> Callable[[Job], None]:
+    """Cleanup run by the engine when the job dies without its runner ever starting
+    (cancelled while queued, or engine shutdown): restore the stage statuses that
+    start_pipeline_job persisted as 'queued'."""
+
+    def cleanup(job: Job) -> None:
+        project = store.load(project_id)
+        if project is None:
+            return
+        before = {k: project.stage(k).status for k in selected}
+        _restore_queued(project, selected, prior)
+        if any(project.stage(k).status != before[k] for k in selected):
+            store.save(project)
+            engine.bus.publish_project(project)
+
+    return cleanup
 
 
 def _stage_progress(job: Job, index: int, total: int) -> ProgressFn:

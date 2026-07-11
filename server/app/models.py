@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr
 
 StageKey = Literal[
     "ingest", "separate", "transcribe", "translate", "synthesize", "mix", "lipsync", "render"
@@ -47,6 +47,10 @@ class Take(BaseModel):
 
 
 class Segment(BaseModel):
+    # Defense in depth: an invalid assignment (e.g. None into a str field) fails immediately
+    # instead of being persisted and bricking the manifest on the next load.
+    model_config = ConfigDict(validate_assignment=True)
+
     id: str = Field(default_factory=lambda: new_id("seg"))
     start: float
     end: float
@@ -72,6 +76,8 @@ class Segment(BaseModel):
 
 
 class Speaker(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
+
     id: str = Field(default_factory=lambda: new_id("spk"))
     name: str
     color: str  # hex from SPEAKER_PALETTE
@@ -112,6 +118,11 @@ class MediaInfo(BaseModel):
 
 
 class Project(BaseModel):
+    # Snapshot of the on-disk state when this instance was loaded with store.load(track=True)
+    # (and refreshed on every store.save_merged). Lets job checkpoints re-apply user edits that
+    # landed on disk while the job held a stale copy. Not serialized; not part of the contract.
+    _checkpoint_base: dict[str, Any] | None = PrivateAttr(default=None)
+
     id: str = Field(default_factory=lambda: new_id("prj"))
     name: str
     created_at: datetime = Field(default_factory=now)

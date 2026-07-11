@@ -29,6 +29,11 @@ export function Player() {
   const mixState = project?.stages?.mix
   const mixDone = mixState?.status === 'done'
   const mixUpdatedAt = mixState?.updated_at ?? null
+  // playback.mp4 only exists once ingest completes; mounting the <video> earlier
+  // leaves the element in a dead error state that browsers never retry.
+  const ingestState = project?.stages?.ingest
+  const ingestDone = ingestState?.status === 'done'
+  const ingestUpdatedAt = ingestState?.updated_at ?? null
 
   // rAF loop: push video.currentTime -> store.playhead, and drift-correct the dub audio.
   useEffect(() => {
@@ -89,13 +94,13 @@ export function Player() {
     }
   }, [audioTrack, playing])
 
-  // Apply playback rate / volume to both elements (also re-applied when the audio element remounts).
+  // Apply playback rate / volume to both elements (also re-applied when either element remounts).
   useEffect(() => {
     const video = videoRef.current
     const audio = audioRef.current
     if (video) { video.playbackRate = rate; video.volume = volume }
     if (audio) { audio.playbackRate = rate; audio.volume = volume }
-  }, [rate, volume, mixDone, mixUpdatedAt])
+  }, [rate, volume, mixDone, mixUpdatedAt, ingestDone, ingestUpdatedAt])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
@@ -105,10 +110,11 @@ export function Player() {
           alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
         }}
       >
-        {pid && (
+        {pid && ingestDone && (
           <video
+            key={ingestUpdatedAt ?? 'video'}
             ref={videoRef}
-            src={api.mediaUrl(pid, 'playback.mp4')}
+            src={`${api.mediaUrl(pid, 'playback.mp4')}${ingestUpdatedAt ? `?v=${encodeURIComponent(ingestUpdatedAt)}` : ''}`}
             onClick={() => setPlaying(!playing)}
             onEnded={() => setPlaying(false)}
             onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || project?.media?.duration || 0)}

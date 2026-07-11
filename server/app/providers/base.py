@@ -9,7 +9,7 @@ import importlib
 import pkgutil
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Literal
+from typing import Any, Callable, Literal
 
 from pydantic import BaseModel, Field
 
@@ -50,6 +50,34 @@ class Provider(ABC):
         v = self.options.get(key)
         return default if v in (None, "") else v
 
+    def opt_bool(self, key: str, default: bool = False) -> bool:
+        """Boolean option, coercing env-var/YAML string values ('false', '0', 'off', ...) —
+        plain bool() would treat any non-empty string, including 'false', as True."""
+        v = self.opt(key)
+        if v is None:
+            return default
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, (int, float)):
+            return bool(v)
+        text = str(v).strip().lower()
+        if text in ("1", "true", "yes", "on"):
+            return True
+        if text in ("0", "false", "no", "off"):
+            return False
+        return default
+
+    def opt_float(self, key: str, default: float) -> float:
+        """Numeric option that only falls back when unset — unlike `float(opt(...) or default)`,
+        an explicitly configured 0 (or 0.0) is preserved."""
+        v = self.opt(key)
+        if v is None:
+            return float(default)
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return float(default)
+
     def available(self, deep: bool = False) -> tuple[bool, str]:
         """(is_usable, human_reason). Cheap by default; `deep=True` may hit the network/API."""
         return True, "ready"
@@ -57,7 +85,14 @@ class Provider(ABC):
     @staticmethod
     def _can_import(*modules: str) -> tuple[bool, str]:
         for m in modules:
-            if importlib.util.find_spec(m) is None:
+            try:
+                spec = importlib.util.find_spec(m)
+            except (ModuleNotFoundError, ImportError, ValueError):
+                # find_spec imports parent packages for dotted names (e.g. 'pyannote.audio')
+                # and raises when the parent itself is missing — that still just means
+                # "not installed" for available()'s cheap-probe contract.
+                spec = None
+            if spec is None:
                 return False, f"python package '{m}' is not installed"
         return True, "ready"
 

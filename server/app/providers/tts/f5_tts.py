@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -87,7 +88,9 @@ class F5TTSProvider(TTSProvider):
 
         progress(0.4, "synthesizing (reference ASR + inference)")
         text = req.text.strip() or " "
-        tmp_out = out_wav.with_name(f"{out_wav.stem}.f5_raw.wav")
+        # Unique per call: an abandoned (uncancellable) synthesis thread from a cancelled job
+        # must never share a tmp path with a later job's write.
+        tmp_out = out_wav.with_name(f"{out_wav.stem}.f5_raw.{uuid.uuid4().hex[:8]}.wav")
         await asyncio.to_thread(_run_infer, model, reference, text, tmp_out)
 
         progress(0.9, "standardizing audio")
@@ -96,7 +99,7 @@ class F5TTSProvider(TTSProvider):
         progress(1.0, "done")
 
     async def _pick_reference(self, req: TTSRequest) -> str:
-        use_segment = bool(self.opt("segment_style", True))
+        use_segment = self.opt_bool("segment_style", True)
         if use_segment and req.segment_reference:
             try:
                 duration = await ffmpeg.wav_duration(Path(req.segment_reference))

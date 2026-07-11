@@ -125,8 +125,9 @@ class ElevenLabsProvider(TTSProvider):
                     "text": req.text,
                     "model_id": str(self.opt("model", DEFAULT_MODEL) or DEFAULT_MODEL),
                     "voice_settings": {
-                        "stability": float(self.opt("stability", 0.4) or 0.4),
-                        "similarity_boost": float(self.opt("similarity", 0.8) or 0.8),
+                        # opt_float (not `or default`): 0 is a valid, explicitly-set value here.
+                        "stability": self.opt_float("stability", 0.4),
+                        "similarity_boost": self.opt_float("similarity", 0.8),
                     },
                 },
             )
