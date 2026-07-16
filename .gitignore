@@ -10,3 +10,6 @@ configs/settings.yaml
 .ruff_cache/
 *.egg-info/
 .DS_Store
+
+# local agent state
+.claude/
