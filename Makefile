@@ -1,4 +1,4 @@
-.PHONY: setup dev server web build test lint gpu-extras
+.PHONY: setup dev server web build test e2e lint gpu-extras
 
 # one-time: install server (core) + web deps
 setup:
@@ -32,6 +32,10 @@ serve: build
 test:
 	cd server && .venv/bin/python -m pytest tests/ -x -q
 	cd web && npm run test
+
+# real-browser end-to-end (headless Chromium; auto-starts both servers)
+e2e:
+	cd web && npm run e2e
 
 lint:
 	cd server && .venv/bin/python -m ruff check app tests

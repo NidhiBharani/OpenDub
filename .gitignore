@@ -13,3 +13,8 @@ configs/settings.yaml
 
 # local agent state
 .claude/
+
+# playwright
+web/test-results/
+web/playwright-report/
+web/e2e/screenshots/

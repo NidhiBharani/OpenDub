@@ -90,7 +90,9 @@ re-voicing → mix/render need re-running); the pipeline only redoes dirty work.
 Tests: `make test` runs the backend end-to-end pipeline over a synthesized video using only
 zero-dep providers (no GPU, no network, no model downloads) **and** the frontend suite —
 Vitest + React Testing Library rendering the UI into jsdom (headless, no browser). Run just the
-UI tests with `cd web && npm test`.
+UI tests with `cd web && npm test`. `make e2e` additionally drives the real app in headless
+Chromium (Playwright) — it auto-starts both servers, exercises library → editor → settings, and
+captures screenshots.
 
 ## Roadmap
 
