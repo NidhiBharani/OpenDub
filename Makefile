@@ -31,6 +31,7 @@ serve: build
 
 test:
 	cd server && .venv/bin/python -m pytest tests/ -x -q
+	cd web && npm run test
 
 lint:
 	cd server && .venv/bin/python -m ruff check app tests

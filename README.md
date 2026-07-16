@@ -87,8 +87,10 @@ re-voicing → mix/render need re-running); the pipeline only redoes dirty work.
 `server/` FastAPI + pipeline + providers · `web/` React/TS/Vite editor · `configs/` settings ·
 `data/projects/<id>/` all media + `manifest.json` per project · `ARCHITECTURE.md` the deep dive.
 
-Tests: `make test` runs an end-to-end pipeline over a synthesized video using only zero-dep
-providers — no GPU, no network, no model downloads.
+Tests: `make test` runs the backend end-to-end pipeline over a synthesized video using only
+zero-dep providers (no GPU, no network, no model downloads) **and** the frontend suite —
+Vitest + React Testing Library rendering the UI into jsdom (headless, no browser). Run just the
+UI tests with `cd web && npm test`.
 
 ## Roadmap
 
