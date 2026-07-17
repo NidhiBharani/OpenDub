@@ -1,4 +1,4 @@
-.PHONY: setup dev server web build test e2e lint gpu-extras
+.PHONY: setup dev server web build test e2e bench lint gpu-extras
 
 # one-time: install server (core) + web deps
 setup:
@@ -37,6 +37,10 @@ test:
 e2e:
 	cd web && npm run e2e
 
+# run the pipeline over data/benchmarks/*, score per-stage metrics, write server/bench/results/
+bench:
+	cd server && .venv/bin/python -m bench run $(CASES)
+
 lint:
-	cd server && .venv/bin/python -m ruff check app tests
+	cd server && .venv/bin/python -m ruff check app tests bench
 	cd web && npx tsc -b

@@ -1,0 +1,9 @@
+# OpenDub benchmark case registry. Each entry needs data/benchmarks/<name>/source.mp4.
+# Optional ground-truth files enable GT metrics (see server/bench/cases.py):
+#   ref_transcript.jsonl  -> transcribe WER/CER
+#   ref_translation.jsonl -> translate chrF
+#   ref_vocals.wav        -> separation SI-SDR
+cases:
+  - name: moshi
+    source_lang: ja
+    target_lang: en

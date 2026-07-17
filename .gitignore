@@ -5,6 +5,12 @@ server/.venv/
 node_modules/
 web/dist/
 data/
+# …but track the benchmark case registry (the source videos + GT files stay ignored).
+!data/
+data/*
+!data/benchmarks/
+data/benchmarks/*
+!data/benchmarks/cases.yaml
 configs/settings.yaml
 .pytest_cache/
 .ruff_cache/
@@ -18,3 +24,6 @@ configs/settings.yaml
 web/test-results/
 web/playwright-report/
 web/e2e/screenshots/
+
+# bench run outputs
+server/bench/results/

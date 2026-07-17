@@ -103,6 +103,36 @@ data/     per-project media + manifest.json
 - `make e2e` — drives the real app in headless Chromium (Playwright), library → editor →
   settings, and captures screenshots.
 
+## Benchmarking & quality assessment
+
+`server/bench/` measures how each pipeline stage actually performs. `make bench` runs the real
+pipeline over every case in `data/benchmarks/cases.yaml` and writes a scored report.
+
+Each stage gets **reference-free** metrics (always) plus **ground-truth** metrics when you supply
+reference files:
+
+| stage | reference-free | ground truth (optional files) |
+|---|---|---|
+| separation | vocal-vs-background loudness gap | SI-SDR (`ref_vocals.wav`) |
+| transcribe | speech coverage, segments/min | WER / CER (`ref_transcript.jsonl`) |
+| translate | time-budget compliance, LLM judge (adequacy + fluency, via your Ollama) | chrF (`ref_translation.jsonl`) |
+| tts | degenerate-take rate, duration-clamp rate | *(round-trip WER / speaker-sim slots)* |
+| mix | integrated LUFS vs target, lead-in noise floor, dialogue-vs-bed margin | — |
+| lipsync | *(SyncNet slot — implemented once a live-action clip exists)* | — |
+
+Plus per-stage wall time, peak VRAM, and realtime factor on every run. Install the ground-truth
+extras with `uv pip install -e '.[bench]'` (jiwer, sacrebleu, soundfile); without them those
+metrics simply report "not computed" with a reason.
+
+```bash
+make bench                      # all cases
+cd server && .venv/bin/python -m bench run moshi
+.venv/bin/python -m bench compare results/<old>.json results/<new>.json
+```
+
+Add a case by dropping `data/benchmarks/<name>/source.mp4` and listing it in `cases.yaml`; add any
+of the ground-truth files next to it to unlock the GT metrics for that case.
+
 ## Roadmap
 
 - More target languages (the pipeline is language-parameterized; EN is the curated default)
