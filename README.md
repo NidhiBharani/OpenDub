@@ -1,5 +1,7 @@
 # OpenDub
 
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 **Self-hosted, voice-preserving video dubbing studio.**
 
 OpenDub takes a video (anime first), transcribes it, translates it, and re-voices every line in
@@ -132,6 +134,15 @@ cd server && .venv/bin/python -m bench run moshi
 
 Add a case by dropping `data/benchmarks/<name>/source.mp4` and listing it in `cases.yaml`; add any
 of the ground-truth files next to it to unlock the GT metrics for that case.
+
+## License
+
+OpenDub is licensed under the **Apache License 2.0** — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+
+That covers OpenDub's own source. The AI models and libraries it drives are installed separately
+and each carries its **own** license; some model weights (e.g. F5-TTS) are **non-commercial**. If
+you plan to use OpenDub commercially, check the upstream license of every provider you enable —
+see [NOTICE](NOTICE) for the list.
 
 ## Roadmap
 

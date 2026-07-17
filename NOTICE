@@ -1,0 +1,17 @@
+OpenDub
+Copyright 2026 Nidhi Bharani
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+OpenDub orchestrates third-party models and libraries that it does NOT bundle; each is
+downloaded/installed separately and carries its own license. The Apache-2.0 license above covers
+OpenDub's own source only. Users are responsible for complying with the license of every provider
+they enable — in particular, some model weights are released under NON-COMMERCIAL terms. Check the
+upstream license/model card before any commercial use, e.g.:
+
+  - Demucs (Meta)                 - separation.demucs
+  - Faster-Whisper / Whisper      - asr.faster_whisper
+  - pyannote.audio                - diarization.pyannote (gated; HF token)
+  - F5-TTS                        - tts.f5_tts        (model weights may be non-commercial)
+  - Wav2Lip / LatentSync          - lipsync.*
+  - ElevenLabs, Anthropic, OpenAI, DeepL - cloud providers, per their terms of service

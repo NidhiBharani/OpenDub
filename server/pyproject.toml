@@ -3,6 +3,8 @@ name = "opendub-server"
 version = "0.1.0"
 description = "OpenDub — voice-preserving video dubbing pipeline with pluggable OSS/cloud models"
 requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["../LICENSE"]
 dependencies = [
     "fastapi>=0.111",
     "uvicorn[standard]>=0.30",
