@@ -125,7 +125,8 @@ export function Player() {
           <audio
             key={mixUpdatedAt ?? 'mix'}
             ref={audioRef}
-            src={`${api.mediaUrl(pid, 'audio/dub_mix.wav')}${mixUpdatedAt ? `?v=${encodeURIComponent(mixUpdatedAt)}` : ''}`}
+            // m4a, not wav: browsers (Safari especially) stall streaming multi-MB PCM WAV
+            src={`${api.mediaUrl(pid, 'audio/dub_mix.m4a')}${mixUpdatedAt ? `?v=${encodeURIComponent(mixUpdatedAt)}` : ''}`}
             style={{ display: 'none' }}
           />
         )}

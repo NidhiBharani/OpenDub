@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import re
 import shutil
 import uuid
 from pathlib import Path
@@ -310,6 +311,21 @@ async def atempo(wav: Path, out_wav: Path, factor: float) -> None:
     )
 
 
+async def to_m4a(wav: Path, out_path: Path, bitrate: str = "192k") -> None:
+    """Encode audio to AAC in an m4a container (faststart for progressive playback).
+
+    Browsers stream AAC far more reliably than multi-MB PCM WAV in <audio> (Safari especially),
+    so the editor's dub preview is served as m4a while WAV stays the pipeline's working format."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    await _ffmpeg(
+        "-i", str(wav),
+        "-c:a", "aac",
+        "-b:a", bitrate,
+        "-movflags", "+faststart",
+        str(out_path),
+    )
+
+
 async def mux(video: Path, audio: Path, out_path: Path) -> None:
     """Replace the video's audio track with `audio`; -shortest.
 
@@ -331,11 +347,74 @@ async def mux(video: Path, audio: Path, out_path: Path) -> None:
 
 
 async def loudness_normalize(wav: Path, out_wav: Path, i: float = -16.0) -> None:
-    """One-pass loudnorm to integrated loudness `i` LUFS."""
+    """One-pass loudnorm to integrated loudness `i` LUFS.
+
+    NOTE: one-pass loudnorm applies a *dynamic* gain ride, which pumps on sparse program
+    material (long silences between dub lines) and lifts silent passages' noise floor. Prefer
+    `measure_loudness` + `apply_gain` (static, linear) for mixing/mastering steps.
+    """
     out_wav.parent.mkdir(parents=True, exist_ok=True)
     await _ffmpeg(
         "-i", str(wav),
         "-af", f"loudnorm=I={i}:TP=-1.5:LRA=11",
+        "-ar", str(_STD_SAMPLE_RATE),
+        "-ac", str(_STD_CHANNELS),
+        "-c:a", "pcm_s16le",
+        str(out_wav),
+    )
+
+
+_EBUR128_I_RE = re.compile(r"I:\s*(-?[0-9.]+)\s*LUFS")
+
+# ebur128's gated integrated-loudness floor: a (near-)silent file measures at/below this.
+SILENCE_LUFS = -70.0
+
+
+async def measure_loudness(wav: Path) -> float:
+    """Integrated loudness (LUFS, EBU R128 gated) of `wav`.
+
+    Returns `SILENCE_LUFS` (-70.0) for silent/near-silent input. Runs ffmpeg's ebur128 filter,
+    whose summary is printed to stderr at info level — so this bypasses `_run`'s
+    `-loglevel error` and captures stderr itself.
+    """
+    proc = await asyncio.create_subprocess_exec(
+        FFMPEG_BIN,
+        "-hide_banner", "-nostats",
+        "-i", str(wav),
+        "-af", "ebur128",
+        "-f", "null", "-",
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        _, stderr = await proc.communicate()
+    except asyncio.CancelledError:
+        with contextlib.suppress(ProcessLookupError):
+            proc.kill()
+        raise
+    text = stderr.decode("utf-8", "replace")
+    if proc.returncode != 0:
+        raise RuntimeError(f"{FFMPEG_BIN} ebur128 failed (exit {proc.returncode}): {text[-4000:]}")
+    matches = _EBUR128_I_RE.findall(text)
+    if not matches:
+        raise RuntimeError(f"could not parse ebur128 integrated loudness for {wav}")
+    return max(float(matches[-1]), SILENCE_LUFS)  # summary block's I: is the last match
+
+
+async def apply_gain(wav: Path, out_wav: Path, gain_db: float, true_peak_db: float | None = None) -> None:
+    """Apply a static (linear, non-pumping) gain; optionally brick-limit true peaks.
+
+    `true_peak_db` (e.g. -1.5) adds an alimiter after the gain so hot sections can't clip —
+    unlike dynamic loudnorm this touches only peaks above the ceiling, not overall dynamics.
+    """
+    out_wav.parent.mkdir(parents=True, exist_ok=True)
+    filt = f"volume={gain_db:.2f}dB"
+    if true_peak_db is not None:
+        limit_linear = 10 ** (true_peak_db / 20)
+        filt += f",alimiter=limit={limit_linear:.4f}:level=false"
+    await _ffmpeg(
+        "-i", str(wav),
+        "-af", filt,
         "-ar", str(_STD_SAMPLE_RATE),
         "-ac", str(_STD_CHANNELS),
         "-c:a", "pcm_s16le",

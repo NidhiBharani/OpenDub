@@ -12,10 +12,10 @@ test.describe('OpenDub — real browser rendering', () => {
     await expect(page.getByText('voice-preserving dubbing studio')).toBeVisible()
     await expect(page.getByText(/Drop a video here/)).toBeVisible()
 
-    // The backend's demo project renders as a card.
+    // The backend's demo project renders as a card (duration + segment count + target lang).
     const card = page.getByText('Demo Episode')
     await expect(card).toBeVisible()
-    await expect(page.getByText(/5 segments/)).toBeVisible()
+    await expect(page.getByText(/segments · → EN/)).toBeVisible()
 
     await page.screenshot({ path: `${SHOTS}/library.png`, fullPage: true })
   })

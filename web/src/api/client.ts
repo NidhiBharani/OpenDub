@@ -98,9 +98,19 @@ export type ProjectEvent =
   | { type: 'job'; job: Job }
   | { type: 'project'; project: Project }
 
-/** Subscribe to a project's SSE stream. Returns an unsubscribe function. */
-export function subscribeProjectEvents(pid: string, onEvent: (e: ProjectEvent) => void): () => void {
+/** Subscribe to a project's SSE stream. Returns an unsubscribe function.
+ *
+ * `onConnect` fires on every successful (re)connect. EventSource auto-reconnects after a server
+ * restart, but events emitted while disconnected are lost forever — callers must treat each
+ * reconnect as "my state may be stale" and re-fetch, or the editor silently diverges (e.g. a mix
+ * that finished during a backend restart never shows up, so the dub track never mounts). */
+export function subscribeProjectEvents(
+  pid: string,
+  onEvent: (e: ProjectEvent) => void,
+  onConnect?: () => void,
+): () => void {
   const es = new EventSource(`${BASE}/projects/${pid}/events`)
+  if (onConnect) es.onopen = () => onConnect()
   es.addEventListener('job', (e) => onEvent({ type: 'job', job: JSON.parse((e as MessageEvent).data) }))
   es.addEventListener('project', (e) => onEvent({ type: 'project', project: JSON.parse((e as MessageEvent).data) }))
   return () => es.close()

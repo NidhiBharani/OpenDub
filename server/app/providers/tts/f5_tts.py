@@ -9,6 +9,7 @@ of the reference audio is required (at the cost of a little extra latency per ca
 from __future__ import annotations
 
 import asyncio
+import os
 import threading
 import uuid
 from pathlib import Path
@@ -38,9 +39,26 @@ def _load_model(model_name: str, device: str) -> Any:
         return model
 
 
-def _run_infer(model: Any, ref_file: str, gen_text: str, out_path: Path) -> None:
-    # ref_text intentionally blank: F5-TTS transcribes the reference clip itself.
-    model.infer(ref_file=ref_file, ref_text="", gen_text=gen_text, file_wave=str(out_path))
+def _run_infer(
+    model: Any, ref_file: str, ref_text: str, gen_text: str, out_path: Path
+) -> None:
+    # f5_tts's seed_everything() writes random.randint(0, sys.maxsize) into PYTHONHASHSEED —
+    # almost always outside the valid [0, 2**32-1] range — which makes every python subprocess
+    # spawned afterwards (demucs, latentsync, wav2lip) die at interpreter startup. Snapshot the
+    # variable and restore it after inference so the process environment stays clean.
+    hash_seed = os.environ.get("PYTHONHASHSEED")
+    try:
+        # With ref_text="" F5-TTS transcribes the reference clip itself; we pass the known
+        # transcript when we have one (see synthesize) because the internal ASR fails on hard
+        # audio (sung/stylized lines), collapsing the duration estimate to near-zero output.
+        model.infer(
+            ref_file=ref_file, ref_text=ref_text, gen_text=gen_text, file_wave=str(out_path)
+        )
+    finally:
+        if hash_seed is None:
+            os.environ.pop("PYTHONHASHSEED", None)
+        else:
+            os.environ["PYTHONHASHSEED"] = hash_seed
 
 
 @register
@@ -79,26 +97,44 @@ class F5TTSProvider(TTSProvider):
 
     async def synthesize(self, req: TTSRequest, out_wav: Path, progress: ProgressFn) -> None:
         progress(0.0, "selecting conditioning audio")
-        reference = await self._pick_reference(req)
+        reference, ref_text = await self._pick_reference(req)
         device = self._resolve_device()
         model_name = str(self.opt("model", DEFAULT_MODEL) or DEFAULT_MODEL)
 
         progress(0.05, f"loading {model_name} ({device})")
         model = await asyncio.to_thread(_load_model, model_name, device)
 
-        progress(0.4, "synthesizing (reference ASR + inference)")
+        progress(0.4, "synthesizing")
         text = req.text.strip() or " "
         # Unique per call: an abandoned (uncancellable) synthesis thread from a cancelled job
         # must never share a tmp path with a later job's write.
         tmp_out = out_wav.with_name(f"{out_wav.stem}.f5_raw.{uuid.uuid4().hex[:8]}.wav")
-        await asyncio.to_thread(_run_infer, model, reference, text, tmp_out)
+        await asyncio.to_thread(_run_infer, model, reference, ref_text, text, tmp_out)
+
+        # Degenerate-output guard: when conditioning goes wrong (e.g. F5's internal ASR returns
+        # nothing for a sung reference), it emits a near-empty clip. Retry once on the speaker
+        # identity reference before accepting the result.
+        duration = await ffmpeg.wav_duration(tmp_out)
+        if duration < 0.25 and len(text) > 2 and req.speaker_reference and (
+            reference != req.speaker_reference
+        ):
+            progress(0.6, "output degenerate; retrying with speaker reference")
+            tmp_out.unlink(missing_ok=True)
+            await asyncio.to_thread(
+                _run_infer, model, req.speaker_reference, "", text, tmp_out
+            )
 
         progress(0.9, "standardizing audio")
         await ffmpeg.to_std_wav(tmp_out, out_wav)
         tmp_out.unlink(missing_ok=True)
         progress(1.0, "done")
 
-    async def _pick_reference(self, req: TTSRequest) -> str:
+    async def _pick_reference(self, req: TTSRequest) -> tuple[str, str]:
+        """Choose the conditioning clip and (if known) its transcript.
+
+        Returns (reference_path, ref_text). ref_text is only non-empty for the segment
+        reference, whose transcript is the segment's own source_text; passing it spares
+        F5-TTS an internal ASR pass that fails on hard (e.g. sung) audio."""
         use_segment = self.opt_bool("segment_style", True)
         if use_segment and req.segment_reference:
             try:
@@ -106,11 +142,11 @@ class F5TTSProvider(TTSProvider):
             except Exception:
                 duration = 0.0
             if duration >= 1.5:
-                return req.segment_reference
+                return req.segment_reference, req.segment_reference_text.strip()
         if req.speaker_reference:
-            return req.speaker_reference
+            return req.speaker_reference, ""
         if req.segment_reference:
-            return req.segment_reference
+            return req.segment_reference, req.segment_reference_text.strip()
         raise RuntimeError(
             "tts.f5_tts requires a speaker_reference or segment_reference audio clip to clone a voice"
         )

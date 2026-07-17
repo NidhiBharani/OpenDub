@@ -15,6 +15,7 @@ router = APIRouter()
 
 _CONTENT_TYPES = {
     ".mp4": "video/mp4",
+    ".m4a": "audio/mp4",
     ".wav": "audio/wav",
     ".json": "application/json",
 }

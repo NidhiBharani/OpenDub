@@ -204,3 +204,7 @@ class TTSRequest(BaseModel):
     target_duration: float = 0.0
     speaker_reference: str | None = None  # absolute path to speaker identity reference wav
     segment_reference: str | None = None  # absolute path to this line's source audio (style/emotion)
+    # Transcript of segment_reference (the line's source_text). Lets zero-shot TTS skip its
+    # internal ASR pass over the reference clip — which fails on hard audio (e.g. sung lines),
+    # collapsing the output-duration estimate to near zero.
+    segment_reference_text: str = ""

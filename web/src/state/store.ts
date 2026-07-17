@@ -95,10 +95,18 @@ export const useStore = create<AppState>((set, get) => ({
   openProject: async (pid) => {
     const project = await api.getProject(pid)
     unsubscribe?.()
-    unsubscribe = subscribeProjectEvents(pid, (e) => {
-      if (e.type === 'job') get().applyJob(e.job)
-      else if (e.type === 'project') get().applyProject(e.project)
-    })
+    unsubscribe = subscribeProjectEvents(
+      pid,
+      (e) => {
+        if (e.type === 'job') get().applyJob(e.job)
+        else if (e.type === 'project') get().applyProject(e.project)
+      },
+      // Fires on every (re)connect: events during a backend restart are lost, so resync.
+      () => {
+        void get().refreshProject()
+        void get().loadWaveforms()
+      },
+    )
     const jobs = await api.listJobs(pid)
     set({
       project,

@@ -430,6 +430,7 @@ async def _synthesize_segment(
         target_duration=seg.duration,
         speaker_reference=speaker_ref,
         segment_reference=str(source_ref),
+        segment_reference_text=seg.source_text,
     )
     await provider.synthesize(request, out_wav, progress)
     if not out_wav.exists():
@@ -524,6 +525,11 @@ async def run_mix(project: Project, job: Job, progress: ProgressFn) -> str:
     progress(0.85, "mixing with background")
     dub_mix = _out(project, "audio/dub_mix.wav")
     await audio_utils.mix_tracks(dub_vocals, background, dub_mix)
+
+    progress(0.91, "encoding preview")
+    # AAC preview for the editor's <audio> element — browsers (Safari especially) stream m4a
+    # far more reliably than a multi-MB PCM WAV. The wav stays the render/mixing source.
+    await ffmpeg.to_m4a(dub_mix, _out(project, "audio/dub_mix.m4a"))
 
     progress(0.93, "computing waveform")
     await waveform.generate_peaks(dub_mix, _out(project, "waveforms/dub_mix.json"))

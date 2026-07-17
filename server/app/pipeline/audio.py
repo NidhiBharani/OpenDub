@@ -114,14 +114,40 @@ def _assemble_track_sync(
 
 
 async def mix_tracks(
-    vocals: Path, background: Path, out_wav: Path, background_gain_db: float = -2.0
+    vocals: Path, background: Path, out_wav: Path, background_gain_db: float = -8.0
 ) -> None:
-    """ffmpeg amix (normalize=0) with a volume filter on `background`, then loudness_normalize to
-    -16 LUFS. Output is 48k s16 stereo."""
+    """Level the dub vocals, duck the background, mix, and master — all with STATIC gains.
+
+    TTS output level varies wildly between providers (F5-TTS peaks around -15..-20 dB, far below
+    a typical music/effects bed), so the vocal track is leveled to a speech-forward -18 LUFS via
+    a measured, linear gain (R128 gating measures the spoken parts, ignoring the gaps). The
+    background is ducked (default -8 dB, a normal dialogue-over-music margin), amixed
+    (normalize=0), and the result mastered to -16 LUFS with a -1.5 dBTP limiter.
+
+    Static gains only: one-pass loudnorm's dynamic ride pumps on sparse dialogue and lifts the
+    noise floor of silent passages (audible hiss before the first line). Output is 48k s16
+    stereo."""
     out_wav.parent.mkdir(parents=True, exist_ok=True)
+    tmp_vocals = out_wav.parent / f".{out_wav.stem}.voclevel.tmp.wav"
     tmp_premix = out_wav.parent / f".{out_wav.stem}.premix.tmp.wav"
     try:
-        await ffmpeg.amix(vocals, background, tmp_premix, background_gain_db=background_gain_db)
-        await ffmpeg.loudness_normalize(tmp_premix, out_wav, i=-16.0)
+        vocals_i = await ffmpeg.measure_loudness(vocals)
+        if vocals_i > ffmpeg.SILENCE_LUFS + 1.0:
+            # Static gain to -18 LUFS, capped at +30 dB so a barely-audible track can't be
+            # blasted into pure amplified noise.
+            gain = min(-18.0 - vocals_i, 30.0)
+            await ffmpeg.apply_gain(vocals, tmp_vocals, gain, true_peak_db=-1.5)
+            leveled = tmp_vocals
+        else:
+            leveled = vocals  # effectively silent: leave untouched (gain would only raise noise)
+
+        await ffmpeg.amix(leveled, background, tmp_premix, background_gain_db=background_gain_db)
+
+        premix_i = await ffmpeg.measure_loudness(tmp_premix)
+        master_gain = 0.0 if premix_i <= ffmpeg.SILENCE_LUFS + 1.0 else -16.0 - premix_i
+        await ffmpeg.apply_gain(
+            tmp_premix, out_wav, max(-30.0, min(master_gain, 30.0)), true_peak_db=-1.5
+        )
     finally:
+        tmp_vocals.unlink(missing_ok=True)
         tmp_premix.unlink(missing_ok=True)

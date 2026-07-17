@@ -7,6 +7,7 @@ imports latentsync/torch/diffusers/etc. in-process.
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 from pathlib import Path
 
@@ -25,9 +26,14 @@ async def _run_streaming(
     and stderr are merged so failures are fully captured. Returns (returncode, last `tail_len`
     non-empty lines) for error reporting.
     """
+    # PYTHONPATH=repo root: the inference script lives in scripts/, so plain `python
+    # scripts/inference.py` puts scripts/ (not the repo) on sys.path and `import latentsync`
+    # fails. The upstream repo works around this with `python -m scripts.inference`.
+    env = {**os.environ, "PYTHONPATH": str(cwd)}
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         cwd=str(cwd),
+        env=env,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
     )
