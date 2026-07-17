@@ -26,10 +26,6 @@ _STD_CHANNELS = 2
 _MP4_FRIENDLY_FORMAT_TAGS = {"mp4", "mov", "m4a", "3gp", "3g2", "mj2"}
 
 
-def ffmpeg_available() -> bool:
-    return shutil.which(FFMPEG_BIN) is not None and shutil.which(FFPROBE_BIN) is not None
-
-
 async def _run(binary: str, *args: str) -> bytes:
     """Run `binary -y -hide_banner -loglevel error <args>` and return stdout bytes."""
     proc = await asyncio.create_subprocess_exec(
@@ -392,7 +388,7 @@ async def to_std_wav(src: Path, out_wav: Path) -> None:
 
 # ---- internal helpers used only by app/pipeline/audio.py ---------------------------------------
 # Kept here (rather than in pipeline/audio.py) because ARCHITECTURE.md restricts ffmpeg invocation
-# to this module. Not part of the documented cross-package contract in specs/media-utils.md.
+# to this module.
 
 
 async def pad_or_trim(wav: Path, out_wav: Path, target: float) -> None:

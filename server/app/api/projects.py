@@ -1,6 +1,6 @@
 """Project CRUD + pipeline-run routes.
 
-Mounted under /api by main.py. See ARCHITECTURE.md "HTTP API" and specs/backend-core.md.
+Mounted under /api by main.py. See ARCHITECTURE.md "HTTP API".
 """
 from __future__ import annotations
 

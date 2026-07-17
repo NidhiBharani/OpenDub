@@ -4,7 +4,7 @@ export function Toasts() {
   const toasts = useStore((s) => s.toasts)
   const dismiss = useStore((s) => s.dismissToast)
   if (toasts.length === 0) return null
-  const colors = { info: 'var(--running)', error: 'var(--err)', success: 'var(--ok)' }
+  const colors = { error: 'var(--err)', success: 'var(--ok)' }
   return (
     <div style={{
       position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)',

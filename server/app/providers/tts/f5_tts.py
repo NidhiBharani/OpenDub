@@ -1,7 +1,7 @@
 """tts.f5_tts — F5-TTS zero-shot voice cloning (local).
 
-Mirrors tts.xtts's reference-selection strategy: prefers the segment's own source audio (≥1.5s)
-as the style/emotion conditioning clip, falling back to the speaker identity reference. The
+Reference selection: prefers the segment's own source audio (≥1.5s) as the style/emotion
+conditioning clip, falling back to the speaker identity reference. The
 reference transcript passed to F5-TTS is left empty on purpose — F5-TTS then runs its own internal
 ASR pass over the reference clip to align the cloning conditioning, so no ground-truth transcript
 of the reference audio is required (at the cost of a little extra latency per call).

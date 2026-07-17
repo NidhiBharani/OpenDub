@@ -30,9 +30,9 @@ class ConfigField(BaseModel):
 
 
 class ProviderMeta(BaseModel):
-    id: str  # "<kind>.<slug>", e.g. "tts.xtts"
+    id: str  # "<kind>.<slug>", e.g. "tts.f5_tts"
     kind: ProviderKind
-    name: str  # display name, e.g. "Coqui XTTS-v2"
+    name: str  # display name, e.g. "F5-TTS"
     description: str = ""
     runtime: Literal["local", "cloud"] = "local"
     fields: list[ConfigField] = Field(default_factory=list)
@@ -146,25 +146,12 @@ class LipSyncProvider(Provider):
     async def sync(self, video: Path, audio: Path, out_video: Path, progress: ProgressFn) -> None: ...
 
 
-KIND_ABCS: dict[ProviderKind, type[Provider]] = {
-    "separation": SeparationProvider,
-    "asr": ASRProvider,
-    "diarization": DiarizationProvider,
-    "translation": TranslationProvider,
-    "tts": TTSProvider,
-    "lipsync": LipSyncProvider,
-}
-
 REGISTRY: dict[str, type[Provider]] = {}
 
 
 def register(cls: type[Provider]) -> type[Provider]:
     REGISTRY[cls.meta.id] = cls
     return cls
-
-
-def providers_for(kind: ProviderKind) -> list[type[Provider]]:
-    return [c for c in REGISTRY.values() if c.meta.kind == kind]
 
 
 def get_provider_class(provider_id: str) -> type[Provider]:

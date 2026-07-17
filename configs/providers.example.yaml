@@ -10,7 +10,7 @@ defaults:
   asr: asr.faster_whisper                # or asr.openai_whisper / asr.mock
   diarization: diarization.single_speaker # or diarization.pyannote
   translation: translation.openai_compatible
-  tts: tts.xtts                          # or tts.elevenlabs / tts.mock
+  tts: tts.f5_tts                        # or tts.elevenlabs / tts.mock
   lipsync: lipsync.none                  # or lipsync.wav2lip / lipsync.latentsync
 
 providers:
@@ -32,9 +32,10 @@ providers:
     model: qwen2.5:14b
     temperature: 0.3
 
-  tts.xtts:
+  tts.f5_tts:
     device: auto
     segment_style: true                  # use each line's own source audio as the emotion reference
+    model: F5TTS_v1_Base
 
   lipsync.wav2lip:
     repo_dir: ""                         # path to a cloned https://github.com/Rudrabha/Wav2Lip

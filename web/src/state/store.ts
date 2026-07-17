@@ -8,7 +8,7 @@ export type AudioTrack = 'original' | 'dub'
 
 export interface Toast {
   id: number
-  kind: 'info' | 'error' | 'success'
+  kind: 'error' | 'success'
   text: string
 }
 

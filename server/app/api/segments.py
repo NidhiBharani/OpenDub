@@ -1,5 +1,5 @@
-"""Segment + speaker mutation routes (dirty-flag propagation lives here per specs/backend-core.md
-"Dirty rules").
+"""Segment + speaker mutation routes (dirty-flag propagation lives here — see ARCHITECTURE.md
+"Dirty tracking / invalidation").
 """
 from __future__ import annotations
 
@@ -90,7 +90,7 @@ def _update_segment_locked(pid: str, sid: str, body: SegmentPatchBody) -> tuple[
         if not any(t.id == data["active_take_id"] for t in segment.takes):
             raise HTTPException(400, f"unknown take '{data['active_take_id']}'")
 
-    # --- apply dirty rules (specs/backend-core.md "Dirty rules") -----------
+    # --- apply dirty rules (ARCHITECTURE.md "Dirty tracking / invalidation") -----------
     translate_dirty = False
     synth_dirty = False
 

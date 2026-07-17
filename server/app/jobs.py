@@ -7,7 +7,7 @@ queues (drop-oldest) so a stalled client can never block a job.
 
 Cancellation semantics: cancelling a running job cancels its runner task; awaited subprocesses
 (ffmpeg, demucs, wav2lip, latentsync) kill their child process on CancelledError, but work inside
-``asyncio.to_thread`` (whisper/xtts/pyannote inference) cannot be interrupted — the thread runs to
+``asyncio.to_thread`` (whisper/f5-tts/pyannote inference) cannot be interrupted — the thread runs to
 completion in the background. Such abandoned work never persists anything (only the cancelled
 runner saved manifests, and provider temp filenames are unique per call), and its late progress
 callbacks are dropped by ``publish_job`` once the job is finished.
