@@ -57,12 +57,15 @@ Each pipeline stage delegates to a provider you pick per project in Settings. In
 
 | Stage | Self-hosted (OSS) | Cloud API | Zero-dep fallback |
 |---|---|---|---|
-| Separation | Demucs (htdemucs) | — | passthrough |
+| Separation | Demucs (htdemucs) | LALAL.AI | passthrough |
 | Transcription | Faster-Whisper | OpenAI Whisper | silence segmenter |
-| Diarization | pyannote 3.1 | — | single speaker |
+| Diarization | pyannote 3.1 | pyannoteAI | single speaker |
 | Translation | any OpenAI-compatible endpoint (Ollama, vLLM, LM Studio…) | Claude, OpenAI, DeepL | mock |
 | Voice (TTS + cloning) | F5-TTS | ElevenLabs | beep/espeak |
-| Lip sync | Wav2Lip, LatentSync | — | none |
+| Lip sync | Wav2Lip, LatentSync | Replicate¹ | none |
+
+¹ Cloud lip-sync uses human-face models — not for 2D anime (see `lipsync.replicate`). Every other
+stage has a fully cloud path, so OpenDub can run **without a local GPU** on API keys alone.
 
 Install the local model stack with `make gpu-extras` (Faster-Whisper + Demucs + F5-TTS).
 

@@ -64,3 +64,16 @@ providers:
   tts.elevenlabs:
     api_key: ""
     model: eleven_multilingual_v2
+
+  separation.lalalai:                    # cloud vocal/instrumental split — good for music-heavy anime
+    api_key: ""                          # LALAL.AI licence key
+    splitter: phoenix                    # phoenix | orion | perseus
+    stem: vocals
+
+  diarization.pyannote_api:              # hosted pyannoteAI — no local GPU / HF token
+    api_key: ""
+    num_speakers: 0                      # 0 = auto-detect
+
+  lipsync.replicate:                     # cloud lip-sync (HUMAN faces only — not for 2D anime)
+    api_key: ""                          # Replicate API token (r8_...)
+    model: bytedance/latentsync          # any Replicate model taking video + audio inputs

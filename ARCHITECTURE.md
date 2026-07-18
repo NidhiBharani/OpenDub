@@ -83,12 +83,17 @@ Included providers:
 
 | kind        | local (OSS)                                             | cloud (API key)                     | always-available |
 |-------------|---------------------------------------------------------|-------------------------------------|------------------|
-| separation  | `separation.demucs` (htdemucs)                          | —                                   | `separation.passthrough` |
+| separation  | `separation.demucs` (htdemucs)                          | `separation.lalalai` (LALAL.AI)     | `separation.passthrough` |
 | asr         | `asr.faster_whisper`                                    | `asr.openai_whisper`                | `asr.mock` (silence segmenter) |
-| diarization | `diarization.pyannote` (HF token)                       | —                                   | `diarization.single_speaker` |
+| diarization | `diarization.pyannote` (HF token)                       | `diarization.pyannote_api` (pyannoteAI) | `diarization.single_speaker` |
 | translation | `translation.openai_compatible` (Ollama, vLLM, LM Studio…: base_url+model) | `translation.anthropic`, `translation.openai`, `translation.deepl` | `translation.mock` |
 | tts         | `tts.f5_tts` (F5-TTS, zero-shot clone)                  | `tts.elevenlabs` (IVC clone)        | `tts.mock` (espeak-ng if present, else shaped beeps via ffmpeg) |
-| lipsync     | `lipsync.wav2lip`, `lipsync.latentsync` (point at your checkout + checkpoint) | —             | `lipsync.none`   |
+| lipsync     | `lipsync.wav2lip`, `lipsync.latentsync` (point at your checkout + checkpoint) | `lipsync.replicate` (human faces only) | `lipsync.none`   |
+
+Every stage has a cloud path (key-only, no local GPU). Cloud providers use `httpx` (a core dep),
+gate `available()` on their API key, and share upload/poll/download helpers in
+`providers/_http.py`; the job-based ones (LALAL.AI, pyannoteAI, Replicate) upload the media,
+poll the remote job, then download results.
 
 Settings persistence: `configs/settings.yaml` →
 `{providers: {<provider_id>: {<field_key>: value}}, defaults: {<kind>: provider_id}}`.
