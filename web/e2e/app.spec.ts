@@ -15,7 +15,7 @@ test.describe('OpenDub — real browser rendering', () => {
     // The backend's demo project renders as a card (duration + segment count + target lang).
     const card = page.getByText('Demo Episode')
     await expect(card).toBeVisible()
-    await expect(page.getByText(/segments · → EN/)).toBeVisible()
+    await expect(page.getByText(/→ EN · \d+ lines?/).first()).toBeVisible()
 
     await page.screenshot({ path: `${SHOTS}/library.png`, fullPage: true })
   })

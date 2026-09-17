@@ -12,15 +12,17 @@ export function Toasts() {
     }}>
       {toasts.map((t) => (
         <div
+          role="status"
           key={t.id}
           onClick={() => dismiss(t.id)}
           style={{
             padding: '8px 16px', borderRadius: 'var(--r-md)', cursor: 'pointer',
             background: 'var(--bg-overlay)', border: '1px solid var(--border-strong)',
-            borderLeft: `3px solid ${colors[t.kind]}`, boxShadow: 'var(--shadow)',
+            boxShadow: 'var(--shadow)', display: 'flex', alignItems: 'center', gap: 10,
             fontSize: 13, maxWidth: 480, animation: 'od-slide-up 150ms ease-out',
           }}
         >
+          <span style={{ width: 8, height: 8, borderRadius: '50%', flexShrink: 0, background: colors[t.kind] }} />
           {t.text}
         </div>
       ))}

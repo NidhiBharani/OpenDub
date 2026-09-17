@@ -3,7 +3,9 @@
 // (self-hosted OSS vs cloud API) is picked and configured here.
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { Icon } from '../components/Icon'
 import { Badge, Button, Field, Select, Spinner, TextInput } from '../components/primitives'
+import { NavLink, TopBar } from '../components/TopBar'
 import { useStore } from '../state/store'
 import { PROVIDER_KINDS, SECRET_MASK } from '../types'
 import type { ConfigField, ProviderInfo, ProviderKind } from '../types'
@@ -87,6 +89,7 @@ export function Settings() {
   const providers = useStore((s) => s.providers)
   const loadProviders = useStore((s) => s.loadProviders)
   const setView = useStore((s) => s.setView)
+  const closeProject = useStore((s) => s.closeProject)
 
   const [activeKind, setActiveKind] = useState<ProviderKind>('separation')
 
@@ -101,71 +104,90 @@ export function Settings() {
       return a.meta.name.localeCompare(b.meta.name)
     })
 
+  const BUILT_IN = /(mock|passthrough|none|single_speaker)$/
+
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      <header
-        style={{
-          height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10,
-          padding: '0 12px', borderBottom: '1px solid var(--border)',
-        }}
-      >
-        <Button variant="ghost" onClick={() => setView(project ? 'editor' : 'library')} title="Back">‹</Button>
-        <div style={{ fontSize: 13, fontWeight: 600 }}>Settings</div>
+      <TopBar padX={48} onBrand={() => (project ? closeProject() : setView('library'))}>
+        <NavLink label="Library" onClick={() => (project ? closeProject() : setView('library'))} />
+        {project && <NavLink label="Editor" onClick={() => setView('editor')} />}
+        <NavLink label="Settings" active onClick={() => setView('settings')} />
         <div style={{ flex: 1 }} />
-        {project && (
-          <div style={{ fontSize: 12, color: 'var(--text-dim)' }}>
-            Pipeline choices apply to ‹{project.name}›
-          </div>
-        )}
-      </header>
+        <div style={{ fontSize: 12, color: 'var(--text-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {project ? <>Provider choices apply to ‹{project.name}›</> : 'Open a project to choose its providers'}
+        </div>
+      </TopBar>
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-        <nav style={{ width: 200, flexShrink: 0, borderRight: '1px solid var(--border)', padding: 12, overflowY: 'auto' }}>
-          {PROVIDER_KINDS.map((kind) => {
+        <nav aria-label="Pipeline stages" style={{
+          width: 380, flexShrink: 0, borderRight: '1px solid var(--border-strong)', padding: '36px 24px 24px 48px',
+          overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6,
+        }}>
+          <h1 className="serif" style={{ margin: '0 0 4px', fontSize: 40, lineHeight: 1 }}>The signal chain</h1>
+          <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--text-dim)' }}>
+            Each stage hands off to one provider. Mix local models, cloud APIs and built-in fallbacks freely.
+          </p>
+          {PROVIDER_KINDS.map((kind, i) => {
             const active = kind === activeKind
             const selectedId = project?.pipeline[kind]?.provider_id
-            const selectedName = providers.find((p) => p.meta.id === selectedId)?.meta.name
+            const selected = providers.find((p) => p.meta.id === selectedId)
+            const tag = !selected ? null : BUILT_IN.test(selected.meta.id) ? 'BUILT-IN' : selected.meta.runtime === 'local' ? 'LOCAL' : 'CLOUD'
             return (
               <button
                 key={kind}
                 type="button"
+                aria-current={active ? 'true' : undefined}
                 onClick={() => setActiveKind(kind)}
                 style={{
-                  position: 'relative', display: 'block', width: '100%', textAlign: 'left',
-                  border: 'none', cursor: 'pointer', color: 'var(--text)',
-                  background: active ? 'var(--bg-overlay)' : 'transparent',
-                  fontSize: 13, padding: '8px 10px', borderRadius: 'var(--r-md)', marginBottom: 2,
+                  minHeight: 58, padding: '0 14px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+                  display: 'flex', alignItems: 'center', gap: 12, color: 'var(--text)',
+                  border: `1px solid ${active ? 'var(--border-strong)' : 'transparent'}`,
+                  background: active ? 'var(--bg-raised)' : 'transparent',
                 }}
               >
-                {active && (
-                  <div style={{
-                    position: 'absolute', left: 0, top: 4, bottom: 4, width: 2,
-                    background: 'var(--accent)', borderRadius: 1,
-                  }} />
-                )}
-                <div>{KIND_LABELS[kind]}</div>
-                {project && (
-                  <div style={{
-                    fontSize: 11, color: 'var(--text-dim)', marginTop: 2,
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                <span className="timecode" style={{ fontSize: 11, color: active ? 'var(--accent)' : 'var(--text-dim)' }}>
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontSize: 14, fontWeight: 500 }}>{KIND_LABELS[kind]}</span>
+                  {project && (
+                    <span style={{
+                      fontSize: 12, color: 'var(--text-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>
+                      {selected?.meta.name ?? '—'}
+                    </span>
+                  )}
+                </span>
+                {tag && (
+                  <span className="timecode" style={{
+                    fontSize: 10, letterSpacing: '0.06em',
+                    color: tag === 'LOCAL' ? 'var(--ok)' : tag === 'CLOUD' ? 'var(--accent-text)' : 'var(--text-dim)',
                   }}>
-                    {selectedName ?? '—'}
-                  </div>
+                    {tag}
+                  </span>
                 )}
               </button>
             )
           })}
+          <div style={{ flex: 1 }} />
+          <p style={{ margin: '16px 0 0', fontSize: 12, color: 'var(--text-dim)' }}>
+            Saved to <span style={{ fontFamily: 'var(--mono)', fontSize: 11 }}>configs/settings.yaml</span>. Environment
+            variables override the file.
+          </p>
         </nav>
 
-        <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: 20 }}>
-          <div style={{ maxWidth: 760 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 600, margin: '0 0 4px' }}>{KIND_LABELS[activeKind]}</h2>
-            <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 16 }}>
+        <div style={{ flex: 1, minWidth: 0, overflowY: 'auto', padding: '36px 48px' }}>
+          <div style={{ maxWidth: 920 }}>
+            <div className="timecode" style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--accent)' }}>
+              STAGE {String(PROVIDER_KINDS.indexOf(activeKind) + 1).padStart(2, '0')}
+            </div>
+            <h2 className="serif" style={{ fontSize: 40, lineHeight: 1, margin: '6px 0' }}>{KIND_LABELS[activeKind]}</h2>
+            <div style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 22, maxWidth: 640 }}>
               {KIND_DESCRIPTIONS[activeKind]}
             </div>
 
             {kindProviders.length === 0 && (
-              <div style={{ fontSize: 12, color: 'var(--text-faint)' }}>No providers registered for this stage.</div>
+              <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>No providers registered for this stage.</div>
             )}
 
             {kindProviders.map((info) => (
@@ -255,10 +277,10 @@ function ProviderCard({ info, kind }: { info: ProviderInfo; kind: ProviderKind }
             type="checkbox"
             checked={Boolean(value)}
             onChange={(e) => setDraft((d) => ({ ...d, [field.key]: e.target.checked }))}
-            style={{ width: 14, height: 14, accentColor: 'var(--accent)', cursor: 'pointer' }}
+            style={{ width: 16, height: 16, accentColor: 'var(--accent)', cursor: 'pointer' }}
           />
           <span>{field.label}</span>
-          {field.help && <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>— {field.help}</span>}
+          {field.help && <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>— {field.help}</span>}
         </label>
       )
     }
@@ -278,7 +300,7 @@ function ProviderCard({ info, kind }: { info: ProviderInfo; kind: ProviderKind }
     if (field.type === 'secret') {
       const isConfigured = configuredOptions[field.key] === SECRET_MASK
       return (
-        <Field key={field.key} label={field.label} help={isConfigured ? 'configured' : field.help}>
+        <Field key={field.key} label={field.label} help={isConfigured ? 'Configured — write-only, leave blank to keep the saved key.' : field.help}>
           <TextInput
             type="password"
             value={String(value ?? '')}
@@ -303,19 +325,18 @@ function ProviderCard({ info, kind }: { info: ProviderInfo; kind: ProviderKind }
   }
 
   const runtimeBadge = meta.runtime === 'local'
-    ? <Badge color="var(--ok)" bg="rgb(80 200 120 / 0.15)">self-hosted</Badge>
-    : <Badge color="var(--running)" bg="rgb(76 155 232 / 0.15)">cloud API</Badge>
+    ? <Badge color="var(--ok)" bg="var(--ok-dim)">self-hosted</Badge>
+    : <Badge color="var(--accent-text)" bg="var(--accent-dim)">cloud API</Badge>
 
   const isErrorish = /error|fail|exception/i.test(reason)
-  const availColor = available ? 'var(--ok)' : (isErrorish ? 'var(--err)' : 'var(--warn)')
-  const availBg = available
-    ? 'rgb(80 200 120 / 0.15)'
-    : (isErrorish ? 'rgb(232 96 76 / 0.15)' : 'rgb(232 184 76 / 0.15)')
+  const availColor = available ? 'var(--ok)' : (isErrorish ? 'var(--err-text)' : 'var(--warn-text)')
+  const availBg = available ? 'var(--ok-dim)' : (isErrorish ? 'var(--err-dim)' : 'var(--warn-dim)')
 
   return (
     <div style={{
-      background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 'var(--r-lg)',
-      padding: 16, marginBottom: 12,
+      background: selected ? 'var(--accent-dim)' : 'var(--bg-raised)', borderRadius: 'var(--r-lg)',
+      border: selected ? '1.5px solid var(--accent)' : '1px solid var(--border-strong)',
+      padding: '16px 18px', marginBottom: 12,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {project && (
@@ -328,17 +349,25 @@ function ProviderCard({ info, kind }: { info: ProviderInfo; kind: ProviderKind }
             title={`Use ${meta.name} for ${KIND_LABELS[kind]}`}
           />
         )}
-        <div style={{ fontSize: 14, fontWeight: 600 }}>{meta.name}</div>
+        <div style={{ fontSize: 15, fontWeight: 500 }}>{meta.name}</div>
+        <span className="timecode" style={{ fontSize: 11 }}>{meta.id}</span>
+        <div style={{ flex: 1 }} />
+        {selected && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--accent-text)' }}>
+            <Icon name="check" size={12} /> In use
+          </span>
+        )}
         {runtimeBadge}
         <span title={reason || undefined}>
           <Badge color={availColor} bg={availBg}>{available ? 'ready' : truncate(reason || 'unavailable', 40)}</Badge>
         </span>
       </div>
-      <div style={{ fontSize: 12, color: 'var(--text-dim)', marginTop: 4 }}>{meta.description}</div>
+      <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 6 }}>{meta.description}</div>
 
       <div style={{ marginTop: 10 }}>
-        <Button variant="ghost" onClick={() => setExpanded((e) => !e)} style={{ padding: '3px 6px' }}>
-          {expanded ? '▾' : '▸'} Configure
+        <Button variant="ghost" onClick={() => setExpanded((e) => !e)} style={{ padding: '0 6px', minHeight: 32 }}>
+          <Icon name="chevron" size={12} style={{ transform: expanded ? 'none' : 'rotate(-90deg)', transition: 'transform var(--ease)' }} />
+          Configure
         </Button>
       </div>
 
@@ -355,8 +384,8 @@ function ProviderCard({ info, kind }: { info: ProviderInfo; kind: ProviderKind }
           )}
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <Button variant="ghost" onClick={() => void test()} disabled={testing}>
-              {testing ? <Spinner size={12} /> : 'Test'}
+            <Button onClick={() => void test()} disabled={testing}>
+              {testing ? <Spinner size={12} /> : 'Test connection'}
             </Button>
             <Button variant="primary" onClick={() => void save()} disabled={saving}>
               {saving ? 'Saving…' : 'Save'}
