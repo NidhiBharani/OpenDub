@@ -19,6 +19,11 @@ describe('formatTime', () => {
   it('optionally appends milliseconds', () => {
     expect(formatTime(1.234, true)).toBe('0:01.234')
   })
+
+  it('does not lose a millisecond to float error', () => {
+    expect(formatTime(6.3, true)).toBe('0:06.300')
+    expect(formatTime(5.8, true)).toBe('0:05.800')
+  })
 })
 
 describe('stage metadata', () => {
