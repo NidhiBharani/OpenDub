@@ -11,6 +11,30 @@ from ...models import ASRSegment
 from ..base import ASRProvider, ConfigField, ProgressFn, ProviderMeta, register
 
 
+def _preload_cuda_libs() -> None:
+    """Load the pip-installed CUDA libraries CTranslate2 links against (cuBLAS 12, cuDNN 9).
+
+    CTranslate2 wheels are built for CUDA 12 and dlopen `libcublas.so.12` by bare name, which the
+    loader can't find inside site-packages (and a CUDA 13 torch ships only `.so.13`). Preloading
+    them globally makes the later dlopen resolve; missing files are skipped (CPU still works).
+    """
+    import ctypes
+    import sysconfig
+
+    nvidia = Path(sysconfig.get_paths()["purelib"]) / "nvidia"
+    for rel in (
+        "cublas/lib/libcublasLt.so.12",
+        "cublas/lib/libcublas.so.12",
+        "cudnn/lib/libcudnn.so.9",
+    ):
+        lib = nvidia / rel
+        if lib.exists():
+            try:
+                ctypes.CDLL(str(lib), mode=ctypes.RTLD_GLOBAL)
+            except OSError:
+                pass
+
+
 @register
 class FasterWhisperASR(ASRProvider):
     meta = ProviderMeta(
@@ -74,6 +98,7 @@ class FasterWhisperASR(ASRProvider):
         def _run() -> list[ASRSegment]:
             from faster_whisper import WhisperModel
 
+            _preload_cuda_libs()
             model = WhisperModel(model_name, device=device, compute_type=compute_type)
             seg_iter, _info = model.transcribe(
                 str(audio),
@@ -81,12 +106,16 @@ class FasterWhisperASR(ASRProvider):
                 vad_filter=vad,
                 beam_size=5,
                 condition_on_previous_text=False,
+                word_timestamps=True,
             )
             out: list[ASRSegment] = []
             for seg in seg_iter:
-                out.append(
-                    ASRSegment(start=seg.start, end=seg.end, text=(seg.text or "").strip())
-                )
+                # Segment bounds can swallow long silences/music around the speech (the VAD merges
+                # regions), which would give the dub a wildly wrong slot - tighten to the words.
+                start, end = seg.start, seg.end
+                if seg.words:
+                    start, end = seg.words[0].start, seg.words[-1].end
+                out.append(ASRSegment(start=start, end=end, text=(seg.text or "").strip()))
                 frac = min(1.0, seg.end / duration) if duration > 0 else 0.0
                 progress(frac, f"transcribing {seg.end:.1f}s / {duration:.1f}s")
             return out

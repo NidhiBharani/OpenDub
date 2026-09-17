@@ -1,7 +1,7 @@
 // Synced transcript list: click to select + seek, follows the playhead while
 // playing, shows per-segment dirty state and a project-wide progress summary.
 import { useEffect, useMemo, useRef } from 'react'
-import { useProject, useStore } from '../state/store'
+import { speakerColor, useProject, useStore } from '../state/store'
 import { formatTime } from '../types'
 import type { Segment, Speaker } from '../types'
 
@@ -11,7 +11,7 @@ export function TranscriptList() {
   const playhead = useStore((s) => s.playhead)
   const playing = useStore((s) => s.playing)
   const selectSegment = useStore((s) => s.selectSegment)
-  const rowRefs = useRef(new Map<string, HTMLDivElement>())
+  const rowRefs = useRef(new Map<string, HTMLButtonElement>())
 
   const segments = project?.segments ?? []
   const sorted = useMemo(() => [...segments].sort((a, b) => a.start - b.start), [segments])
@@ -34,77 +34,81 @@ export function TranscriptList() {
   const voiced = segments.filter((s) => s.active_take_id != null).length
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto' }}>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div style={{
-        position: 'sticky', top: 0, zIndex: 1, background: 'var(--bg-raised)',
-        padding: '8px 12px', borderBottom: '1px solid var(--border)',
-        fontSize: 13, color: 'var(--text-dim)',
+        height: 44, flexShrink: 0, padding: '0 16px', borderBottom: '1px solid var(--border-strong)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
       }}>
-        {segments.length} segments · {translated} translated · {voiced} voiced
+        <span className="serif" style={{ fontSize: 20 }}>Script</span>
+        <span className="timecode" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+          {segments.length} lines · {translated} translated · {voiced} voiced
+        </span>
       </div>
-      {sorted.map((seg) => (
-        <Row
-          key={seg.id}
-          segment={seg}
-          speaker={project.speakers.find((sp) => sp.id === seg.speaker_id)}
-          selected={selection === seg.id}
-          current={currentId === seg.id}
-          onClick={() => selectSegment(seg.id, true)}
-          registerRef={(el) => {
-            if (el) rowRefs.current.set(seg.id, el)
-            else rowRefs.current.delete(seg.id)
-          }}
-        />
-      ))}
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+        {sorted.length === 0 && (
+          <div style={{ padding: 16, fontSize: 13, color: 'var(--text-dim)' }}>
+            The script appears here once the Transcribe stage has run.
+          </div>
+        )}
+        {sorted.map((seg) => (
+          <Row
+            key={seg.id}
+            segment={seg}
+            speaker={project.speakers.find((sp) => sp.id === seg.speaker_id)}
+            color={speakerColor(project, seg.speaker_id)}
+            selected={selection === seg.id}
+            current={currentId === seg.id}
+            onClick={() => selectSegment(seg.id, true)}
+            registerRef={(el) => {
+              if (el) rowRefs.current.set(seg.id, el)
+              else rowRefs.current.delete(seg.id)
+            }}
+          />
+        ))}
+      </div>
     </div>
   )
 }
 
-function Row({ segment, speaker, selected, current, onClick, registerRef }: {
+function Row({ segment, speaker, color, selected, current, onClick, registerRef }: {
   segment: Segment
   speaker: Speaker | undefined
+  color: string
   selected: boolean
   current: boolean
   onClick: () => void
-  registerRef: (el: HTMLDivElement | null) => void
+  registerRef: (el: HTMLButtonElement | null) => void
 }) {
-  const dirty = segment.translate_dirty || segment.synth_dirty
-  const background = selected ? 'var(--accent-dim)' : current ? 'var(--bg-overlay)' : 'transparent'
+  const flag = segment.translate_dirty ? 'needs re-translate' : segment.synth_dirty ? 'needs re-voice' : ''
 
   return (
-    <div
+    <button
+      type="button"
       ref={registerRef}
       onClick={onClick}
+      aria-pressed={selected}
       style={{
-        display: 'flex', gap: 10, padding: '8px 12px', borderBottom: '1px solid var(--border)',
-        cursor: 'pointer', background,
-        boxShadow: current ? 'inset 2px 0 0 var(--accent)' : undefined,
+        width: '100%', textAlign: 'left', border: 'none', borderBottom: '1px solid var(--border)',
+        background: selected ? 'var(--bg-overlay)' : 'transparent', cursor: 'pointer',
+        padding: '10px 16px', display: 'flex', flexDirection: 'column', gap: 4,
       }}
     >
-      <div style={{
-        width: 3, alignSelf: 'stretch', borderRadius: 2, flexShrink: 0,
-        background: speaker?.color ?? 'var(--text-faint)',
-      }} />
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span className="timecode">{formatTime(segment.start)}</span>
-          <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>{speaker?.name ?? 'Unknown'}</span>
-          {dirty && (
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--warn)', flexShrink: 0 }} />
-          )}
-        </div>
-        <div style={{
-          fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {segment.source_text}
-        </div>
-        <div style={{
-          fontSize: 13, color: 'var(--text-dim)', fontStyle: segment.translated_text ? 'normal' : 'italic',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {segment.translated_text || '— untranslated —'}
-        </div>
-      </div>
-    </div>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, width: '100%' }}>
+        <span className="timecode" style={{ fontSize: 11, color: current ? 'var(--accent)' : 'var(--text-dim)' }}>
+          {formatTime(segment.start, true).slice(0, -2)}
+        </span>
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
+        <span style={{ color, fontWeight: 500 }}>{speaker?.name ?? 'Unknown'}</span>
+        <span style={{ flex: 1 }} />
+        {flag && <span style={{ color: 'var(--warn-text)' }}>{flag}</span>}
+      </span>
+      <span style={{
+        fontSize: 13, lineHeight: 1.4, color: segment.translated_text ? 'var(--text)' : 'var(--text-faint)',
+        fontStyle: segment.translated_text ? 'normal' : 'italic',
+      }}>
+        {segment.translated_text || '— untranslated —'}
+      </span>
+      <span style={{ fontSize: 12, lineHeight: 1.4, color: 'var(--text-dim)' }}>{segment.source_text}</span>
+    </button>
   )
 }

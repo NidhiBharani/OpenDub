@@ -5,6 +5,7 @@
 import { useEffect, useRef } from 'react'
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { useStore } from '../state/store'
+import type { Project } from '../types'
 import {
   RULER_H,
   computeLayout,
@@ -47,6 +48,8 @@ export function Timeline() {
   /** Bumped whenever a ref that affects drawing changes; part of the redraw snapshot. */
   const versionRef = useRef(0)
   const lastSnapRef = useRef<unknown[] | null>(null)
+  /** Project with speaker colours swapped for the active theme's palette (cached per project). */
+  const paletteRef = useRef<{ source: Project; themed: Project } | null>(null)
 
   const bump = (): void => {
     versionRef.current++
@@ -229,6 +232,14 @@ export function Timeline() {
     const canvas = canvasRef.current
     if (!container || !canvas) return
     themeRef.current = resolveTheme()
+    // theme toggle: CSS variables change synchronously in setTheme, so re-resolve and repaint
+    const unsubTheme = useStore.subscribe((st, prev) => {
+      if (st.theme !== prev.theme) {
+        themeRef.current = resolveTheme()
+        paletteRef.current = null
+        versionRef.current++
+      }
+    })
 
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -306,11 +317,21 @@ export function Timeline() {
       if (canvas.height !== bh) canvas.height = bh
 
       const d = dragRef.current
+      const spk = themeRef.current.spk
+      if (st.project && paletteRef.current?.source !== st.project) {
+        paletteRef.current = {
+          source: st.project,
+          themed: {
+            ...st.project,
+            speakers: st.project.speakers.map((sp, i) => ({ ...sp, color: spk[i % spk.length] })),
+          },
+        }
+      }
       drawTimeline(ctx, themeRef.current, {
         width: w,
         height: h,
         dpr,
-        project: st.project,
+        project: st.project ? paletteRef.current!.themed : null,
         waveMain: st.waveforms.vocals ?? st.waveforms.original ?? null,
         waveDub: st.waveforms.dub_mix ?? null,
         zoom: st.zoom,
@@ -328,6 +349,7 @@ export function Timeline() {
 
     return () => {
       cancelAnimationFrame(raf)
+      unsubTheme()
       ro.disconnect()
       canvas.removeEventListener('wheel', onWheel)
     }
@@ -342,7 +364,7 @@ export function Timeline() {
         height: '100%',
         minHeight: 0,
         overflow: 'hidden',
-        background: 'var(--bg)',
+        background: 'var(--bg-sunk)',
       }}
     >
       <canvas

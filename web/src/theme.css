@@ -1,29 +1,82 @@
-/* OpenDub design tokens — dark-first, minimal, video-editor feel. */
+/* OpenDub design tokens — "Neon Dusk": dusk-indigo grounds with neon pink / cyan / sunset accents.
+   Dark is the default; light applies via :root[data-theme='light'] (set by state/theme.ts). */
 :root {
-  --bg: #0d0f13;
-  --bg-raised: #14171d;
-  --bg-overlay: #1a1e26;
-  --border: #232833;
-  --border-strong: #313848;
-  --text: #e8eaf0;
-  --text-dim: #8b93a7;
-  --text-faint: #5a6175;
-  --accent: #e8604c;
-  --accent-hover: #f0715e;
-  --accent-dim: rgb(232 96 76 / 0.15);
-  --ok: #50c878;
-  --warn: #e8b84c;
-  --err: #e8604c;
-  --running: #4c9be8;
+  color-scheme: dark;
+  --bg: #120b24;
+  --bg-raised: #1a1233;
+  --bg-overlay: #2a1f4f;
+  --bg-sunk: #0e081d;
+  --border: #281e4a;
+  --border-strong: #382d63;
+  --border-dashed: #55488a;
+  --text: #f3eeff;
+  --text-dim: #ada3cf;
+  --text-faint: #7a6fa3;
 
-  --font: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
-  --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
+  --accent: #ff4fa3;
+  --accent-hover: #ff6bb3;
+  --accent-ink: #2a0518;
+  --accent-text: #ff8cc3;
+  --accent-dim: rgb(255 79 163 / 0.16);
+  --ok: #2fe6d6;
+  --ok-ink: #04211f;
+  --ok-dim: rgb(47 230 214 / 0.12);
+  --warn: #ffa14f;
+  --warn-text: #ffc08a;
+  --warn-dim: rgb(255 161 79 / 0.14);
+  --err: #ff6b6b;
+  --err-text: #ff9c9c;
+  --err-dim: rgb(255 107 107 / 0.14);
+  --running: #ff4fa3;
 
-  --r-sm: 4px;
+  /* speaker palette — kept clear of the three accents */
+  --spk-1: #b69cff; --spk-2: #6cb8ff; --spk-3: #c6f26b; --spk-4: #ffd166;
+  --spk-5: #8ce0ff; --spk-6: #d7a6ff; --spk-7: #9af0b0; --spk-8: #ffb3a1;
+
+  --font: 'Geist', -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --serif: 'Instrument Serif', 'Iowan Old Style', Georgia, serif;
+  --mono: 'Geist Mono', ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
+
+  --r-sm: 5px;
   --r-md: 8px;
-  --r-lg: 12px;
-  --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  --r-lg: 14px;
+  --shadow: 0 8px 32px rgb(6 2 18 / 0.5);
   --ease: 150ms ease-out;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f8f3ff;
+  --bg-raised: #ffffff;
+  --bg-overlay: #eadffb;
+  --bg-sunk: #f1e9fc;
+  --border: #e8def7;
+  --border-strong: #d9ccf0;
+  --border-dashed: #b9a8dc;
+  --text: #1c1233;
+  --text-dim: #5b5180;
+  --text-faint: #8a80a8;
+
+  --accent: #d6247f;
+  --accent-hover: #c01a70;
+  --accent-ink: #ffffff;
+  --accent-text: #b3126a;
+  --accent-dim: rgb(214 36 127 / 0.1);
+  --ok: #00857c;
+  --ok-ink: #ffffff;
+  --ok-dim: rgb(0 133 124 / 0.1);
+  --warn: #c25e00;
+  --warn-text: #9a4a00;
+  --warn-dim: rgb(194 94 0 / 0.1);
+  --err: #c8263a;
+  --err-text: #a81b2e;
+  --err-dim: rgb(200 38 58 / 0.1);
+  --running: #d6247f;
+
+  --spk-1: #6a45d9; --spk-2: #1a6fc9; --spk-3: #4f7a00; --spk-4: #8a6100;
+  --spk-5: #00748f; --spk-6: #9a3fc4; --spk-7: #1f7a3d; --spk-8: #b0452c;
+
+  --shadow: 0 8px 32px rgb(60 30 110 / 0.18);
 }
 
 * { box-sizing: border-box; }
@@ -67,10 +120,18 @@ button, input, select, textarea {
   color: var(--text-dim);
 }
 
+.serif { font-family: var(--serif); font-weight: 400; }
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
 /* focus rings — keyboard only */
 :focus { outline: none; }
 :focus-visible {
-  outline: 1.5px solid var(--accent);
+  outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
 
@@ -79,4 +140,7 @@ button, input, select, textarea {
 @keyframes od-slide-up {
   from { transform: translateY(8px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
 }

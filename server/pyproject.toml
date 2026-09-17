@@ -16,7 +16,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-asr = ["faster-whisper>=1.0"]
+# nvidia-cublas-cu12: CTranslate2 is built for CUDA 12; a CUDA 13 torch only ships libcublas.so.13
+asr = ["faster-whisper>=1.0", "nvidia-cublas-cu12; sys_platform == 'linux'"]
 separation = ["demucs>=4.0", "torch>=2.2", "torchaudio>=2.2"]
 diarization = ["pyannote.audio>=3.1"]
 tts = ["f5-tts>=1.1"]

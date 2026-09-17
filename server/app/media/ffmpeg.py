@@ -470,6 +470,11 @@ async def to_std_wav(src: Path, out_wav: Path) -> None:
 # to this module.
 
 
+async def trim_start(wav: Path, out_wav: Path, start: float) -> None:
+    """Drop the first `start` seconds of a wav."""
+    await _ffmpeg("-ss", f"{start:.3f}", "-i", str(wav), str(out_wav))
+
+
 async def pad_or_trim(wav: Path, out_wav: Path, target: float) -> None:
     """Pad the end with silence (apad) or hard-trim (-t) so output is exactly `target` seconds."""
     out_wav.parent.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,6 @@
 // Typed REST client + SSE subscription. All server communication goes through this module.
 import type {
-  Job, Project, ProjectSummary, ProviderInfo, Segment, StageKey, Waveform,
+  Job, Project, ProjectSummary, ProviderInfo, Segment, Speaker, StageKey, Waveform,
 } from '../types'
 
 const BASE = '/api'
@@ -43,6 +43,8 @@ export const api = {
   updateSegment: (pid: string, sid: string, patch: Partial<Pick<Segment,
     'source_text' | 'translated_text' | 'speaker_id' | 'start' | 'end' | 'emotion' | 'active_take_id' | 'notes'>>) =>
     request<Segment>(`/projects/${pid}/segments/${sid}`, { method: 'PATCH', ...json(patch) }),
+  updateSpeaker: (pid: string, spid: string, patch: Partial<Pick<Speaker, 'name' | 'color'>>) =>
+    request<Speaker>(`/projects/${pid}/speakers/${spid}`, { method: 'PATCH', ...json(patch) }),
   regenerateSegment: (pid: string, sid: string, stages: ('translate' | 'synthesize')[]) =>
     request<Job>(`/projects/${pid}/segments/${sid}/regenerate`, { method: 'POST', ...json({ stages }) }),
 

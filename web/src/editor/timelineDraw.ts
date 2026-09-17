@@ -68,27 +68,33 @@ export interface Theme {
   textDim: string
   textFaint: string
   accent: string
+  ok: string
   warn: string
+  /** speaker palette for the active theme, indexed by cast order */
+  spk: string[]
   font: string
   mono: string
 }
 
 const FALLBACK: Theme = {
-  bg: '#0d0f13',
-  bgRaised: '#14171d',
-  bgOverlay: '#1a1e26',
-  border: '#232833',
-  borderStrong: '#313848',
-  text: '#e8eaf0',
-  textDim: '#8b93a7',
-  textFaint: '#5a6175',
-  accent: '#e8604c',
-  warn: '#e8b84c',
-  font: "'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif",
-  mono: "ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace",
+  bg: '#0e081d',
+  bgRaised: '#1a1233',
+  bgOverlay: '#2a1f4f',
+  border: '#281e4a',
+  borderStrong: '#382d63',
+  text: '#f3eeff',
+  textDim: '#ada3cf',
+  textFaint: '#7a6fa3',
+  accent: '#ff4fa3',
+  ok: '#2fe6d6',
+  warn: '#ffa14f',
+  spk: ['#b69cff', '#6cb8ff', '#c6f26b', '#ffd166', '#8ce0ff', '#d7a6ff', '#9af0b0', '#ffb3a1'],
+  font: "'Geist', -apple-system, 'Segoe UI', system-ui, sans-serif",
+  mono: "'Geist Mono', ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace",
 }
 
-/** Resolve design tokens from CSS variables once (falls back to the theme.css hexes). */
+/** Resolve design tokens from CSS variables (falls back to the dark theme.css hexes).
+ *  Call again whenever the theme changes. */
 export function resolveTheme(): Theme {
   const cs = getComputedStyle(document.documentElement)
   const v = (name: string, fallback: string): string => {
@@ -96,7 +102,7 @@ export function resolveTheme(): Theme {
     return raw !== '' ? raw : fallback
   }
   return {
-    bg: v('--bg', FALLBACK.bg),
+    bg: v('--bg-sunk', FALLBACK.bg),
     bgRaised: v('--bg-raised', FALLBACK.bgRaised),
     bgOverlay: v('--bg-overlay', FALLBACK.bgOverlay),
     border: v('--border', FALLBACK.border),
@@ -105,7 +111,9 @@ export function resolveTheme(): Theme {
     textDim: v('--text-dim', FALLBACK.textDim),
     textFaint: v('--text-faint', FALLBACK.textFaint),
     accent: v('--accent', FALLBACK.accent),
+    ok: v('--ok', FALLBACK.ok),
     warn: v('--warn', FALLBACK.warn),
+    spk: FALLBACK.spk.map((fb, i) => v(`--spk-${i + 1}`, fb)),
     font: v('--font', FALLBACK.font),
     mono: v('--mono', FALLBACK.mono),
   }
@@ -123,8 +131,6 @@ export function withAlpha(color: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
-/** Dim blue-gray for the original-audio waveform. */
-const WAVE_COLOR = '#5b6b85'
 
 // --------------------------------------------------------------- helpers ----
 
@@ -259,15 +265,15 @@ export function drawTimeline(ctx: CanvasRenderingContext2D, theme: Theme, s: Dra
   ctx.fillRect(0, layout.dubTop, w, layout.dubH)
 
   drawGrid(rc, dur, step, RULER_H, bottom)
-  drawWaveLane(rc, layout.waveTop, layout.waveH, s.waveMain, WAVE_COLOR)
-  drawWaveLane(rc, layout.dubTop, layout.dubH, s.waveDub, theme.accent)
+  drawWaveLane(rc, layout.waveTop, layout.waveH, s.waveMain, theme.accent)
+  drawWaveLane(rc, layout.dubTop, layout.dubH, s.waveDub, theme.ok)
   drawSegments(rc, p, layout, s.selection, s.override)
 
   // shade the area past the end of the media
   const endX = (dur - s.scrollX) * s.zoom
   if (endX < w) {
     const x0 = Math.max(0, endX)
-    ctx.fillStyle = 'rgb(0 0 0 / 0.3)'
+    ctx.fillStyle = withAlpha(theme.borderStrong, 0.35)
     ctx.fillRect(x0, RULER_H, w - x0, Math.max(0, bottom - RULER_H))
   }
 
@@ -442,7 +448,7 @@ function drawSegmentBlock(
   ctx.fillStyle = withAlpha(color, hollow ? (selected ? 0.1 : 0.05) : selected ? 0.3 : 0.18)
   ctx.fill()
   if (selected) {
-    ctx.strokeStyle = theme.accent
+    ctx.strokeStyle = theme.text
     ctx.lineWidth = 1.5
   } else {
     ctx.strokeStyle = hollow ? withAlpha(color, 0.45) : color
@@ -483,7 +489,7 @@ function drawLanePills(rc: RC, p: Project, layout: Layout): void {
     drawPill(rc, 8, lane.top + lane.height / 2, spk.name || spk.id, spk.color, withAlpha(spk.color, 0.35))
   })
   if (layout.dubTop < rc.h) {
-    drawPill(rc, 8, layout.dubTop + 12, 'DUB', theme.accent, withAlpha(theme.accent, 0.4))
+    drawPill(rc, 8, layout.dubTop + 12, 'DUB', theme.ok, withAlpha(theme.ok, 0.4))
   }
 }
 
@@ -518,12 +524,12 @@ function drawPlayhead(rc: RC, playhead: number, bottom: number): void {
   const { ctx, theme, dpr } = rc
   const x = (playhead - rc.scrollX) * rc.zoom
   if (x < -6 || x > rc.w + 6) return
-  ctx.strokeStyle = theme.accent
+  ctx.strokeStyle = theme.text
   ctx.lineWidth = 1
   vline(ctx, x, 0, bottom, dpr)
   // triangle handle in the ruler
   const xx = crisp(x, dpr)
-  ctx.fillStyle = theme.accent
+  ctx.fillStyle = theme.text
   ctx.beginPath()
   ctx.moveTo(xx - 4.5, RULER_H - 10)
   ctx.lineTo(xx + 4.5, RULER_H - 10)

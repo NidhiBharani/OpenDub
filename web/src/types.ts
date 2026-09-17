@@ -154,13 +154,14 @@ export const SECRET_MASK = '•••'
 
 export function formatTime(t: number, withMs = false): string {
   if (!isFinite(t) || t < 0) t = 0
-  const h = Math.floor(t / 3600)
-  const m = Math.floor((t % 3600) / 60)
-  const s = Math.floor(t % 60)
+  // Split integer milliseconds, not float seconds: `6.3 % 1` is 0.2999…, which floored to "06.299".
+  const totalMs = Math.round(t * 1000)
+  const h = Math.floor(totalMs / 3_600_000)
+  const m = Math.floor((totalMs % 3_600_000) / 60_000)
+  const s = Math.floor((totalMs % 60_000) / 1000)
   const base = h > 0
     ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
     : `${m}:${String(s).padStart(2, '0')}`
   if (!withMs) return base
-  const ms = Math.floor((t % 1) * 1000)
-  return `${base}.${String(ms).padStart(3, '0')}`
+  return `${base}.${String(totalMs % 1000).padStart(3, '0')}`
 }

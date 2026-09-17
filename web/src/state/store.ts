@@ -5,6 +5,22 @@ import type { Job, Project, ProjectSummary, ProviderInfo, Segment, StageKey, Wav
 
 export type View = 'library' | 'editor' | 'settings'
 export type AudioTrack = 'original' | 'dub'
+export type ThemeName = 'dark' | 'light'
+
+const THEME_KEY = 'opendub.theme'
+
+function initialTheme(): ThemeName {
+  try {
+    const saved = localStorage.getItem(THEME_KEY)
+    if (saved === 'light' || saved === 'dark') return saved
+    if (window.matchMedia?.('(prefers-color-scheme: light)').matches) return 'light'
+  } catch { /* storage blocked */ }
+  return 'dark'
+}
+
+function applyTheme(theme: ThemeName): void {
+  document.documentElement.dataset.theme = theme
+}
 
 export interface Toast {
   id: number
@@ -16,6 +32,11 @@ interface AppState {
   // navigation
   view: View
   setView: (v: View) => void
+  theme: ThemeName
+  setTheme: (t: ThemeName) => void
+  /** Full-screen live progress view over the editor; opens itself when a multi-stage run starts. */
+  runViewOpen: boolean
+  setRunViewOpen: (open: boolean) => void
 
   // data
   projects: ProjectSummary[]
@@ -48,6 +69,7 @@ interface AppState {
   applyProject: (p: Project) => void
   applyJob: (j: Job) => void
   updateSegment: (sid: string, patch: Parameters<typeof api.updateSegment>[2]) => Promise<void>
+  renameSpeaker: (spid: string, name: string) => Promise<void>
   selectSegment: (sid: string | null, seek?: boolean) => void
 
   // actions — playback/timeline
@@ -63,9 +85,24 @@ let unsubscribe: (() => void) | null = null
 let toastSeq = 1
 let seekSeq = 1
 
+const theme0 = initialTheme()
+applyTheme(theme0)
+
+const isActive = (j: Job): boolean => j.status === 'queued' || j.status === 'running'
+/** A run worth the full progress view: several stages, not a one-chip re-run or the upload ingest. */
+const isFullRun = (j: Job): boolean => j.kind === 'pipeline' && j.stages.length > 1
+
 export const useStore = create<AppState>((set, get) => ({
   view: 'library',
   setView: (view) => set({ view }),
+  theme: theme0,
+  setTheme: (theme) => {
+    applyTheme(theme)
+    try { localStorage.setItem(THEME_KEY, theme) } catch { /* storage blocked */ }
+    set({ theme })
+  },
+  runViewOpen: false,
+  setRunViewOpen: (runViewOpen) => set({ runViewOpen }),
 
   projects: [],
   project: null,
@@ -112,6 +149,7 @@ export const useStore = create<AppState>((set, get) => ({
       project,
       view: 'editor',
       jobs: Object.fromEntries(jobs.map((j) => [j.id, j])),
+      runViewOpen: jobs.some((j) => isActive(j) && isFullRun(j)),
       selection: null,
       playhead: 0,
       playing: false,
@@ -126,7 +164,7 @@ export const useStore = create<AppState>((set, get) => ({
   closeProject: () => {
     unsubscribe?.()
     unsubscribe = null
-    set({ project: null, view: 'library', jobs: {}, selection: null, playing: false })
+    set({ project: null, view: 'library', jobs: {}, selection: null, playing: false, runViewOpen: false })
     void get().loadProjects()
   },
 
@@ -151,7 +189,11 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   applyJob: (j) => {
-    set((s) => ({ jobs: { ...s.jobs, [j.id]: j } }))
+    set((s) => ({
+      jobs: { ...s.jobs, [j.id]: j },
+      // a run we have not seen before puts its progress view up front
+      runViewOpen: s.runViewOpen || (!s.jobs[j.id] && isActive(j) && isFullRun(j)),
+    }))
     if (j.status === 'done') {
       // stage outputs (waveforms, mixes) may have changed
       void get().loadWaveforms()
@@ -172,6 +214,17 @@ export const useStore = create<AppState>((set, get) => ({
               segments: s.project.segments.map((x) => (x.id === sid ? seg : x)),
             },
           }
+        : {},
+    )
+  },
+
+  renameSpeaker: async (spid, name) => {
+    const pid = get().project?.id
+    if (!pid) return
+    const speaker = await api.updateSpeaker(pid, spid, { name })
+    set((s) =>
+      s.project && s.project.id === pid
+        ? { project: { ...s.project, speakers: s.project.speakers.map((x) => (x.id === spid ? speaker : x)) } }
         : {},
     )
   },
@@ -214,6 +267,19 @@ export const useActiveJob = (): Job | null =>
     const active = Object.values(s.jobs).filter((j) => j.status === 'queued' || j.status === 'running')
     return active.sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null
   })
+
+/** Most recent multi-stage pipeline run (active or finished) — what the progress view shows. */
+export const useLatestRun = (): Job | null =>
+  useStore((s) => {
+    const runs = Object.values(s.jobs).filter(isFullRun)
+    return runs.sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null
+  })
+
+/** Speaker colour from the theme palette by cast order (server colours predate the themes). */
+export function speakerColor(project: Project | null, speakerId: string | undefined): string {
+  const idx = project?.speakers.findIndex((sp) => sp.id === speakerId) ?? -1
+  return idx < 0 ? 'var(--text-faint)' : `var(--spk-${(idx % 8) + 1})`
+}
 
 export function stageStatus(project: Project | null, key: StageKey) {
   return project?.stages?.[key]?.status ?? 'pending'
