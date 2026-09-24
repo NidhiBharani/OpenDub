@@ -1,11 +1,14 @@
-// Video player: plays playback.mp4, keeps a hidden dub_mix.wav <audio> element in sync,
-// and drives store.playhead / consumes store.seekRequest / store.playing / store.audioTrack.
-import type { CSSProperties } from 'react'
+// Viewer: one <video> whose source is playback.mp4 (original audio), playback_dub.mp4 (the same
+// picture muxed with the dub mix) or, while previewing a version, that version's copied
+// playback_dub. A single file means a single media clock — the earlier hidden <audio> element,
+// re-seeked to follow the muted video, stuttered whenever either stream hiccupped. Drives
+// store.playhead / consumes store.seekRequest / store.playing / store.audioTrack / store.rate.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { Icon } from '../components/Icon'
-import { Select } from '../components/primitives'
+import { Button, IconButton, Segmented, Select } from '../components/primitives'
 import { useProject, useStore } from '../state/store'
+import type { AudioTrack } from '../state/store'
 import { formatTime } from '../types'
 
 const RATES = [0.5, 1, 1.5, 2]
@@ -17,16 +20,28 @@ export function Player() {
   const audioTrack = useStore((s) => s.audioTrack)
   const seekRequest = useStore((s) => s.seekRequest)
   const setPlayhead = useStore((s) => s.setPlayhead)
+  const seek = useStore((s) => s.seek)
   const playhead = useStore((s) => s.playhead)
   const setAudioTrack = useStore((s) => s.setAudioTrack)
   const selection = useStore((s) => s.selection)
   const selectSegment = useStore((s) => s.selectSegment)
+  const rate = useStore((s) => s.rate)
+  const setRate = useStore((s) => s.setRate)
+  const loopRange = useStore((s) => s.loopRange)
+  const setLoopRange = useStore((s) => s.setLoopRange)
+  const hasRange = useStore((s) => s.range !== null)
+  const previewVersionId = useStore((s) => s.previewVersionId)
+  const previewVersion = useStore((s) => s.versions.find((v) => v.id === s.previewVersionId) ?? null)
+  const setPreviewVersion = useStore((s) => s.setPreviewVersion)
+  const restoreVersion = useStore((s) => s.restoreVersion)
+  const toast = useStore((s) => s.toast)
 
   const videoRef = useRef<HTMLVideoElement>(null)
-  const audioRef = useRef<HTMLAudioElement>(null)
   const rafRef = useRef<number | null>(null)
+  const playheadRef = useRef(0)
+  // Where to put the playhead back (and whether to keep playing) after the source swaps.
+  const resumeRef = useRef<{ t: number; playing: boolean } | null>(null)
 
-  const [rate, setRate] = useState(1)
   const [volume, setVolume] = useState(1)
   const [duration, setDuration] = useState(project?.media?.duration ?? 0)
 
@@ -40,16 +55,25 @@ export function Player() {
   const ingestDone = ingestState?.status === 'done'
   const ingestUpdatedAt = ingestState?.updated_at ?? null
 
-  // rAF loop: push video.currentTime -> store.playhead, and drift-correct the dub audio.
+  const previewPath = previewVersion?.outputs?.playback_dub
+  const dub = audioTrack === 'dub' || !!previewPath
+  const src = !pid || !ingestDone
+    ? null
+    : previewPath
+      ? api.mediaUrl(pid, previewPath)
+      : audioTrack === 'dub' && mixDone
+        ? `${api.mediaUrl(pid, 'playback_dub.mp4')}${mixUpdatedAt ? `?v=${encodeURIComponent(mixUpdatedAt)}` : ''}`
+        : `${api.mediaUrl(pid, 'playback.mp4')}${ingestUpdatedAt ? `?v=${encodeURIComponent(ingestUpdatedAt)}` : ''}`
+
+  // rAF loop: push video.currentTime -> store.playhead; wrap inside the range when looping.
   useEffect(() => {
     function tick() {
       const video = videoRef.current
-      const audio = audioRef.current
       if (video) {
+        const { loopRange: loop, range } = useStore.getState()
+        if (loop && range && video.currentTime >= range.end) video.currentTime = range.start
+        playheadRef.current = video.currentTime
         setPlayhead(video.currentTime)
-        if (audio && Math.abs(audio.currentTime - video.currentTime) > 0.08) {
-          audio.currentTime = video.currentTime
-        }
       }
       rafRef.current = requestAnimationFrame(tick)
     }
@@ -59,60 +83,41 @@ export function Player() {
     }
   }, [setPlayhead])
 
-  // Consume seek requests from Timeline / TranscriptList / keyboard.
+  // Changing the source reloads the element (position 0, paused): note where we were so
+  // onLoadedMetadata can restore it. Playback rate is reset by a reload too, so it is re-applied there.
+  const prevSrc = useRef(src)
+  useEffect(() => {
+    if (prevSrc.current === src) return
+    prevSrc.current = src
+    resumeRef.current = { t: playheadRef.current, playing }
+  }, [src, playing])
+
+  // Consume seek requests from Timeline / Script / keyboard.
   useEffect(() => {
     if (!seekRequest) return
     const video = videoRef.current
-    const audio = audioRef.current
     if (video) video.currentTime = seekRequest.t
-    if (audio) audio.currentTime = seekRequest.t
   }, [seekRequest])
 
-  // play()/pause() both elements when store.playing changes.
+  // play()/pause() when store.playing changes.
   useEffect(() => {
     const video = videoRef.current
-    const audio = audioRef.current
-    if (playing) {
-      void video?.play().catch(() => {})
-      if (audioTrack === 'dub') void audio?.play().catch(() => {})
-    } else {
-      video?.pause()
-      audio?.pause()
-    }
-  }, [playing, audioTrack])
+    if (!video) return
+    if (playing) void video.play().catch(() => {})
+    else video.pause()
+  }, [playing])
 
-  // Mute/unmute video vs. dub audio when the audio track selection changes.
+  // Apply playback rate (J/K/L shuttle writes store.rate) / volume; re-applied when the element remounts.
   useEffect(() => {
     const video = videoRef.current
-    const audio = audioRef.current
-    if (video) video.muted = audioTrack === 'dub'
-    if (audio) {
-      audio.muted = audioTrack !== 'dub'
-      if (audioTrack === 'dub') {
-        if (playing) {
-          if (video) audio.currentTime = video.currentTime
-          void audio.play().catch(() => {})
-        }
-      } else {
-        audio.pause()
-      }
-    }
-  }, [audioTrack, playing])
-
-  // Apply playback rate / volume to both elements (also re-applied when either element remounts).
-  useEffect(() => {
-    const video = videoRef.current
-    const audio = audioRef.current
     if (video) { video.playbackRate = rate; video.volume = volume }
-    if (audio) { audio.playbackRate = rate; audio.volume = volume }
-  }, [rate, volume, mixDone, mixUpdatedAt, ingestDone, ingestUpdatedAt])
+  }, [rate, volume, src])
 
   const sorted = useMemo(
     () => [...(project?.segments ?? [])].sort((a, b) => a.start - b.start),
     [project?.segments],
   )
   const current = sorted.find((sg) => sg.start <= playhead && playhead < sg.end) ?? null
-  const dub = audioTrack === 'dub'
 
   function step(dir: 1 | -1) {
     if (sorted.length === 0) return
@@ -122,138 +127,161 @@ export function Player() {
     selectSegment(next.id, true)
   }
 
-  const roundBtn: CSSProperties = {
-    width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--border-strong)',
-    background: 'transparent', color: 'var(--text)', cursor: 'pointer', flexShrink: 0,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  async function restorePreview() {
+    if (!previewVersionId) return
+    try {
+      await restoreVersion(previewVersionId)
+      toast('success', 'Version restored')
+    } catch (e) {
+      toast('error', e instanceof Error ? e.message : 'Failed to restore version')
+    }
   }
-  const trackBtn = (on: boolean, enabled = true): CSSProperties => ({
-    height: 36, padding: '0 12px', border: 'none', borderRadius: 7, fontSize: 13, fontWeight: 500,
-    display: 'flex', alignItems: 'center', gap: 8, cursor: enabled ? 'pointer' : 'not-allowed',
-    // sits on the (always dark) video, so it keeps fixed colours in both themes
-    background: on ? '#f3eeff' : 'transparent', color: on ? '#120b24' : '#d9d2ee',
-    opacity: enabled ? 1 : 0.5,
-  })
+
+  // While a version preview plays, the viewer is pinned to that version's dub: the switch is inert.
+  const previewing = !!previewPath
+  const trackOptions: { value: AudioTrack; label: string; title: string; disabled?: boolean }[] = [
+    {
+      value: 'original', label: 'Original', disabled: previewing,
+      title: previewing ? 'Close the version preview to switch tracks' : 'Original audio (1)',
+    },
+    {
+      value: 'dub', label: 'Dub', disabled: !mixDone || previewing,
+      title: previewing ? 'Close the version preview to switch tracks' : mixDone ? 'Dubbed audio (2)' : 'Dub — run the Mix stage first',
+    },
+  ]
 
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0,
-      padding: '16px 20px', gap: 14, alignItems: 'center',
-    }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: '#000' }}>
+      {previewVersion && (
+        <div
+          role="status"
+          style={{
+            height: 24, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 8px 0 12px',
+            background: 'var(--bg-raised)', borderBottom: '1px solid var(--border)', fontSize: 11, color: 'var(--text)',
+          }}
+        >
+          <Icon name="eye" size={12} style={{ color: 'var(--accent-text)' }} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+            Previewing <b style={{ fontWeight: 600 }}>{previewVersion.label}</b>
+          </span>
+          <span style={{ color: 'var(--text-faint)' }}>—</span>
+          <Button size="sm" variant="ghost" onClick={() => void restorePreview()} title="Restore this version (the current state is saved first)" style={{ height: 18, padding: '0 6px', color: 'var(--accent-text)' }}>
+            Restore
+          </Button>
+          <span style={{ color: 'var(--text-faint)' }}>·</span>
+          <Button size="sm" variant="ghost" onClick={() => setPreviewVersion(null)} title="Stop previewing" style={{ height: 18, padding: '0 6px' }}>
+            Close
+          </Button>
+        </div>
+      )}
+
       <div
         style={{
-          position: 'relative', flex: 1, minHeight: 0, width: '100%', maxWidth: 960, borderRadius: 10,
-          overflow: 'hidden', border: '1px solid var(--border)',
-          background: 'repeating-linear-gradient(135deg, #0a0617 0 14px, #130c28 14px 28px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          position: 'relative', flex: 1, minHeight: 0, background: '#000',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
         }}
       >
         {!ingestDone && (
-          <span style={{ fontFamily: 'var(--mono)', fontSize: 12, color: '#7a6fa3' }}>
-            video preview · appears after ingest
-          </span>
+          <span style={{ fontSize: 11, color: 'var(--text-faint)' }}>Waiting for ingest…</span>
         )}
-        {pid && ingestDone && (
+        {src && (
           <video
             key={ingestUpdatedAt ?? 'video'}
             ref={videoRef}
-            src={`${api.mediaUrl(pid, 'playback.mp4')}${ingestUpdatedAt ? `?v=${encodeURIComponent(ingestUpdatedAt)}` : ''}`}
+            src={src}
             onClick={() => setPlaying(!playing)}
             onEnded={() => setPlaying(false)}
-            onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || project?.media?.duration || 0)}
-            style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000', cursor: 'pointer' }}
+            onLoadedMetadata={(e) => {
+              const video = e.currentTarget
+              setDuration(video.duration || project?.media?.duration || 0)
+              video.playbackRate = rate
+              video.volume = volume
+              const resume = resumeRef.current
+              if (resume) {
+                resumeRef.current = null
+                video.currentTime = resume.t
+                if (resume.playing) void video.play().catch(() => {})
+              }
+            }}
+            style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000', cursor: 'pointer', display: 'block' }}
           />
         )}
-        {pid && mixDone && (
-          <audio
-            key={mixUpdatedAt ?? 'mix'}
-            ref={audioRef}
-            // m4a, not wav: browsers (Safari especially) stall streaming multi-MB PCM WAV
-            src={`${api.mediaUrl(pid, 'audio/dub_mix.m4a')}${mixUpdatedAt ? `?v=${encodeURIComponent(mixUpdatedAt)}` : ''}`}
-            style={{ display: 'none' }}
-          />
-        )}
-        <div style={{
-          position: 'absolute', top: 12, left: 12, display: 'flex', alignItems: 'center', gap: 6,
-          padding: '4px 9px', borderRadius: 20, background: 'rgb(12 7 26 / 0.8)', pointerEvents: 'none',
-          fontFamily: 'var(--mono)', fontSize: 11, letterSpacing: '0.06em',
-          color: dub ? '#2fe6d6' : '#ff4fa3',
-        }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
-          {dub ? `DUBBED · ${(project?.target_lang ?? '').toUpperCase()}` : `ORIGINAL · ${(project?.source_lang ?? '').toUpperCase()}`}
-        </div>
-        <div role="group" aria-label="Audio track" style={{
-          position: 'absolute', top: 10, right: 10, display: 'flex', padding: 3, borderRadius: 10,
-          background: 'rgb(12 7 26 / 0.8)', border: '1px solid rgb(243 238 255 / 0.18)',
-        }}>
-          <button type="button" style={trackBtn(!dub)} onClick={() => setAudioTrack('original')}>
-            <span className="timecode" style={{ fontSize: 11, color: 'inherit', opacity: 0.7 }}>1</span>Original
-          </button>
-          <button
-            type="button"
-            disabled={!mixDone}
-            title={mixDone ? undefined : 'Run the Mix stage to preview the dub audio'}
-            style={trackBtn(dub, mixDone)}
-            onClick={() => setAudioTrack('dub')}
-          >
-            <span className="timecode" style={{ fontSize: 11, color: 'inherit', opacity: 0.7 }}>2</span>Dubbed
-          </button>
-        </div>
         {current && (
           <div style={{
-            position: 'absolute', left: 40, right: 40, bottom: 24, textAlign: 'center', pointerEvents: 'none',
-            display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center',
-            textShadow: '0 1px 3px #000, 0 0 12px rgb(0 0 0 / 0.6)',
+            position: 'absolute', left: '6%', right: '6%', bottom: '8%', textAlign: 'center', pointerEvents: 'none',
+            display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center',
+            textShadow: '0 1px 2px rgb(0 0 0 / 0.9), 0 0 8px rgb(0 0 0 / 0.6)',
           }}>
-            <span style={{ fontSize: 20, lineHeight: 1.35, fontWeight: 500, color: '#fff' }}>
+            <span style={{ fontSize: 16, lineHeight: 1.35, fontWeight: 500, color: '#fff' }}>
               {dub ? (current.translated_text || current.source_text) : current.source_text}
             </span>
             {dub && current.translated_text && (
-              <span style={{ fontSize: 13, color: '#d9d2ee' }}>{current.source_text}</span>
+              <span style={{ fontSize: 12, lineHeight: 1.35, color: 'rgb(255 255 255 / 0.75)' }}>{current.source_text}</span>
             )}
           </div>
         )}
       </div>
 
-      <div style={{
-        width: '100%', maxWidth: 960, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10,
-              }}>
-        <button type="button" style={roundBtn} onClick={() => step(-1)} aria-label="Previous line" title="Previous line (↑)">
-          <Icon name="prev" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setPlaying(!playing)}
-          aria-label={playing ? 'Pause' : 'Play'}
-          title={playing ? 'Pause (Space)' : 'Play (Space)'}
-          style={{ ...roundBtn, width: 52, height: 52, border: 'none', background: 'var(--text)', color: 'var(--bg)' }}
-        >
-          <Icon name={playing ? 'pause' : 'play'} size={18} />
-        </button>
-        <button type="button" style={roundBtn} onClick={() => step(1)} aria-label="Next line" title="Next line (↓)">
-          <Icon name="next" />
-        </button>
-        <span className="timecode" style={{ fontSize: 13, color: 'var(--text)', marginLeft: 4, whiteSpace: 'nowrap' }}>
-          {formatTime(playhead, true)} <span style={{ color: 'var(--text-dim)' }}>/ {formatTime(duration, true)}</span>
+      <div
+        role="toolbar"
+        aria-label="Transport"
+        style={{
+          height: 32, flexShrink: 0, display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center',
+          padding: '0 8px', gap: 8, background: 'var(--bg-raised)', borderTop: '1px solid var(--border)',
+        }}
+      >
+        <span className="timecode" style={{ fontSize: 12, color: 'var(--text)', whiteSpace: 'nowrap', justifySelf: 'start' }}>
+          {formatTime(playhead, true)}
+          <span style={{ color: 'var(--text-dim)' }}> / {formatTime(duration, true)}</span>
         </span>
-        <div style={{ flex: 1 }} />
-        <Select
-          value={String(rate)}
-          onChange={(v) => setRate(Number(v))}
-          options={RATES.map((r) => ({ value: String(r), label: `${r}×` }))}
-          style={{ width: 66 }}
-        />
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.01}
-          value={volume}
-          onChange={(e) => setVolume(Number(e.target.value))}
-          aria-label="Volume"
-          title={`Volume ${Math.round(volume * 100)}%`}
-          style={{ width: 60, accentColor: 'var(--accent)' }}
-        />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <IconButton name="prev" title="Previous line (↑)" onClick={() => step(-1)} />
+          <IconButton name="back" title="Step back 1 s (←)" onClick={() => seek(playhead - 1)} />
+          <IconButton
+            name={playing ? 'pause' : 'play'}
+            title={playing ? 'Pause (Space)' : 'Play (Space)'}
+            onClick={() => setPlaying(!playing)}
+            size={28} iconSize={16}
+            style={{ color: 'var(--text)' }}
+          />
+          <IconButton name="forward" title="Step forward 1 s (→)" onClick={() => seek(playhead + 1)} />
+          <IconButton name="next" title="Next line (↓)" onClick={() => step(1)} />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifySelf: 'end' }}>
+          <Segmented<AudioTrack>
+            size="sm"
+            ariaLabel="Audio track"
+            value={previewPath ? 'dub' : audioTrack}
+            onChange={setAudioTrack}
+            options={trackOptions}
+          />
+          <IconButton
+            name="loop"
+            title={hasRange ? (loopRange ? 'Loop range: on' : 'Loop range: off') : 'Loop range (set a range with I / O first)'}
+            active={loopRange}
+            onClick={() => setLoopRange(!loopRange)}
+          />
+          <Select
+            ariaLabel="Playback rate"
+            value={String(rate)}
+            onChange={(v) => setRate(Number(v))}
+            options={(RATES.includes(rate) ? RATES : [...RATES, rate].sort((a, b) => a - b)).map((r) => ({ value: String(r), label: `${r}×` }))}
+            style={{ width: 58, height: 22, fontSize: 11, padding: '0 4px' }}
+          />
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={volume}
+            onChange={(e) => setVolume(Number(e.target.value))}
+            aria-label="Volume"
+            title={`Volume ${Math.round(volume * 100)}%`}
+            style={{ width: 60, accentColor: 'var(--accent)', margin: 0 }}
+          />
+        </div>
       </div>
     </div>
   )

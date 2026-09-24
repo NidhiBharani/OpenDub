@@ -311,19 +311,141 @@ async def atempo(wav: Path, out_wav: Path, factor: float) -> None:
     )
 
 
-async def to_m4a(wav: Path, out_path: Path, bitrate: str = "192k") -> None:
-    """Encode audio to AAC in an m4a container (faststart for progressive playback).
+_SILENCE_START_RE = re.compile(r"silence_start:\s*(-?[\d.]+)")
+_SILENCE_END_RE = re.compile(r"silence_end:\s*(-?[\d.]+)")
 
-    Browsers stream AAC far more reliably than multi-MB PCM WAV in <audio> (Safari especially),
-    so the editor's dub preview is served as m4a while WAV stays the pipeline's working format."""
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    await _ffmpeg(
-        "-i", str(wav),
-        "-c:a", "aac",
-        "-b:a", bitrate,
-        "-movflags", "+faststart",
-        str(out_path),
+
+async def detect_silences(
+    audio: Path, noise_db: float = -35.0, min_dur: float = 0.45
+) -> list[tuple[float, float | None]]:
+    """Run silencedetect over `audio`, returning (start, end) silence intervals.
+
+    `end` is `None` when the stream ends while still inside a silence run (ffmpeg never emits a
+    matching `silence_end` then) — callers substitute the total duration. The filter reports at
+    info level on stderr, so this bypasses `_run`'s `-loglevel error` like `measure_loudness`.
+    """
+    proc = await asyncio.create_subprocess_exec(
+        FFMPEG_BIN,
+        "-hide_banner", "-nostats", "-loglevel", "info",
+        "-i", str(audio),
+        "-af", f"silencedetect=noise={noise_db:g}dB:d={min_dur:g}",
+        "-f", "null", "-",
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE,
     )
+    try:
+        _, stderr = await proc.communicate()
+    except asyncio.CancelledError:
+        with contextlib.suppress(ProcessLookupError):
+            proc.kill()
+        raise
+    text = stderr.decode("utf-8", "replace")
+    starts: list[float] = []
+    ends: list[float] = []
+    for line in text.splitlines():
+        m = _SILENCE_START_RE.search(line)
+        if m:
+            starts.append(float(m.group(1)))
+            continue
+        m = _SILENCE_END_RE.search(line)
+        if m:
+            ends.append(float(m.group(1)))
+    if proc.returncode not in (0, None) and not starts and not ends:
+        raise RuntimeError(f"{FFMPEG_BIN} silencedetect failed (exit {proc.returncode}): {text[-500:]}")
+    return [(start, ends[i] if i < len(ends) else None) for i, start in enumerate(starts)]
+
+
+_PTS_TIME_RE = re.compile(r"pts_time:(\S+)")
+_SCENE_SCORE_RE = re.compile(r"lavfi\.scene_score=(\S+)")
+
+
+async def detect_scene_changes(video: Path, threshold: float = 0.3) -> list[tuple[float, float]]:
+    """Shot boundaries as (time, score) pairs, score in 0..1, via the `scene` frame-difference
+    metric. Frames are downscaled first (the metric is resolution-independent and ~10x faster)."""
+    tmp = video.parent / f".scenes_{uuid.uuid4().hex[:8]}.txt"
+    try:
+        await _ffmpeg(
+            "-i", str(video),
+            "-an",
+            "-vf", f"scale=320:-2,select='gt(scene,{threshold:g})',metadata=print:file={tmp}",
+            "-f", "null", "-",
+        )
+        text = tmp.read_text() if tmp.exists() else ""
+    finally:
+        tmp.unlink(missing_ok=True)
+    cuts: list[tuple[float, float]] = []
+    t: float | None = None
+    for line in text.splitlines():
+        m = _PTS_TIME_RE.search(line)
+        if m:
+            try:
+                t = float(m.group(1))
+            except ValueError:
+                t = None
+            continue
+        m = _SCENE_SCORE_RE.search(line)
+        if m and t is not None:
+            try:
+                cuts.append((round(t, 3), min(1.0, max(0.0, float(m.group(1))))))
+            except ValueError:
+                pass
+            t = None
+    return cuts
+
+
+async def overlay_ranges(
+    base_video: Path, overlay_video: Path, ranges: list[tuple[float, float]], out_path: Path
+) -> None:
+    """Video-only output: `base_video` with the picture of `overlay_video` shown during `ranges`
+    (used to put the original picture back over a lip-synced render inside skip ranges)."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    if not ranges:
+        await _ffmpeg("-i", str(base_video), "-an", "-c:v", "copy", str(out_path))
+        return
+    enable = "+".join(f"between(t,{s:.3f},{e:.3f})" for s, e in ranges)
+    graph = (
+        "[1:v][0:v]scale2ref[ov][base];"
+        f"[base][ov]overlay=eof_action=pass:enable='{enable}'[v]"
+    )
+    script = out_path.parent / f".overlay_{uuid.uuid4().hex[:8]}.txt"
+    try:
+        script.write_text(graph)
+        await _ffmpeg(
+            "-i", str(base_video),
+            "-i", str(overlay_video),
+            "-filter_complex_script", str(script),
+            "-map", "[v]",
+            "-an",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            str(out_path),
+        )
+    finally:
+        script.unlink(missing_ok=True)
+
+
+async def filmstrip(
+    video: Path, out_jpg: Path, interval: float, cols: int, tile_w: int = 96, tile_h: int = 54
+) -> int:
+    """Contact sheet of one frame every `interval` seconds, `cols` tiles per row, each
+    `tile_w`x`tile_h` (letterboxed on black). Returns the number of tiles written."""
+    out_jpg.parent.mkdir(parents=True, exist_ok=True)
+    info = await probe(video)
+    count = max(1, int(info.duration // interval) + 1)
+    rows = (count + cols - 1) // cols
+    await _ffmpeg(
+        "-i", str(video),
+        "-an",
+        "-vf",
+        (
+            f"fps=1/{interval:g},scale={tile_w}:{tile_h}:force_original_aspect_ratio=decrease,"
+            f"pad={tile_w}:{tile_h}:(ow-iw)/2:(oh-ih)/2:black,tile={cols}x{rows}"
+        ),
+        "-frames:v", "1",
+        "-q:v", "5",
+        str(out_jpg),
+    )
+    return count
 
 
 async def mux(video: Path, audio: Path, out_path: Path) -> None:

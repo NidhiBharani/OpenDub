@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useStore } from './store'
-import { demoProject } from '../test/fixtures'
+import { demoProject, resolvedCapabilities } from '../test/fixtures'
+
+const getProjectCapabilities = vi.fn(async () => resolvedCapabilities)
 
 // The store imports the api client; stub it so no module-load side effects hit fetch.
 vi.mock('../api/client', () => ({
-  api: {},
+  api: { getProjectCapabilities: () => getProjectCapabilities() },
   subscribeProjectEvents: () => () => {},
 }))
 
@@ -56,6 +58,24 @@ describe('store: selection + toasts', () => {
     useStore.getState().selectSegment('seg_019e618e', true)
     expect(useStore.getState().selection).toBe('seg_019e618e')
     expect(useStore.getState().seekRequest?.t).toBe(1.0)
+  })
+
+  it('re-resolves the capability map only when the pipeline changes', async () => {
+    useStore.setState({ project: demoProject })
+    await useStore.getState().loadResolvedCapabilities()
+    expect(getProjectCapabilities).toHaveBeenCalledTimes(1)
+    expect(useStore.getState().resolvedCapabilities.A1?.enabled).toBe(true)
+
+    // An unrelated project update (a rename, an SSE tick) must not re-fetch.
+    useStore.getState().applyProject({ ...demoProject, name: 'Renamed' })
+    expect(getProjectCapabilities).toHaveBeenCalledTimes(1)
+
+    // A pipeline edit changes what will run, so it must.
+    useStore.getState().applyProject({
+      ...demoProject,
+      pipeline: { ...demoProject.pipeline, preset: 'custom' },
+    })
+    expect(getProjectCapabilities).toHaveBeenCalledTimes(2)
   })
 
   it('toast enqueues and dismiss removes it', () => {

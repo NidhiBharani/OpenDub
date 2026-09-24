@@ -4,69 +4,24 @@ installed — every other ASR provider is optional.
 """
 from __future__ import annotations
 
-import asyncio
 import math
-import re
 from pathlib import Path
 
+from ...media import ffmpeg
 from ...models import ASRSegment
 from ..base import ASRProvider, ProgressFn, ProviderMeta, register
 
-_NOISE_DB = "-35dB"
+_NOISE_DB = -35.0
 _MIN_SILENCE = 0.45
 _MIN_REGION = 0.3
 _MAX_SEGMENT_DURATION = 12.0
 _MAX_SEGMENTS = 500
 
-_SILENCE_START_RE = re.compile(r"silence_start:\s*(-?[\d.]+)")
-_SILENCE_END_RE = re.compile(r"silence_end:\s*(-?[\d.]+)")
 
 
 async def _detect_silences(audio: Path) -> list[tuple[float, float | None]]:
-    """Run ffmpeg silencedetect over `audio`, returning (start, end) silence intervals.
-
-    `end` is `None` when the stream ends while still inside a silence run (ffmpeg never emits a
-    matching `silence_end` in that case) — the caller substitutes total duration.
-    """
-    cmd = [
-        "ffmpeg",
-        "-hide_banner",
-        "-nostats",
-        "-loglevel",
-        "info",
-        "-i",
-        str(audio),
-        "-af",
-        f"silencedetect=noise={_NOISE_DB}:d={_MIN_SILENCE}",
-        "-f",
-        "null",
-        "-",
-    ]
-    proc = await asyncio.create_subprocess_exec(
-        *cmd, stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE
-    )
-    _, stderr_bytes = await proc.communicate()
-    text = stderr_bytes.decode("utf-8", errors="replace")
-
-    starts: list[float] = []
-    ends: list[float] = []
-    for line in text.splitlines():
-        m = _SILENCE_START_RE.search(line)
-        if m:
-            starts.append(float(m.group(1)))
-            continue
-        m = _SILENCE_END_RE.search(line)
-        if m:
-            ends.append(float(m.group(1)))
-
-    if proc.returncode not in (0, None) and not starts and not ends:
-        raise RuntimeError(f"ffmpeg silencedetect failed (exit {proc.returncode}): {text[-500:]}")
-
-    intervals: list[tuple[float, float | None]] = []
-    for i, start in enumerate(starts):
-        end = ends[i] if i < len(ends) else None
-        intervals.append((start, end))
-    return intervals
+    """(start, end) silence intervals; `end` is None when the file ends inside a silence."""
+    return await ffmpeg.detect_silences(audio, noise_db=_NOISE_DB, min_dur=_MIN_SILENCE)
 
 
 def _merge_short_regions(

@@ -1,82 +1,100 @@
-/* OpenDub design tokens — "Neon Dusk": dusk-indigo grounds with neon pink / cyan / sunset accents.
-   Dark is the default; light applies via :root[data-theme='light'] (set by state/theme.ts). */
+/* OpenDub design tokens — neutral NLE chrome (see docs/plans/editor-redesign.md §2).
+   Dark is the default; light applies via :root[data-theme='light'] (set by state/store.ts).
+   Rules: one accent, colour only for content (speakers, status), 12px base, 4px radii. */
 :root {
   color-scheme: dark;
-  --bg: #120b24;
-  --bg-raised: #1a1233;
-  --bg-overlay: #2a1f4f;
-  --bg-sunk: #0e081d;
-  --border: #281e4a;
-  --border-strong: #382d63;
-  --border-dashed: #55488a;
-  --text: #f3eeff;
-  --text-dim: #ada3cf;
-  --text-faint: #7a6fa3;
+  --bg: #1c1c1e;
+  --bg-panel: #242426;
+  --bg-raised: #2c2c2e;
+  --bg-overlay: #343436;
+  --bg-sunk: #19191b;
+  --bg-field: #1e1e20;
+  --border: #3a3a3c;
+  --border-strong: #454547;
+  --border-subtle: #2f2f31;
+  --border-dashed: #5a5a5e;
+  --text: #e5e5e7;
+  --text-dim: #9a9aa0;
+  --text-faint: #6a6a70;
 
-  --accent: #ff4fa3;
-  --accent-hover: #ff6bb3;
-  --accent-ink: #2a0518;
-  --accent-text: #ff8cc3;
-  --accent-dim: rgb(255 79 163 / 0.16);
-  --ok: #2fe6d6;
-  --ok-ink: #04211f;
-  --ok-dim: rgb(47 230 214 / 0.12);
-  --warn: #ffa14f;
-  --warn-text: #ffc08a;
-  --warn-dim: rgb(255 161 79 / 0.14);
-  --err: #ff6b6b;
-  --err-text: #ff9c9c;
-  --err-dim: rgb(255 107 107 / 0.14);
-  --running: #ff4fa3;
+  --accent: #3d7eff;
+  --accent-hover: #5b92ff;
+  --accent-ink: #ffffff;
+  --accent-text: #7fa8ff;
+  --accent-dim: rgb(61 126 255 / 0.18);
+  --playhead: #f2f2f2;
+  --skimmer: #ff3b30;
+  --range: #ffd60a;
+  --ok: #30d158;
+  --ok-ink: #04210f;
+  --ok-dim: rgb(48 209 88 / 0.14);
+  --warn: #ff9f0a;
+  --warn-text: #ffb340;
+  --warn-dim: rgb(255 159 10 / 0.14);
+  --err: #ff453a;
+  --err-text: #ff6b62;
+  --err-dim: rgb(255 69 58 / 0.14);
+  --running: #3d7eff;
 
-  /* speaker palette — kept clear of the three accents */
-  --spk-1: #b69cff; --spk-2: #6cb8ff; --spk-3: #c6f26b; --spk-4: #ffd166;
-  --spk-5: #8ce0ff; --spk-6: #d7a6ff; --spk-7: #9af0b0; --spk-8: #ffb3a1;
+  /* speaker palette — muted so clips never fight the accent */
+  --spk-1: #5b8def; --spk-2: #a06fd8; --spk-3: #4fb286; --spk-4: #d9a441;
+  --spk-5: #e0705e; --spk-6: #4db3c9; --spk-7: #c46aa0; --spk-8: #8f9d5c;
 
-  --font: 'Geist', -apple-system, 'Segoe UI', system-ui, sans-serif;
-  --serif: 'Instrument Serif', 'Iowan Old Style', Georgia, serif;
-  --mono: 'Geist Mono', ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, monospace;
+  /* CJK fallbacks: source scripts (ja/zh/ko) render in the panel next to the translation */
+  --font: -apple-system, 'SF Pro Text', 'Inter', 'Segoe UI', system-ui, 'Hiragino Sans',
+    'Noto Sans CJK JP', 'Noto Sans JP', 'Yu Gothic UI', 'Microsoft YaHei', 'Malgun Gothic', sans-serif;
+  --mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Cascadia Code', Menlo, monospace;
 
-  --r-sm: 5px;
-  --r-md: 8px;
-  --r-lg: 14px;
-  --shadow: 0 8px 32px rgb(6 2 18 / 0.5);
-  --ease: 150ms ease-out;
+  --r-sm: 3px;
+  --r-md: 4px;
+  --r-lg: 6px;
+  --shadow: 0 6px 24px rgb(0 0 0 / 0.45);
+  --ease: 120ms ease-out;
+
+  --titlebar-h: 38px;
+  --toolbar-h: 32px;
+  --row-h: 24px;
 }
 
 :root[data-theme='light'] {
   color-scheme: light;
-  --bg: #f8f3ff;
+  --bg: #e9e9eb;
+  --bg-panel: #f4f4f5;
   --bg-raised: #ffffff;
-  --bg-overlay: #eadffb;
-  --bg-sunk: #f1e9fc;
-  --border: #e8def7;
-  --border-strong: #d9ccf0;
-  --border-dashed: #b9a8dc;
-  --text: #1c1233;
-  --text-dim: #5b5180;
-  --text-faint: #8a80a8;
+  --bg-overlay: #e2e2e5;
+  --bg-sunk: #dcdce0;
+  --bg-field: #ffffff;
+  --border: #c9c9cd;
+  --border-strong: #b5b5ba;
+  --border-subtle: #dedee2;
+  --border-dashed: #a3a3a9;
+  --text: #1d1d1f;
+  --text-dim: #5c5c62;
+  --text-faint: #8e8e94;
 
-  --accent: #d6247f;
-  --accent-hover: #c01a70;
+  --accent: #2f6fe8;
+  --accent-hover: #245ccc;
   --accent-ink: #ffffff;
-  --accent-text: #b3126a;
-  --accent-dim: rgb(214 36 127 / 0.1);
-  --ok: #00857c;
+  --accent-text: #1f55bd;
+  --accent-dim: rgb(47 111 232 / 0.14);
+  --playhead: #1d1d1f;
+  --skimmer: #d92e24;
+  --range: #b8950a;
+  --ok: #1f9d48;
   --ok-ink: #ffffff;
-  --ok-dim: rgb(0 133 124 / 0.1);
-  --warn: #c25e00;
-  --warn-text: #9a4a00;
-  --warn-dim: rgb(194 94 0 / 0.1);
-  --err: #c8263a;
-  --err-text: #a81b2e;
-  --err-dim: rgb(200 38 58 / 0.1);
-  --running: #d6247f;
+  --ok-dim: rgb(31 157 72 / 0.12);
+  --warn: #c97a00;
+  --warn-text: #9a5d00;
+  --warn-dim: rgb(201 122 0 / 0.12);
+  --err: #d3302a;
+  --err-text: #a81f1a;
+  --err-dim: rgb(211 48 42 / 0.12);
+  --running: #2f6fe8;
 
-  --spk-1: #6a45d9; --spk-2: #1a6fc9; --spk-3: #4f7a00; --spk-4: #8a6100;
-  --spk-5: #00748f; --spk-6: #9a3fc4; --spk-7: #1f7a3d; --spk-8: #b0452c;
+  --spk-1: #2f63c9; --spk-2: #7a45b8; --spk-3: #23855a; --spk-4: #a87510;
+  --spk-5: #bd4a37; --spk-6: #1f879c; --spk-7: #a2447f; --spk-8: #667630;
 
-  --shadow: 0 8px 32px rgb(60 30 110 / 0.18);
+  --shadow: 0 6px 24px rgb(0 0 0 / 0.18);
 }
 
 * { box-sizing: border-box; }
@@ -90,8 +108,8 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
@@ -116,16 +134,28 @@ button, input, select, textarea {
 .timecode {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-dim);
 }
 
-.serif { font-family: var(--serif); font-weight: 400; }
 .eyebrow {
   font-size: 11px;
-  letter-spacing: 0.08em;
+  font-weight: 500;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-dim);
+}
+
+/* panel header: 28px, uppercase label, icon buttons right */
+.panel-header {
+  height: 28px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-raised);
 }
 
 /* focus rings — keyboard only */
@@ -138,7 +168,7 @@ button, input, select, textarea {
 @keyframes od-spin { to { transform: rotate(360deg); } }
 @keyframes od-pulse { 50% { opacity: 0.45; } }
 @keyframes od-slide-up {
-  from { transform: translateY(8px); opacity: 0; }
+  from { transform: translateY(6px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {

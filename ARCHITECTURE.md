@@ -36,7 +36,9 @@ anime-dub-v2/
 
 ## Pipeline
 
-Fixed stage sequence. Each stage delegates to the provider chosen in the project's `pipeline`
+Fixed stage sequence (`ingest → separate → analyze → transcribe → translate → synthesize → mix →
+lipsync → review → render`; `analyze` and `review` only run capability steps — see *Capability
+map*). Each stage delegates to the provider chosen in the project's `pipeline`
 config:
 
 | stage        | kind         | consumes                          | produces (paths relative to project dir)          |
@@ -46,7 +48,7 @@ config:
 | `transcribe` | `asr` + `diarization` | `audio/vocals.wav`       | `segments[]` (start/end/source_text), `speakers[]`, per-speaker `speakers/<id>/reference.wav` (that speaker's clearest lines, ≤30 s) |
 | `translate`  | `translation`| segments' `source_text` + context | segments' `translated_text` (duration-aware; clears `translate_dirty`) |
 | `synthesize` | `tts`        | `translated_text` + speaker reference + **the segment's own source audio** as style reference | `audio/segments/<seg>/take_<n>.wav`, appended to `takes[]`, `active_take_id` set |
-| `mix`        | —            | active takes + `background.wav`   | takes time-fitted (ffmpeg atempo, clamped 0.6–1.6, `rate_factor` recorded), placed on the timeline → `audio/dub_vocals.wav`; + background → `audio/dub_mix.wav`, `waveforms/dub_mix.json` |
+| `mix`        | —            | active takes + `background.wav`   | takes time-fitted (ffmpeg atempo, clamped 0.6–1.6, `rate_factor` recorded), placed on the timeline → `audio/dub_vocals.wav`; + background → `audio/dub_mix.wav`, `waveforms/dub_mix.json`, `playback_dub.mp4` (preview: `playback.mp4` picture + dub audio) |
 | `lipsync`    | `lipsync`    | `playback.mp4` + `audio/dub_mix.wav` | `render/lipsync.mp4` (provider `lipsync.none` ⇒ status `skipped`) |
 | `render`     | —            | lipsync output or `playback.mp4` + `audio/dub_mix.wav` | `render/dubbed.mp4` |
 
@@ -59,15 +61,78 @@ carries each line's delivery into the dub.
 `translated_text`/`speaker_id`/timing ⇒ `synth_dirty=true`. Any dirty segment ⇒ downstream stages
 (`mix`, `lipsync`, `render`) become `dirty`. Stage runs process only dirty/missing work.
 Per-segment regeneration runs translate and/or synthesize for that one segment, then marks
-`mix`+ dirty (it does not auto-run mix).
+`mix`+ dirty (it does not auto-run mix). Structural transcript edits (split, merge, insert, delete,
+re-transcribe one line) set both flags on the affected lines and mark `synthesize`+ dirty; they
+are refused with 409 while a job runs (the job's checkpoint merge treats its segment list as
+authoritative). `_stage_needs_run` and the stage bodies share one predicate
+(`stages.translate_targets` / `synth_targets`), so a line without output is always picked up.
+
+**Skip ranges (keep the original).** `Project.skip_ranges: TimeRange[]` are spans excluded from
+dubbing. `pipeline/regions.py` normalizes them and derives `Segment.skipped` (midpoint inside a
+range, or ≥ 50 % overlap); skipped lines are never translated or voiced, the mix splices
+`audio/original.wav` back in over those spans with 50 ms crossfades (`audio.splice_ranges`, before
+mastering so levels match), and lip sync overlays the original picture there
+(`ffmpeg.overlay_ranges`). Editing ranges marks `mix`+ dirty.
+
+**Anchors.** `GET /projects/{pid}/anchors` merges shot changes (`ffmpeg` scene score, cached in
+`analysis/scenes.json` at ingest), dialogue silences (`silencedetect` over `vocals.wav`, cached in
+`analysis/silences.json` at separate) and segment edges into one sorted list the timeline draws
+under its ruler; `?refresh=1` re-runs the detectors. `GET /projects/{pid}/filmstrip` builds a
+contact sheet (`analysis/filmstrip.jpg`) for the timeline's video row.
+
+**Versions.** Every pipeline run that completes `mix` snapshots the on-disk state to
+`versions/<vid>/` (`meta.json` = `Version`, `state.json` = `VersionState`, copies of
+`dub_mix.wav` / `playback_dub.mp4` / `dubbed.mp4` / the waveform, hardlinks of take files and
+speaker references — take files are immutable but `run_transcribe` deletes the directory).
+Manual snapshots and restores go through `/versions`; restore refuses while a job runs, first
+snapshots the working state as a `pre_restore` version when it is not already a version, then
+copies outputs back and relinks takes. `Project.active_version_id` names the version the working
+state equals; every mutation route clears it. A project has one working `target_lang`; changing it
+snapshots the current dub, flags every line for re-translation and re-voicing, and versions carry
+their own `target_lang`, so dubs in several languages coexist as lineages (`Take.lang` records
+the language each take was voiced in).
+
+## Capability map
+
+`server/app/capabilities.py` is the declarative registry of the **41 capabilities** in the
+inference map (phases A–G: audio in, picture in, text, voice, audio out, picture out, judges).
+Each `Capability` names its provider `kind`, the macro stage it runs in, a `slot`
+(`pre`/`post` = run by the stage's step loop around the stage body; `inline` = the stage body
+consults it), a `tier`, hard `needs` / soft `uses` dependencies, an optional feature gate
+(`lipsync` / `subtitles`), an always-available builtin provider and its own `params`.
+
+- The six original kinds are capabilities too (A1 separation, A4 asr, A6 diarization,
+  C2 translation, D1 tts, F1 lipsync); their provider choice stays in the `PipelineConfig` field
+  of the same name. Every other capability is configured in `PipelineConfig.capabilities[<id>]`
+  (`CapabilityChoice {enabled, provider_id, options, params}`).
+- **Simple mode** = `apply_preset(cfg, preset, runtime, lipsync, subtitles)`: writes concrete
+  choices for all 41 (presets `minimal` | `balanced` | `max`; runtimes `builtin` | `local` |
+  `cloud`, falling back cloud → local → builtin when no provider is `available()`, with notes).
+  New projects default to `minimal` + `builtin`. **Advanced mode** edits one capability at a time
+  and flips `preset` to `custom`.
+- `resolve(cfg)` is the single answer to "what will run": explicit choice → preset membership →
+  dependency closure (`needs` are switched on) → feature gates → core capabilities are always
+  on → a `<kind>.off` provider means off. Each result carries a human `reason`.
+- Stages `analyze` (after `separate`) and `review` (before `render`) have no body: they run
+  their enabled steps and are `skipped` when none are. A failing step is recorded in
+  `StageState.steps[<capability id>]` and never fails the stage.
+- Adding a capability provider: subclass `StepProvider` in `server/app/providers/steps/`,
+  `meta.id = "<kind>.<slug>"`, implement `run(ctx: StepContext, progress) -> str`, `@register`.
+- E5 (watermark + provenance) is registered but tier `deferred`: in no preset, not implemented.
+
+Roadmap and per-capability builtins/providers: `docs/plans/capability-map-implementation.md`.
+Model picks per capability under three compute budgets (DGX Spark / unconstrained / API):
+`docs/model-candidates-by-compute.md`.
 
 ## Domain model (contract — mirrored in web/src/types.ts)
 
-See `server/app/models.py`. Key types: `Project`, `Segment` (start/end seconds, `speaker_id`,
-`source_text`, `translated_text`, `emotion`, `takes[]`, `active_take_id`, dirty flags), `Speaker`
-(id, name, color, `reference_path`), `PipelineConfig` (a `ProviderChoice {provider_id, options}`
-per kind), `StageState`, `Job`, `MediaInfo`. IDs are short random hex (`uuid4().hex[:8]`,
-prefixed `seg_` / `spk_` / `take_` / `job_`).
+See `server/app/models.py`. Key types: `Project` (… `skip_ranges[]`, `active_version_id`),
+`Segment` (start/end seconds, `speaker_id`, `source_text`, `translated_text`, `emotion`,
+`words[]` with per-word timing + confidence, `takes[]`, `active_take_id`, dirty flags, `skipped`),
+`Take` (… `lang`), `TimeRange`, `Speaker` (id, name, color, `reference_path`), `PipelineConfig`
+(a `ProviderChoice {provider_id, options}` per kind), `StageState`, `Job`, `MediaInfo`,
+`Version` / `VersionState`. IDs are short random hex (`uuid4().hex[:8]`, prefixed `seg_` /
+`spk_` / `take_` / `job_` / `rng_` / `ver_`).
 
 ## Provider system (contract)
 
@@ -107,9 +172,16 @@ Env override wins: `OPENDUB_<PROVIDER_ID upper, dots→underscores>_<FIELD upper
 - `GET  /api/projects` → `ProjectSummary[]`
 - `POST /api/projects` multipart `{file, name?, source_lang?, target_lang?}` → `Project` (ingest job auto-started)
 - `GET/DELETE /api/projects/{pid}` → `Project` / `{ok}`
-- `PATCH /api/projects/{pid}` partial `{name?, source_lang?, target_lang?, pipeline?}` → `Project`
+- `PATCH /api/projects/{pid}` partial `{name?, source_lang?, target_lang?, pipeline?, mode?, capabilities?}` → `Project` (`pipeline` = legacy kinds only; `capabilities` keyed by capability id)
+- `POST /api/projects/{pid}/pipeline/preset` `{preset, runtime, lipsync?, subtitles?}` → `{project, notes[]}` (Simple mode)
+- `GET  /api/capabilities` → `{phases, capabilities[41], presets[]}` · `GET /api/projects/{pid}/capabilities` → resolved map
 - `PATCH /api/projects/{pid}/segments/{sid}` partial `{source_text?, translated_text?, speaker_id?, start?, end?, emotion?, active_take_id?}` → `Segment` (applies dirty rules)
-- `POST /api/projects/{pid}/segments/{sid}/regenerate` `{stages: ("translate"|"synthesize")[]}` → `Job`
+- `POST /api/projects/{pid}/segments/{sid}/regenerate` `{stages: ("translate"|"synthesize")[]}` → `Job` (409 for a skipped line)
+- `POST /api/projects/{pid}/segments/{sid}/split` `{at} | {word_index}` → `Project` · `POST …/{sid}/merge-next` → `Project` · `POST /api/projects/{pid}/segments` `{start, end, speaker_id?, source_text?}` → `Project` · `DELETE …/{sid}` → `Project` (all 409 while a job runs)
+- `POST /api/projects/{pid}/segments/{sid}/transcribe` → `Job` (re-run ASR over one line)
+- `PUT  /api/projects/{pid}/skip-ranges` `{ranges: [{id?, start, end, label?}]}` → `Project`
+- `GET  /api/projects/{pid}/anchors?refresh=` → `{version, anchors[{t, kind, confidence, start, end}]}` · `GET /api/projects/{pid}/filmstrip` → `{interval, cols, rows, tile_w, tile_h, count, url}`
+- `GET  /api/projects/{pid}/versions?lang=` → `Version[]` · `POST …/versions` `{label?}` → `Version` · `PATCH …/versions/{vid}` `{label}` · `DELETE …/versions/{vid}` · `POST …/versions/{vid}/restore` `{restore_point?}` → `Project` (version outputs are served by the media route at their `outputs` paths)
 - `PATCH /api/projects/{pid}/speakers/{spid}` `{name?, color?}` → `Speaker`
 - `POST /api/projects/{pid}/pipeline/run` `{stages?: StageKey[]}` → `Job` (default: everything not `done`, in order)
 - `POST /api/jobs/{job_id}/cancel` → `Job`
@@ -126,34 +198,35 @@ Errors: JSON `{detail}` with proper status codes.
 ## Web GUI
 
 Single-page app, three views switched in the zustand store (no router): **Library** (project
-cards + drag-drop upload), **Editor**, **Settings** (per-stage provider picker + config forms
-generated from `ConfigField[]`, availability badges, a "Test" button per provider).
+browser + drag-drop upload), **Editor**, **Settings** (Simple/Advanced pipeline configuration
+with forms generated from `ConfigField[]`). Design spec and audit: `docs/plans/editor-redesign.md`.
 
-Editor layout:
+Editor layout (an NLE shell):
 
 ```
-┌────────────────────────────────────────────────┬──────────────┐
-│  Player (video, orig/dub audio toggle,         │  Inspector   │
-│  transport: ⏯ time  ⧗)                        │  (selected   │
-├────────────────────────────────────────────────┤   segment:   │
-│  PipelineBar: stage chips w/ status + Run      │   src text,  │
-├────────────────────────────────────────────────┤   editable   │
-│  Timeline (canvas): ruler ▸ waveform lane ▸    │   translation│
-│  one lane per speaker with segment blocks ▸    │   emotion,   │
-│  dub lane. Playhead, click-seek, wheel-zoom,   │   takes,     │
-│  drag-pan, segment click→select               │   ⟳ regen)   │
-└────────────────────────────────────────────────┴──────────────┘
+┌ Title bar: project · JA → EN · duration │ Run / progress │ Export · Settings ──────────────┐
+├ Status strip: 10 stages as dots + labels (click → popover: detail, run only / run from) ───┤
+├ Sidebar (Script | Versions | Cast) ┬ Viewer (black, transport bar) ┬ Inspector (Line|Speaker|Info)┤
+├ Timeline: toolbar (tools, snapping, zoom, fit, exclude range) · headers │ ruler + scene strip ┤
+│   V filmstrip ▸ ORIGINAL waveform ▸ one lane per speaker ▸ DUB waveform; range selection,   │
+│   skip regions (hatched "keep original"), skimmer + playhead                                  │
+└──────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 - The store owns: `playhead` (written each rAF by Player), `seekRequest {t, nonce}` (Player
-  consumes), `playing`, `audioTrack: original|dub`, `zoom` (px/s, 2–500), `scrollX` (seconds at
-  left edge), `selection`, plus data + actions.
-- Dub preview: a hidden `<audio src=dub_mix.wav>` kept in sync with the muted video element.
-- Keyboard: Space play/pause, ←/→ ±1 s (Shift ±5 s), ↑/↓ prev/next segment, +/- zoom, `1`/`2`
-  audio track.
-- Design: dark-first minimal. Tokens in `theme.css` — bg `#0d0f13`, panels `#14171d`, 1px borders
-  `#232833`, text `#e8eaf0`/`#8b93a7`, accent `#e8604c`, 8-hue speaker palette. Inter/system font,
-  tabular numerals for timecodes. No gradients, everything keyboard-reachable, 150 ms ease-out.
+  consumes), `playing`, `rate`, `audioTrack: original|dub`, `zoom` (px/s, 2–500), `scrollX`
+  (seconds at left edge), `selection` / `skipSelection`, `range {start,end}`, `editing`
+  (script row + field), `anchors`, `filmstrip`, `versions`, `previewVersionId`, plus data + actions.
+- Dub preview: the `<video>` source swaps between `playback.mp4`, `playback_dub.mp4` and a
+  version's `playback_dub.mp4` (same picture, different audio) so one media clock drives both;
+  position is restored across the swap.
+- Script panel: sentence-by-sentence inline correction (Enter commits + next row, Tab
+  source→translation, Esc reverts); word spans seek on click and underline low-confidence ASR
+  words; per-row actions (play, re-translate, re-voice, split, merge, keep original, delete).
+- Keyboard map: `docs/plans/editor-redesign.md` §7.
+- Design: neutral dark NLE chrome, one accent (`#3d7eff`), tokens in `theme.css`; system sans at
+  12 px, tabular mono timecodes, 24–28 px rows, 4 px radii, no gradients or serif. Colour is
+  reserved for content (speaker clips, status dots).
 
 ## Conventions
 

@@ -1,32 +1,47 @@
-// Library view: project gallery + drag-drop upload. First impression of the product.
-import type { ChangeEvent, DragEvent } from 'react'
-import { useEffect, useRef, useState } from 'react'
+// Library view: a project browser (docs/plans/editor-redesign.md §8). Toolbar (New project, search,
+// sort, grid/list), a grid of 16:9 cards or a dense table, and drop-to-upload over the whole body.
+import type { ChangeEvent, DragEvent, KeyboardEvent, ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api/client'
-import { Button, Field, Modal, ProgressBar, Select, TextInput } from '../components/primitives'
+import { Button, IconButton, Modal, ProgressBar, Segmented, Select, TextInput } from '../components/primitives'
 import { Icon } from '../components/Icon'
 import { NavLink, TopBar } from '../components/TopBar'
 import { useStore } from '../state/store'
-import { formatTime, STAGE_LABELS, STAGE_ORDER } from '../types'
+import { LANGUAGES, STAGE_LABELS, STAGE_ORDER, formatTime } from '../types'
 import type { ProjectSummary, StageKey, StageStatus } from '../types'
+
+type ViewMode = 'grid' | 'list'
+type SortKey = 'modified' | 'name' | 'duration'
+
+const VIEW_KEY = 'opendub.library.view'
+const TARGET_KEY = 'opendub.library.target'
+const SOURCE_KEY = 'opendub.library.source'
 
 const SOURCE_LANG_OPTIONS = [
   { value: 'auto', label: 'Detect automatically' },
-  { value: 'ja', label: 'Japanese' },
-  { value: 'zh', label: 'Chinese' },
-  { value: 'ko', label: 'Korean' },
-  { value: 'en', label: 'English' },
+  ...LANGUAGES.map((l) => ({ value: l.code, label: l.name })),
+]
+const TARGET_LANG_OPTIONS = LANGUAGES.map((l) => ({ value: l.code, label: l.name }))
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: 'modified', label: 'Modified' }, { value: 'name', label: 'Name' }, { value: 'duration', label: 'Duration' },
 ]
 
-const TARGET_LANG_OPTIONS = [{ value: 'en', label: 'English' }]
+const STAGE_COLOR: Record<StageStatus, string> = {
+  pending: 'var(--border-strong)',
+  queued: 'var(--running)',
+  running: 'var(--running)',
+  done: 'var(--ok)',
+  dirty: 'var(--warn)',
+  error: 'var(--err)',
+  skipped: 'var(--border-strong)',
+}
 
-const STAGE_VISUALS: Record<StageStatus, { background: string; pulse?: boolean }> = {
-  pending: { background: 'var(--border-strong)' },
-  queued: { background: 'var(--running)', pulse: true },
-  running: { background: 'var(--running)', pulse: true },
-  done: { background: 'var(--ok)' },
-  dirty: { background: 'var(--warn)' },
-  error: { background: 'var(--err)' },
-  skipped: { background: 'var(--border-strong)' },
+function readStorage(key: string, fallback: string): string {
+  try { return localStorage.getItem(key) ?? fallback } catch { return fallback }
+}
+function writeStorage(key: string, value: string) {
+  try { localStorage.setItem(key, value) } catch { /* private mode / disabled storage */ }
 }
 
 function stripExt(filename: string): string {
@@ -42,213 +57,32 @@ function isProjectActive(p: ProjectSummary): boolean {
   return STAGE_ORDER.some((key) => p.stages?.[key]?.status === 'running')
 }
 
-export function Library() {
-  const projects = useStore((s) => s.projects)
-  const loadProjects = useStore((s) => s.loadProjects)
-  const setView = useStore((s) => s.setView)
-  const [pendingFile, setPendingFile] = useState<File | null>(null)
-  const [sourceLang, setSourceLang] = useState('ja')
-  const [query, setQuery] = useState('')
-
-  useEffect(() => {
-    void loadProjects()
-  }, [loadProjects])
-
-  // Poll while any visible project is mid-stage — cheap, self-cancelling.
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (useStore.getState().projects.some(isProjectActive)) void loadProjects()
-    }, 5000)
-    return () => clearInterval(id)
-  }, [loadProjects])
-
-  const q = query.trim().toLowerCase()
-  const shown = q ? projects.filter((p) => p.name.toLowerCase().includes(q)) : projects
-  const running = projects.filter(isProjectActive).length
-
-  return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-      <TopBar padX={48}>
-        <NavLink label="Library" active onClick={() => setView('library')} />
-        <NavLink label="Settings" onClick={() => setView('settings')} />
-        <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>voice-preserving dubbing studio</span>
-        <div style={{ flex: 1 }} />
-        {running > 0 && (
-          <span className="timecode" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11 }}>
-            <span style={{
-              width: 7, height: 7, borderRadius: '50%', background: 'var(--accent)',
-              animation: 'od-pulse 1200ms ease-in-out infinite',
-            }} />
-            {running} {running === 1 ? 'job' : 'jobs'} running
-          </span>
-        )}
-      </TopBar>
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '40px 48px 48px' }}>
-        <div style={{ maxWidth: 1344, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 28 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 24, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <h1 className="serif" style={{ margin: 0, fontSize: 60, lineHeight: 1 }}>
-                Every line, <span style={{ fontStyle: 'italic', color: 'var(--accent)' }}>their</span> voice.
-              </h1>
-              <p style={{ margin: 0, fontSize: 14, color: 'var(--text-dim)' }}>
-                {projects.length} {projects.length === 1 ? 'project' : 'projects'} on this machine · media stays in{' '}
-                <span style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>data/</span>
-              </p>
-            </div>
-            <div style={{ flex: 1 }} />
-            <input
-              type="search"
-              aria-label="Search projects"
-              placeholder="Search projects"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              style={{
-                width: 260, height: 44, padding: '0 14px', borderRadius: 10, fontSize: 13,
-                border: '1px solid var(--border-strong)', background: 'var(--bg-raised)',
-              }}
-            />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 24 }}>
-            <DropZone onFile={setPendingFile} sourceLang={sourceLang} setSourceLang={setSourceLang} />
-            {shown.map((p) => (
-              <ProjectCard key={p.id} project={p} />
-            ))}
-          </div>
-
-          {projects.length === 0 ? <EmptyState /> : shown.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>No project matches “{query}”.</div>
-          ) : <StageLegend />}
-        </div>
-      </div>
-      {pendingFile && (
-        <CreateProjectModal file={pendingFile} initialSourceLang={sourceLang} onClose={() => setPendingFile(null)} />
-      )}
-    </div>
-  )
-}
-
-const CARD_H = 296
-
-function DropZone({ onFile, sourceLang, setSourceLang }: {
-  onFile: (f: File) => void; sourceLang: string; setSourceLang: (v: string) => void
-}) {
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [dragOver, setDragOver] = useState(false)
-
-  function handleDrop(e: DragEvent<HTMLDivElement>) {
-    e.preventDefault()
-    setDragOver(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) onFile(file)
+/** Last stage completion, falling back to creation. */
+function modifiedAt(p: ProjectSummary): number {
+  let t = Date.parse(p.created_at) || 0
+  for (const key of STAGE_ORDER) {
+    const u = p.stages?.[key]?.updated_at
+    if (u) t = Math.max(t, Date.parse(u) || 0)
   }
-
-  function handleInputChange(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (file) onFile(file)
-    e.target.value = ''
-  }
-
-  return (
-    <div
-      onDragEnter={(e) => { e.preventDefault(); setDragOver(true) }}
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={handleDrop}
-      style={{
-        minHeight: CARD_H, padding: 24, borderRadius: 'var(--r-lg)',
-        border: `1.5px dashed ${dragOver ? 'var(--accent)' : 'var(--border-dashed)'}`,
-        background: dragOver ? 'var(--accent-dim)' : 'transparent',
-        display: 'flex', flexDirection: 'column', gap: 14,
-        transition: 'border-color var(--ease), background var(--ease)',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'var(--accent)' }}>
-        <Icon name="upload" size={28} />
-        <div className="serif" style={{ fontSize: 28, lineHeight: 1.05, color: 'var(--text)' }}>
-          Drop a video here to start a dub
-        </div>
-      </div>
-      <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>
-        mp4, mkv, mov or webm. It is ingested right away; nothing else runs until you press Run pipeline.
-      </div>
-      <div style={{ flex: 1 }} />
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
-        <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <span className="eyebrow">From</span>
-          <Select value={sourceLang} onChange={setSourceLang} options={SOURCE_LANG_OPTIONS} style={{ minHeight: 44 }} />
-        </label>
-        <Icon name="arrow" style={{ color: 'var(--text-dim)', marginBottom: 14 }} />
-        <label style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
-          <span className="eyebrow">To</span>
-          <Select value="en" onChange={() => {}} options={TARGET_LANG_OPTIONS} style={{ minHeight: 44 }} />
-        </label>
-      </div>
-      <Button variant="primary" onClick={() => inputRef.current?.click()} style={{ minHeight: 44 }}>
-        Choose a file
-      </Button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="video/*,.mkv"
-        style={{ display: 'none' }}
-        onChange={handleInputChange}
-      />
-    </div>
-  )
+  return t
 }
 
-function EmptyState() {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 8 }}>
-      <div className="serif" style={{ fontSize: 26 }}>No projects yet</div>
-      <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>
-        Your dubs will line up here. Every stage has a built-in fallback, so the first one runs without any model installed.
-      </div>
-    </div>
-  )
+function formatDate(ms: number): string {
+  if (!ms) return '—'
+  const d = new Date(ms)
+  const now = new Date()
+  const sameYear = d.getFullYear() === now.getFullYear()
+  return d.toLocaleDateString(undefined, sameYear ? { month: 'short', day: 'numeric' } : { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
-function StageLegend() {
-  const items: [string, string][] = [
-    ['var(--ok)', 'done'], ['var(--accent)', 'running'], ['var(--warn)', 'needs re-run'],
-    ['var(--err)', 'error'], ['var(--border-strong)', 'pending or skipped'],
-  ]
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 18, fontSize: 12, color: 'var(--text-dim)', flexWrap: 'wrap' }}>
-      <span>Stage strip:</span>
-      {items.map(([color, label]) => (
-        <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 14, height: 4, borderRadius: 2, background: color }} />{label}
-        </span>
-      ))}
-    </div>
-  )
-}
-
-function StageStrip({ project }: { project: ProjectSummary }) {
-  return (
-    <div style={{ display: 'flex', gap: 3 }}>
-      {STAGE_ORDER.map((key) => {
-        const status: StageStatus = project.stages?.[key]?.status ?? 'pending'
-        const visuals = STAGE_VISUALS[status]
-        return (
-          <div
-            key={key}
-            title={`${STAGE_LABELS[key]}: ${status}`}
-            style={{
-              flex: 1, height: 4, borderRadius: 2, background: visuals.background,
-              animation: visuals.pulse ? 'od-pulse 1200ms ease-in-out infinite' : undefined,
-            }}
-          />
-        )
-      })}
-    </div>
-  )
+/** The server's summary carries source_lang; the shared type does not (yet). */
+function langPair(p: ProjectSummary): string {
+  const src = (p as { source_lang?: string }).source_lang
+  return `${src ? src.toUpperCase() : '??'} → ${p.target_lang.toUpperCase()}`
 }
 
 /** One human line for where a project stands, worst news first. */
-function projectStatus(p: ProjectSummary): { text: string; color: string } {
+export function projectStatus(p: ProjectSummary): { text: string; color: string } {
   const st = (k: StageKey): StageStatus => p.stages?.[k]?.status ?? 'pending'
   const failed = STAGE_ORDER.find((k) => st(k) === 'error')
   if (failed) {
@@ -267,94 +101,401 @@ function projectStatus(p: ProjectSummary): { text: string; color: string } {
   return { text: 'Waiting for ingest', color: 'var(--text-dim)' }
 }
 
-const POSTER_BG = 'repeating-linear-gradient(135deg, #0a0617 0 14px, #130c28 14px 28px)'
+export function Library() {
+  const projects = useStore((s) => s.projects)
+  const loadProjects = useStore((s) => s.loadProjects)
+  const setView = useStore((s) => s.setView)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<SortKey>('modified')
+  const [viewMode, setViewMode] = useState<ViewMode>(() => (readStorage(VIEW_KEY, 'grid') === 'list' ? 'list' : 'grid'))
+  const [dragDepth, setDragDepth] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    void loadProjects()
+  }, [loadProjects])
+
+  // Poll while any visible project is mid-stage — cheap, self-cancelling.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (useStore.getState().projects.some(isProjectActive)) void loadProjects()
+    }, 5000)
+    return () => clearInterval(id)
+  }, [loadProjects])
+
+  function chooseView(v: ViewMode) {
+    setViewMode(v)
+    writeStorage(VIEW_KEY, v)
+  }
+
+  const q = query.trim().toLowerCase()
+  const shown = useMemo(() => {
+    const list = q ? projects.filter((p) => p.name.toLowerCase().includes(q)) : [...projects]
+    list.sort((a, b) => {
+      if (sort === 'name') return a.name.localeCompare(b.name)
+      if (sort === 'duration') return b.duration - a.duration
+      return modifiedAt(b) - modifiedAt(a)
+    })
+    return list
+  }, [projects, q, sort])
+  const running = projects.filter(isProjectActive).length
+
+  function handleInputChange(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) setPendingFile(file)
+    e.target.value = ''
+  }
+
+  function hasFiles(e: DragEvent) {
+    return Array.from(e.dataTransfer?.types ?? []).includes('Files')
+  }
+  function onDragEnter(e: DragEvent<HTMLDivElement>) {
+    if (!hasFiles(e)) return
+    e.preventDefault()
+    setDragDepth((d) => d + 1)
+  }
+  function onDragOver(e: DragEvent<HTMLDivElement>) {
+    if (!hasFiles(e)) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+  function onDragLeave(e: DragEvent<HTMLDivElement>) {
+    if (!hasFiles(e)) return
+    setDragDepth((d) => Math.max(0, d - 1))
+  }
+  function onDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    setDragDepth(0)
+    const file = e.dataTransfer.files?.[0]
+    if (file) setPendingFile(file)
+  }
+  const dragging = dragDepth > 0
+
+  return (
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+      <TopBar>
+        <NavLink label="Library" active onClick={() => setView('library')} />
+        <NavLink label="Settings" onClick={() => setView('settings')} />
+        <div style={{ flex: 1 }} />
+        {running > 0 && (
+          <span className="timecode" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+            <span style={{
+              width: 6, height: 6, borderRadius: '50%', background: 'var(--running)',
+              animation: 'od-pulse 1200ms ease-in-out infinite',
+            }} />
+            {running} {running === 1 ? 'job' : 'jobs'} running
+          </span>
+        )}
+      </TopBar>
+
+      <div
+        role="toolbar"
+        aria-label="Library"
+        style={{
+          height: 36, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px',
+          background: 'var(--bg-raised)', borderBottom: '1px solid var(--border)',
+        }}
+      >
+        <Button variant="primary" onClick={() => inputRef.current?.click()} title="New project from a video file">
+          <Icon name="upload" size={13} />
+          New project
+        </Button>
+        <div style={{ position: 'relative', width: 220 }}>
+          <Icon name="search" size={13} style={{
+            position: 'absolute', left: 7, top: 6, color: 'var(--text-faint)', pointerEvents: 'none',
+          }} />
+          <TextInput
+            value={query}
+            onChange={setQuery}
+            placeholder="Search projects"
+            ariaLabel="Search projects"
+            style={{ paddingLeft: 24 }}
+          />
+        </div>
+        <Select
+          value={sort}
+          onChange={(v) => setSort(v as SortKey)}
+          options={SORT_OPTIONS}
+          ariaLabel="Sort by"
+          style={{ width: 110 }}
+        />
+        <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>
+          {shown.length === projects.length
+            ? `${projects.length} ${projects.length === 1 ? 'project' : 'projects'}`
+            : `${shown.length} of ${projects.length}`}
+        </span>
+        <Segmented<ViewMode>
+          value={viewMode}
+          onChange={chooseView}
+          ariaLabel="View"
+          options={[
+            { value: 'grid', label: <Icon name="grid" size={13} />, title: 'Grid' },
+            { value: 'list', label: <Icon name="list" size={13} />, title: 'List' },
+          ]}
+        />
+      </div>
+
+      <div
+        onDragEnter={onDragEnter}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        style={{
+          flex: 1, minHeight: 0, overflowY: 'auto', padding: 16, position: 'relative',
+          outline: dragging ? '2px dashed var(--accent)' : '2px dashed transparent', outlineOffset: -8,
+          background: dragging ? 'var(--accent-dim)' : 'var(--bg)',
+          transition: 'background var(--ease), outline-color var(--ease)',
+        }}
+      >
+        {projects.length === 0 ? (
+          <EmptyState dragging={dragging} />
+        ) : shown.length === 0 ? (
+          <div style={{ fontSize: 12, color: 'var(--text-dim)', textAlign: 'center', paddingTop: 48 }}>
+            No project matches “{query}”.
+          </div>
+        ) : viewMode === 'grid' ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
+            {shown.map((p) => <ProjectCard key={p.id} project={p} />)}
+          </div>
+        ) : (
+          <ProjectTable projects={shown} />
+        )}
+      </div>
+
+      <input
+        ref={inputRef}
+        type="file"
+        accept="video/*,.mkv"
+        aria-label="Choose a video file"
+        style={{ display: 'none' }}
+        onChange={handleInputChange}
+      />
+      {pendingFile && <CreateProjectModal file={pendingFile} onClose={() => setPendingFile(null)} />}
+    </div>
+  )
+}
+
+function EmptyState({ dragging }: { dragging: boolean }) {
+  return (
+    <div style={{
+      height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontSize: 12, color: dragging ? 'var(--accent-text)' : 'var(--text-dim)', textAlign: 'center',
+    }}>
+      {dragging ? 'Drop to create a project' : 'No projects yet — drop a video or click New project.'}
+    </div>
+  )
+}
+
+/** Ten stage cells, 3px tall, coloured by status. */
+function StageStrip({ project, height = 3 }: { project: ProjectSummary; height?: number }) {
+  return (
+    <div style={{ display: 'flex', gap: 2 }} aria-hidden>
+      {STAGE_ORDER.map((key) => {
+        const status: StageStatus = project.stages?.[key]?.status ?? 'pending'
+        const pulse = status === 'running' || status === 'queued'
+        return (
+          <div
+            key={key}
+            title={`${STAGE_LABELS[key]}: ${status}`}
+            style={{
+              flex: 1, height, borderRadius: 1, background: STAGE_COLOR[status],
+              animation: pulse ? 'od-pulse 1200ms ease-in-out infinite' : undefined,
+            }}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
+function Poster({ project, width, height, radius = 4, children }: {
+  project: ProjectSummary; width?: number | string; height?: number | string; radius?: number; children?: ReactNode
+}) {
+  const ingest = project.stages?.ingest
+  const hasVideo = ingest?.status === 'done'
+  return (
+    <div style={{
+      position: 'relative', width, height, aspectRatio: height ? undefined : '16 / 9', flexShrink: 0,
+      background: '#000', borderRadius: radius, border: '1px solid var(--border)', overflow: 'hidden',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+    }}>
+      {hasVideo ? (
+        <video
+          src={`${api.mediaUrl(project.id, 'playback.mp4')}?v=${encodeURIComponent(ingest?.updated_at ?? '')}#t=1`}
+          preload="metadata"
+          muted
+          playsInline
+          tabIndex={-1}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none', display: 'block' }}
+        />
+      ) : (
+        <Icon name="film" size={14} style={{ color: 'var(--text-faint)' }} />
+      )}
+      {children}
+    </div>
+  )
+}
 
 function ProjectCard({ project }: { project: ProjectSummary }) {
   const openProject = useStore((s) => s.openProject)
   const [hover, setHover] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const status = projectStatus(project)
-  const ingest = project.stages?.ingest
-  const hasVideo = ingest?.status === 'done'
 
   return (
     <div
       role="button"
       tabIndex={0}
+      aria-label={project.name}
       onClick={() => void openProject(project.id)}
       onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) void openProject(project.id) }}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
+      onFocus={() => setHover(true)}
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setHover(false) }}
       style={{
-        position: 'relative', minHeight: CARD_H, background: 'var(--bg-raised)', overflow: 'hidden',
-        border: `1px solid ${hover ? 'var(--accent)' : 'var(--border-strong)'}`,
-        borderRadius: 'var(--r-lg)', cursor: 'pointer', display: 'flex', flexDirection: 'column',
-        transform: hover ? 'translateY(-2px)' : 'none',
-        transition: 'border-color var(--ease), transform var(--ease)',
+        position: 'relative', padding: 6, background: 'var(--bg-panel)', cursor: 'pointer',
+        border: `1px solid ${hover ? 'var(--accent)' : 'var(--border)'}`, borderRadius: 'var(--r-md)',
+        display: 'flex', flexDirection: 'column', gap: 6, transition: 'border-color var(--ease)',
       }}
     >
-      <div style={{
-        position: 'relative', height: 168, flexShrink: 0, background: POSTER_BG,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: 'var(--mono)', fontSize: 11, color: '#7a6fa3',
-      }}>
-        {hasVideo ? (
-          <video
-            src={`${api.mediaUrl(project.id, 'playback.mp4')}?v=${encodeURIComponent(ingest?.updated_at ?? '')}#t=1`}
-            preload="metadata"
-            muted
-            playsInline
-            tabIndex={-1}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
-          />
-        ) : 'no preview yet'}
+      <Poster project={project}>
         <span className="timecode" style={{
-          position: 'absolute', right: 10, bottom: 10, padding: '2px 7px', borderRadius: 5,
-          background: 'rgb(12 7 26 / 0.8)', color: '#f3eeff', fontSize: 11,
+          position: 'absolute', right: 4, bottom: 4, padding: '0 4px', borderRadius: 3, lineHeight: '16px',
+          background: 'rgb(0 0 0 / 0.7)', color: '#fff', fontSize: 10,
         }}>
           {formatTime(project.duration)}
         </span>
-      </div>
-      <div style={{ flex: 1, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Clicks on the card open the project; keep the delete button's click to itself. */}
+        <span onClick={(e) => e.stopPropagation()} style={{
+          position: 'absolute', top: 4, right: 4,
+          opacity: hover ? 1 : 0, pointerEvents: hover ? 'auto' : 'none', transition: 'opacity var(--ease)',
+        }}>
+          <IconButton
+            name="trash"
+            title="Delete project"
+            size={22}
+            iconSize={13}
+            onClick={() => setConfirmDelete(true)}
+            style={{ background: 'rgb(0 0 0 / 0.7)', color: '#fff' }}
+          />
+        </span>
+      </Poster>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '0 2px 2px' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <span style={{
-            fontSize: 15, fontWeight: 500, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
+          <span style={{ fontSize: 12, fontWeight: 600, minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {project.name}
           </span>
-          <div style={{ flex: 1 }} />
-          <span className="timecode" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
-            → {project.target_lang.toUpperCase()} · {project.segment_count} {project.segment_count === 1 ? 'line' : 'lines'}
-          </span>
+          <span className="timecode" style={{ fontSize: 10, whiteSpace: 'nowrap' }}>{langPair(project)}</span>
         </div>
         <StageStrip project={project} />
-        <div style={{
-          fontSize: 12, color: status.color, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }} title={status.text}>
-          {status.text}
-        </div>
-        <div style={{ fontSize: 11, color: 'var(--text-faint)' }}>
-          {new Date(project.created_at).toLocaleDateString()}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 11 }}>
+          <span title={status.text} style={{ color: status.color, minWidth: 0, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {status.text}
+          </span>
+          <span style={{ color: 'var(--text-faint)', whiteSpace: 'nowrap' }}>
+            {project.segment_count} {project.segment_count === 1 ? 'line' : 'lines'} · {formatDate(modifiedAt(project))}
+          </span>
         </div>
       </div>
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); setConfirmDelete(true) }}
-        title="Delete project"
-        aria-label="Delete project"
-        style={{
-          position: 'absolute', top: 10, right: 10, width: 32, height: 32,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          borderRadius: 'var(--r-md)', border: 'none', background: 'rgb(12 7 26 / 0.8)',
-          color: '#f3eeff', cursor: 'pointer', padding: 0,
-          opacity: hover ? 1 : 0, pointerEvents: hover ? 'auto' : 'none',
-          transition: 'opacity var(--ease)',
-        }}
-      >
-        <Icon name="trash" />
-      </button>
       {confirmDelete && <DeleteConfirmModal project={project} onClose={() => setConfirmDelete(false)} />}
     </div>
+  )
+}
+
+const TH_STYLE = {
+  height: 24, padding: '0 8px', textAlign: 'left' as const, fontSize: 11, fontWeight: 500,
+  letterSpacing: '0.04em', textTransform: 'uppercase' as const, color: 'var(--text-dim)',
+  background: 'var(--bg-raised)', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' as const,
+  position: 'sticky' as const, top: 0, zIndex: 1,
+}
+const TD_STYLE = {
+  height: 28, padding: '0 8px', fontSize: 12, borderBottom: '1px solid var(--border-subtle)',
+  whiteSpace: 'nowrap' as const, overflow: 'hidden', textOverflow: 'ellipsis',
+}
+
+function ProjectTable({ projects }: { projects: ProjectSummary[] }) {
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--r-md)', background: 'var(--bg-panel)', overflow: 'hidden' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: 64 }} />
+          <col />
+          <col style={{ width: 90 }} />
+          <col style={{ width: 80 }} />
+          <col style={{ width: 64 }} />
+          <col style={{ width: '30%' }} />
+          <col style={{ width: 96 }} />
+          <col style={{ width: 40 }} />
+        </colgroup>
+        <thead>
+          <tr>
+            <th style={TH_STYLE} aria-label="Poster" />
+            <th style={TH_STYLE}>Name</th>
+            <th style={TH_STYLE}>Languages</th>
+            <th style={{ ...TH_STYLE, textAlign: 'right' }}>Duration</th>
+            <th style={{ ...TH_STYLE, textAlign: 'right' }}>Lines</th>
+            <th style={TH_STYLE}>Status</th>
+            <th style={TH_STYLE}>Modified</th>
+            <th style={TH_STYLE} aria-label="Actions" />
+          </tr>
+        </thead>
+        <tbody>
+          {projects.map((p) => <ProjectRow key={p.id} project={p} />)}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function ProjectRow({ project }: { project: ProjectSummary }) {
+  const openProject = useStore((s) => s.openProject)
+  const [hover, setHover] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const status = projectStatus(project)
+
+  function onKeyDown(e: KeyboardEvent<HTMLTableRowElement>) {
+    if (e.key === 'Enter' && e.target === e.currentTarget) void openProject(project.id)
+  }
+
+  return (
+    <tr
+      tabIndex={0}
+      aria-label={project.name}
+      onClick={() => void openProject(project.id)}
+      onKeyDown={onKeyDown}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ cursor: 'pointer', background: hover ? 'var(--bg-raised)' : 'transparent' }}
+    >
+      <td style={{ ...TD_STYLE, padding: '0 0 0 8px' }}>
+        <Poster project={project} width={48} height={27} radius={2} />
+      </td>
+      <td style={{ ...TD_STYLE, fontWeight: 600 }}>{project.name}</td>
+      <td style={TD_STYLE}><span className="timecode" style={{ fontSize: 11 }}>{langPair(project)}</span></td>
+      <td style={{ ...TD_STYLE, textAlign: 'right' }}><span className="timecode">{formatTime(project.duration)}</span></td>
+      <td style={{ ...TD_STYLE, textAlign: 'right' }}><span className="timecode">{project.segment_count}</span></td>
+      <td style={{ ...TD_STYLE, fontSize: 11, color: status.color }} title={status.text}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 60, flexShrink: 0 }}><StageStrip project={project} /></div>
+          <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{status.text}</span>
+        </div>
+      </td>
+      <td style={{ ...TD_STYLE, fontSize: 11, color: 'var(--text-dim)' }}>{formatDate(modifiedAt(project))}</td>
+      <td style={{ ...TD_STYLE, padding: 0, textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+        <IconButton
+          name="trash"
+          title="Delete project"
+          size={22}
+          iconSize={13}
+          onClick={() => setConfirmDelete(true)}
+          style={{ color: hover ? 'var(--text-dim)' : 'var(--text-faint)' }}
+        />
+        {confirmDelete && <DeleteConfirmModal project={project} onClose={() => setConfirmDelete(false)} />}
+      </td>
+    </tr>
   )
 }
 
@@ -378,8 +519,8 @@ function DeleteConfirmModal({ project, onClose }: { project: ProjectSummary; onC
 
   return (
     <Modal title="Delete project" onClose={deleting ? () => {} : onClose} width={380}>
-      <div style={{ fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.5, marginBottom: 20 }}>
-        Delete project — this removes all media. Cannot be undone.
+      <div style={{ fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.5, marginBottom: 16 }}>
+        Delete “{project.name}” — this removes all media. Cannot be undone.
       </div>
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
         <Button variant="ghost" onClick={onClose} disabled={deleting}>
@@ -393,13 +534,21 @@ function DeleteConfirmModal({ project, onClose }: { project: ProjectSummary; onC
   )
 }
 
-function CreateProjectModal({ file, initialSourceLang, onClose }: {
-  file: File; initialSourceLang: string; onClose: () => void
-}) {
+function FormRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 26, marginBottom: 8 }}>
+      <span style={{ width: 104, flexShrink: 0, fontSize: 11, color: 'var(--text-dim)', textAlign: 'right' }}>{label}</span>
+      <span style={{ flex: 1, minWidth: 0 }}>{children}</span>
+    </label>
+  )
+}
+
+function CreateProjectModal({ file, onClose }: { file: File; onClose: () => void }) {
   const openProject = useStore((s) => s.openProject)
   const toast = useStore((s) => s.toast)
   const [name, setName] = useState(stripExt(file.name))
-  const [sourceLang, setSourceLang] = useState(initialSourceLang)
+  const [sourceLang, setSourceLang] = useState(() => readStorage(SOURCE_KEY, 'ja'))
+  const [targetLang, setTargetLang] = useState(() => readStorage(TARGET_KEY, 'en'))
   const [creating, setCreating] = useState(false)
   const [progress, setProgress] = useState(0)
 
@@ -407,8 +556,10 @@ function CreateProjectModal({ file, initialSourceLang, onClose }: {
     const trimmed = name.trim() || stripExt(file.name)
     setCreating(true)
     setProgress(0)
+    writeStorage(SOURCE_KEY, sourceLang)
+    writeStorage(TARGET_KEY, targetLang)
     try {
-      const project = await api.createProject(file, trimmed, sourceLang, 'en', setProgress)
+      const project = await api.createProject(file, trimmed, sourceLang, targetLang, setProgress)
       onClose()
       await openProject(project.id)
     } catch (e) {
@@ -418,34 +569,30 @@ function CreateProjectModal({ file, initialSourceLang, onClose }: {
   }
 
   return (
-    <Modal title="New project" onClose={creating ? () => {} : onClose}>
-      <Field label="Name">
-        <TextInput value={name} onChange={setName} disabled={creating} />
-      </Field>
-      <Field label="Source language">
-        <Select value={sourceLang} onChange={setSourceLang} disabled={creating} options={SOURCE_LANG_OPTIONS} />
-      </Field>
-      <Field label="Target language" help="More target languages coming">
-        <Select
-          value="en"
-          onChange={() => {}}
-          disabled
-          options={TARGET_LANG_OPTIONS}
-          style={{ cursor: 'not-allowed', opacity: 0.6 }}
-        />
-      </Field>
-      <div style={{ fontSize: 12, color: 'var(--text-faint)', margin: '4px 0 18px' }}>
-        {file.name} · {formatSize(file.size)}
-      </div>
+    <Modal title="New project" onClose={creating ? () => {} : onClose} width={420}>
+      <FormRow label="Name">
+        <TextInput value={name} onChange={setName} disabled={creating} ariaLabel="Name" autoFocus />
+      </FormRow>
+      <FormRow label="Source language">
+        <Select value={sourceLang} onChange={setSourceLang} disabled={creating} options={SOURCE_LANG_OPTIONS} ariaLabel="Source language" />
+      </FormRow>
+      <FormRow label="Target language">
+        <Select value={targetLang} onChange={setTargetLang} disabled={creating} options={TARGET_LANG_OPTIONS} ariaLabel="Target language" />
+      </FormRow>
+      <FormRow label="File">
+        <span style={{ fontSize: 11, color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+          {file.name} · {formatSize(file.size)}
+        </span>
+      </FormRow>
       {creating && (
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, color: 'var(--text-dim)', marginBottom: 6 }}>
+        <div style={{ margin: '4px 0 12px' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 4 }}>
             Uploading… {Math.round(progress * 100)}%
           </div>
           <ProgressBar value={progress} />
         </div>
       )}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
         <Button variant="ghost" onClick={onClose} disabled={creating}>
           Cancel
         </Button>

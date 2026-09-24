@@ -28,7 +28,15 @@ describe('formatTime', () => {
 
 describe('stage metadata', () => {
   it('has a label for every stage in order', () => {
-    expect(STAGE_ORDER).toHaveLength(8)
+    expect(STAGE_ORDER).toHaveLength(10)
     for (const key of STAGE_ORDER) expect(STAGE_LABELS[key]).toBeTruthy()
+  })
+
+  it('places the capability stages where the server does', () => {
+    // analyze runs after separate; review just before render (server/app/models.py STAGE_ORDER).
+    expect(STAGE_ORDER.indexOf('analyze')).toBe(STAGE_ORDER.indexOf('separate') + 1)
+    expect(STAGE_ORDER.indexOf('review')).toBe(STAGE_ORDER.indexOf('render') - 1)
+    expect(STAGE_LABELS.analyze).toBe('Analyze')
+    expect(STAGE_LABELS.review).toBe('Review')
   })
 })

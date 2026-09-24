@@ -9,11 +9,13 @@ export function App() {
   const view = useStore((s) => s.view)
   const loadProjects = useStore((s) => s.loadProjects)
   const loadProviders = useStore((s) => s.loadProviders)
+  const loadCapabilityMap = useStore((s) => s.loadCapabilityMap)
 
   useEffect(() => {
     void loadProjects()
     void loadProviders()
-  }, [loadProjects, loadProviders])
+    void loadCapabilityMap()
+  }, [loadProjects, loadProviders, loadCapabilityMap])
 
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>

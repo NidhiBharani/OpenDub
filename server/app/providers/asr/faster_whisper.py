@@ -7,7 +7,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from ...models import ASRSegment
+from ...models import ASRSegment, Word
 from ..base import ASRProvider, ConfigField, ProgressFn, ProviderMeta, register
 
 
@@ -115,7 +115,13 @@ class FasterWhisperASR(ASRProvider):
                 start, end = seg.start, seg.end
                 if seg.words:
                     start, end = seg.words[0].start, seg.words[-1].end
-                out.append(ASRSegment(start=start, end=end, text=(seg.text or "").strip()))
+                words = [
+                    Word(start=w.start, end=w.end, text=w.word, confidence=w.probability)
+                    for w in (seg.words or [])
+                ]
+                out.append(
+                    ASRSegment(start=start, end=end, text=(seg.text or "").strip(), words=words)
+                )
                 frac = min(1.0, seg.end / duration) if duration > 0 else 0.0
                 progress(frac, f"transcribing {seg.end:.1f}s / {duration:.1f}s")
             return out

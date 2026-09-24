@@ -1,21 +1,23 @@
-// App-wide top bar: brand, optional left/center/right slots, theme toggle.
+// App-wide title bar (38px): brand, optional slots, theme toggle. Neutral chrome, one sans.
 import type { ReactNode } from 'react'
 import { useStore } from '../state/store'
-import { Icon, LogoMark } from './Icon'
+import { LogoMark } from './Icon'
+import { IconButton } from './primitives'
 
 export function Brand({ onClick }: { onClick?: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      title="Library"
+      title={onClick ? 'Library' : undefined}
+      aria-label="OpenDub"
       style={{
-        display: 'flex', alignItems: 'center', gap: 10, border: 'none', background: 'transparent',
-        padding: 0, cursor: onClick ? 'pointer' : 'default', color: 'var(--text)',
+        display: 'flex', alignItems: 'center', gap: 8, border: 'none', background: 'transparent',
+        padding: 0, cursor: onClick ? 'pointer' : 'default', color: 'var(--text)', flexShrink: 0,
       }}
     >
-      <LogoMark />
-      <span className="serif" style={{ fontStyle: 'italic', fontSize: 24, lineHeight: 1 }}>
+      <LogoMark size={16} />
+      <span style={{ fontSize: 13, fontWeight: 600, lineHeight: 1, letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
         <span>Open</span><span>Dub</span>
       </span>
     </button>
@@ -27,19 +29,11 @@ export function ThemeToggle() {
   const setTheme = useStore((s) => s.setTheme)
   const next = theme === 'dark' ? 'light' : 'dark'
   return (
-    <button
-      type="button"
-      onClick={() => setTheme(next)}
-      aria-label={`Switch to ${next} mode`}
+    <IconButton
+      name={theme === 'dark' ? 'sun' : 'moon'}
       title={`Switch to ${next} mode`}
-      style={{
-        width: 36, height: 36, borderRadius: '50%', border: '1px solid var(--border-strong)',
-        background: 'transparent', color: 'var(--text-dim)', cursor: 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-      }}
-    >
-      <Icon name={theme === 'dark' ? 'sun' : 'moon'} />
-    </button>
+      onClick={() => setTheme(next)}
+    />
   )
 }
 
@@ -50,8 +44,9 @@ export function NavLink({ label, active, onClick }: { label: string; active?: bo
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
       style={{
-        border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 13, padding: '8px 2px',
-        color: active ? 'var(--text)' : 'var(--text-dim)', fontWeight: active ? 500 : 400,
+        border: 'none', background: 'transparent', cursor: 'pointer', fontSize: 12, padding: '0 6px', height: 24,
+        borderRadius: 'var(--r-md)',
+        color: active ? 'var(--text)' : 'var(--text-dim)', fontWeight: active ? 600 : 500,
       }}
     >
       {label}
@@ -59,12 +54,12 @@ export function NavLink({ label, active, onClick }: { label: string; active?: bo
   )
 }
 
-export function TopBar({ onBrand, children, padX = 20 }: { onBrand?: () => void; children?: ReactNode; padX?: number }) {
+export function TopBar({ onBrand, children, padX = 12 }: { onBrand?: () => void; children?: ReactNode; padX?: number }) {
   return (
     <header
       style={{
-        height: 56, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 14,
-        padding: `0 ${padX}px`, borderBottom: '1px solid var(--border-strong)', background: 'var(--bg-raised)',
+        height: 'var(--titlebar-h)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10,
+        padding: `0 ${padX}px`, borderBottom: '1px solid var(--border)', background: 'var(--bg-raised)',
       }}
     >
       <Brand onClick={onBrand} />

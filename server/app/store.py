@@ -73,6 +73,8 @@ _USER_SEGMENT_FIELDS = (
     "notes",
     "translate_dirty",
     "synth_dirty",
+    "words",
+    "skipped",
 )
 
 
@@ -100,6 +102,9 @@ def _reapply_user_edits(ours: Project, base: dict, fresh: Project) -> None:
     ours.source_lang = fresh.source_lang
     ours.target_lang = fresh.target_lang
     ours.pipeline = fresh.pipeline
+    ours.skip_ranges = fresh.skip_ranges
+    # A route clearing it (any edit) or the snapshot setting it both happen on disk.
+    ours.active_version_id = fresh.active_version_id
 
     base_segments = {s["id"]: s for s in base.get("segments", [])}
     for seg in ours.segments:
@@ -161,15 +166,32 @@ def list_summaries() -> list[ProjectSummary]:
                 p = Project.model_validate(json.loads((d / "manifest.json").read_text()))
             except Exception:
                 continue
+            langs: list[str] = []
+            vcount = 0
+            vdir = d / "versions"
+            if vdir.is_dir():
+                for meta in vdir.glob("*/meta.json"):
+                    vcount += 1
+                    try:
+                        lang = json.loads(meta.read_text()).get("target_lang")
+                    except Exception:
+                        continue
+                    if isinstance(lang, str) and lang and lang not in langs:
+                        langs.append(lang)
+            if p.target_lang not in langs:
+                langs.append(p.target_lang)
             out.append(
                 ProjectSummary(
                     id=p.id,
                     name=p.name,
                     created_at=p.created_at,
                     duration=p.media.duration if p.media else 0.0,
+                    source_lang=p.source_lang,
                     target_lang=p.target_lang,
                     segment_count=len(p.segments),
                     stages=p.stages,
+                    version_count=vcount,
+                    languages=langs,
                 )
             )
     out.sort(key=lambda s: s.created_at, reverse=True)

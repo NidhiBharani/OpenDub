@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import config
-from .api import events, jobs, media, projects, providers, segments
+from .api import capabilities, events, jobs, media, projects, providers, segments, versions
 from .jobs import engine
 from .providers.base import load_all
 
@@ -39,6 +39,7 @@ def create_app() -> FastAPI:
         return {"ok": True, "version": VERSION}
 
     for router in (projects.router, segments.router, jobs.router, providers.router,
+                   capabilities.router, versions.router,
                    media.router, events.router):
         app.include_router(router, prefix="/api")
 

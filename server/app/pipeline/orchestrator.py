@@ -19,9 +19,10 @@ from ..jobs import Runner, engine
 from ..models import STAGE_ORDER, Job, Project, StageKey, StageStatus, now
 from ..providers.base import ProgressFn
 from . import stages as stage_impl
+from . import versions
 from .stages import StageSkipped, resolve_provider
 
-_SEGMENT_STAGES: tuple[StageKey, ...] = ("translate", "synthesize")
+_SEGMENT_STAGES: tuple[StageKey, ...] = ("transcribe", "translate", "synthesize")
 
 
 # ---- public API ------------------------------------------------------------------------------
@@ -73,8 +74,11 @@ def start_segment_job(project_id: str, segment_id: str, stages: list[str]) -> Jo
     project = store.load(project_id)
     if project is None:
         raise KeyError(f"unknown project '{project_id}'")
-    if project.segment(segment_id) is None:
+    segment = project.segment(segment_id)
+    if segment is None:
         raise KeyError(f"unknown segment '{segment_id}' in project '{project_id}'")
+    if segment.skipped and any(s in ("translate", "synthesize") for s in stages):
+        raise ValueError("this line keeps the original audio (inside a skip range)")
 
     bad = sorted({s for s in stages if s not in _SEGMENT_STAGES})
     if bad:
@@ -84,7 +88,7 @@ def start_segment_job(project_id: str, segment_id: str, stages: list[str]) -> Jo
     wanted = set(stages)
     selected: list[StageKey] = [k for k in _SEGMENT_STAGES if k in wanted]
     if not selected:
-        raise ValueError("no stages requested; pass 'translate' and/or 'synthesize'")
+        raise ValueError("no stages requested; pass 'transcribe', 'translate' and/or 'synthesize'")
 
     job = Job(project_id=project_id, kind="segment", stages=selected, segment_id=segment_id)
     engine.submit(job, _segment_runner(project_id, segment_id))
@@ -118,10 +122,6 @@ def _pipeline_runner(project_id: str, prior: dict[StageKey, StageStatus]) -> Run
 
                 progress = _stage_progress(job, index, total)
                 try:
-                    if key == "lipsync" and (
-                        project.pipeline.choice("lipsync").provider_id == "lipsync.none"
-                    ):
-                        raise StageSkipped("lipsync provider is set to 'none'")
                     detail = await stage_impl.STAGE_RUNNERS[key](project, job, progress)
                     state.status = "done"
                     state.detail = detail or ""
@@ -144,6 +144,20 @@ def _pipeline_runner(project_id: str, prior: dict[StageKey, StageStatus]) -> Run
                 await _checkpoint(project)
                 engine.bus.publish_job(job)
             job.message = f"completed {total} stage(s)"
+            # Every run that completes Mix becomes a browsable version (snapshot of the
+            # on-disk state, taken after the last stage so a render is included).
+            if "mix" in job.stages and project is not None and project.stage("mix").status == "done":
+                job.message = "saving version"
+                engine.bus.publish_job(job)
+                async with store.lock(project_id):
+                    try:
+                        await asyncio.shield(versions.snapshot(project_id, kind="auto", job_id=job.id))
+                    except versions.VersionError:
+                        pass
+                fresh = store.load(project_id)
+                if fresh is not None:
+                    engine.bus.publish_project(fresh)
+                job.message = f"completed {total} stage(s)"
         except BaseException as exc:
             # Single cleanup point: a cancel/error landing ANYWHERE in the loop (including the
             # inter-stage checkpoints) must not leave stages stuck on "running"/"queued".
@@ -182,6 +196,7 @@ def _segment_runner(project_id: str, segment_id: str) -> Runner:
 
         total = len(job.stages)
         completed = 0
+        downstream_from: StageKey = "translate" if "transcribe" in job.stages else "synthesize"
         try:
             for index, key in enumerate(job.stages):
                 job.stage = key
@@ -189,7 +204,10 @@ def _segment_runner(project_id: str, segment_id: str) -> Runner:
                 job.message = f"{key} for segment {segment_id}"
                 engine.bus.publish_job(job)
                 progress = _stage_progress(job, index, total)
-                if key == "translate":
+                if key == "transcribe":
+                    provider = resolve_provider(project, "asr")
+                    await stage_impl.transcribe_one(project, provider, segment, progress)
+                elif key == "translate":
                     provider = resolve_provider(project, "translation")
                     await stage_impl.translate_one(project, provider, segment, progress)
                 else:
@@ -201,19 +219,19 @@ def _segment_runner(project_id: str, segment_id: str) -> Runner:
                 engine.bus.publish_job(job)
         except asyncio.CancelledError:
             if completed:
-                project.mark_downstream_dirty("synthesize")
+                project.mark_downstream_dirty(downstream_from)
             # Shielded so a second cancel can't skip persisting what was already produced.
             with contextlib.suppress(asyncio.CancelledError):
                 await asyncio.shield(_checkpoint(project))
             raise
         except Exception:
             if completed:
-                project.mark_downstream_dirty("synthesize")
+                project.mark_downstream_dirty(downstream_from)
             await _checkpoint(project)
             raise
 
-        # Regenerated audio invalidates the mixdown and everything after it.
-        project.mark_downstream_dirty("synthesize")
+        # Regenerated text/audio invalidates everything after it.
+        project.mark_downstream_dirty(downstream_from)
         await _checkpoint(project)
         job.message = "segment updated"
 
@@ -238,9 +256,9 @@ def _stage_needs_run(project: Project, key: StageKey) -> bool:
     if project.stage(key).status != "done":
         return True
     if key == "translate":
-        return any(s.translate_dirty for s in project.segments)
+        return bool(stage_impl.translate_targets(project))
     if key == "synthesize":
-        return any(s.synth_dirty for s in project.segments)
+        return bool(stage_impl.synth_targets(project))
     return False
 
 

@@ -146,6 +146,47 @@ class LipSyncProvider(Provider):
     async def sync(self, video: Path, audio: Path, out_video: Path, progress: ProgressFn) -> None: ...
 
 
+class StepContext(BaseModel):
+    """What a capability step gets to work with. Steps read/write project artifacts under
+    `project_dir` and mutate `project` in place; the stage persists it afterwards."""
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    project: Any  # app.models.Project (Any: avoids a models↔base import cycle in annotations)
+    project_dir: Path
+    capability_id: str
+    params: dict[str, Any] = Field(default_factory=dict)  # capability-level knobs, defaults merged
+    enabled: dict[str, bool] = Field(default_factory=dict)  # capability id → resolved on/off
+
+
+class StepProvider(Provider):
+    """Base for every capability beyond the original six kinds (see app/capabilities.py).
+    `run` does the capability's work and returns a one-line detail for the run view. Raise
+    StepSkipped when there is nothing to do."""
+
+    @abstractmethod
+    async def run(self, ctx: StepContext, progress: ProgressFn) -> str: ...
+
+
+class StepSkipped(Exception):
+    """A capability step intentionally did nothing."""
+
+
+class OffProvider(StepProvider):
+    """The '<kind>.off' choice: selecting it disables the capability (capabilities.resolve)."""
+
+    async def run(self, ctx: StepContext, progress: ProgressFn) -> str:
+        raise StepSkipped("capability is off")
+
+
+class InlineBuiltin(StepProvider):
+    """Builtin whose behaviour is implemented by the stage body itself (e.g. atempo timing fit,
+    the static loudness chain). Registered so it is selectable and documented in the map."""
+
+    async def run(self, ctx: StepContext, progress: ProgressFn) -> str:
+        return "handled by the stage"
+
+
 REGISTRY: dict[str, type[Provider]] = {}
 
 
@@ -167,3 +208,37 @@ def load_all() -> None:
     for pkg in (asr, diarization, lipsync, separation, translation, tts):
         for mod in pkgutil.iter_modules(pkg.__path__):
             importlib.import_module(f"{pkg.__name__}.{mod.name}")
+
+    from . import steps  # capability step providers, one sub-package per kind
+
+    for mod in pkgutil.walk_packages(steps.__path__, f"{steps.__name__}."):
+        importlib.import_module(mod.name)
+    _register_builtins()
+
+
+_INLINE_BUILTINS: dict[str, tuple[str, str]] = {
+    "segmentation.pause": ("Pause + punctuation splitter", "Regroups recognized words into speakable lines: splits on real pauses and sentence ends, and caps line length. Needs word timing; falls back to the recognizer's segments."),
+    "segmentation.verbatim": ("ASR segments as lines", "Uses the recognizer's segments as dub lines, unchanged."),
+    "style.segment_reference": ("Line audio as style reference", "Passes each line's own source audio to the voice model as the style prompt."),
+    "timing_fit.atempo": ("ffmpeg atempo", "Uniform tempo stretch, clamped to 0.6–1.6×."),
+    "loudness.static": ("Static gain chain", "Dialogue −18 LUFS, bed ducked 8 dB, master −16 LUFS, −1.5 dBTP limiter."),
+}
+
+
+def _register_builtins() -> None:
+    """Make sure every capability has its always-available builtin registered: the documented
+    inline ones above, and a '<kind>.off' for every kind that can be switched off."""
+    from ..capabilities import CAPABILITIES
+
+    for provider_id, (name, description) in _INLINE_BUILTINS.items():
+        if provider_id not in REGISTRY:
+            kind, slug = provider_id.split(".", 1)
+            meta = ProviderMeta(id=provider_id, kind=kind, name=name, description=description)
+            register(type(f"Inline_{kind}_{slug}", (InlineBuiltin,), {"meta": meta}))
+    for cap in CAPABILITIES:
+        off_id = f"{cap.kind}.off"
+        if not cap.legacy_field and cap.tier != "core" and off_id not in REGISTRY:
+            meta = ProviderMeta(
+                id=off_id, kind=cap.kind, name="Off", description="This capability does not run."
+            )
+            register(type(f"Off_{cap.kind}", (OffProvider,), {"meta": meta}))

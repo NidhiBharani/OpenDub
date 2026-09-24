@@ -205,6 +205,13 @@ class JobEngine:
     def get(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)
 
+    def active(self, project_id: str) -> Job | None:
+        """The queued or running job for a project, if any (jobs are serialized per project)."""
+        for job in self._jobs.values():
+            if job.project_id == project_id and job.status in ("queued", "running"):
+                return job
+        return None
+
     def list(self, project_id: str | None = None) -> list[Job]:
         """All known jobs (active + bounded finished history), newest first."""
         jobs = [j for j in self._jobs.values() if project_id is None or j.project_id == project_id]
