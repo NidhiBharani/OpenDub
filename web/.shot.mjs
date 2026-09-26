@@ -1,0 +1,10 @@
+import { chromium } from '@playwright/test'
+const b = await chromium.launch()
+const p = await b.newPage({ viewport: { width: 1400, height: 900 } })
+p.on('console', m => console.log('console:', m.type(), m.text()))
+p.on('pageerror', e => console.log('pageerror:', e.message))
+await p.goto('http://10.0.0.27:8000/', { waitUntil: 'networkidle' })
+console.log('ROOT HTML length:', (await p.innerHTML('#root')).length)
+console.log((await p.innerText('body')).slice(0, 800))
+await p.screenshot({ path: process.argv[2] })
+await b.close()
