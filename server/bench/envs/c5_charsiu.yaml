@@ -1,0 +1,13 @@
+name: c5_charsiu
+python: ~/.opendub/envs/c5_charsiu/bin/python
+description: CharsiuG2P multilingual ByT5 (transformers + torch).
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} "transformers==4.57.6"
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} "transformers==4.57.6"
+check: "import transformers, torch; assert torch.cuda.is_available()"

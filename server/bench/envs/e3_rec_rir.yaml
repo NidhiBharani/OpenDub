@@ -1,0 +1,16 @@
+name: e3_rec_rir
+python: ~/.opendub/envs/e3_rec_rir/bin/python
+description: Rec-RIR (MIT; checkpoint ckpt/epoch35.tar in the repo) with mamba-ssm / causal-conv1d
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} torch==2.7.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} packaging ninja wheel setuptools
+    - uv pip install --python {python} --no-build-isolation causal-conv1d==1.5.2 mamba-ssm==2.2.5
+    - uv pip install --python {python} pytorch-lightning librosa soundfile tqdm toml tensorboard jsonargparse matplotlib scipy
+    - test -d {home}/.opendub/src/rec-rir || git clone https://github.com/Audio-WestlakeU/Rec-RIR {home}/.opendub/src/rec-rir
+    - git -C {home}/.opendub/src/rec-rir checkout b3ac6fc1421bd58e017022037feb14f30366b46f
+check: "import torch, mamba_ssm; assert torch.cuda.is_available()"
+notes: >-
+  x86_64 only: mamba-ssm/causal-conv1d are CUDA extensions without aarch64/sm_121 wheels (source
+  builds on GB10 unverified). torch 2.7.1 is the repo's pin; its cu128 build covers sm_120.

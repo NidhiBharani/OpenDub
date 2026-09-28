@@ -1,0 +1,14 @@
+name: e2_flowhigh
+python: ~/.opendub/envs/e2_flowhigh/bin/python
+description: FLowHigh via the packaged resemble-ai/flowhigh fork (MIT); weights ResembleAI/FlowHigh on the HF Hub
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} soundfile==0.13.1 "git+https://github.com/resemble-ai/flowhigh.git@ce73b7a3701b16e86f69050729c41dfc2b24a35b"
+  aarch64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} soundfile==0.13.1 "git+https://github.com/resemble-ai/flowhigh.git@ce73b7a3701b16e86f69050729c41dfc2b24a35b"
+check: "import flowhigh, torch; assert torch.cuda.is_available()"
+notes: from_local() calls .cuda() unconditionally, so a GPU is required.

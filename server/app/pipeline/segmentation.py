@@ -7,6 +7,8 @@ voice model never gets a 25-second paragraph.
 """
 from __future__ import annotations
 
+import math
+
 from ..models import ASRSegment, Word
 
 _SENTENCE_END = tuple("。．.!?！？…‥")
@@ -49,7 +51,8 @@ def resegment(
             run.clear()
 
     for seg in segments:
-        words = [w for w in seg.words if w.text.strip() and w.end >= w.start]
+        words = [w for w in seg.words if w.text.strip() and math.isfinite(w.start)
+                 and math.isfinite(w.end) and w.end > w.start]
         if not words:
             flush()
             out.append(seg)
@@ -57,8 +60,27 @@ def resegment(
         for word in words:
             if run:
                 gap = word.start - run[-1].end
-                if gap >= min_pause or (_ends_sentence(run[-1]) and gap >= _SENTENCE_GAP):
+                if gap < -0.02 or gap >= min_pause or (_ends_sentence(run[-1]) and gap >= _SENTENCE_GAP):
                     flush()
             run.append(word)
     flush()
     return sorted(out, key=lambda s: (s.start, s.end))
+
+
+def resegment_speakers(
+    segments: list[ASRSegment], labels: list[str], **kwargs
+) -> tuple[list[ASRSegment], list[str]]:
+    """Regroup words only within a contiguous speaker turn, never across identities."""
+    if len(segments) != len(labels):
+        raise ValueError("one speaker label is required per ASR segment")
+    out, out_labels = [], []
+    start = 0
+    while start < len(segments):
+        end = start + 1
+        while end < len(segments) and labels[end] == labels[start]:
+            end += 1
+        lines = resegment(segments[start:end], **kwargs)
+        out.extend(lines)
+        out_labels.extend([labels[start]] * len(lines))
+        start = end
+    return out, out_labels

@@ -1,0 +1,13 @@
+name: e2_sidon
+python: ~/.opendub/envs/e2_sidon/bin/python
+description: Sidon v0.1 (MIT TorchScript weights) + w2v-BERT 2.0 feature extractor (transformers)
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} transformers==4.57.6 huggingface_hub==0.36.0 soundfile==0.13.1 numpy==2.2.6
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} transformers==4.57.6 huggingface_hub==0.36.0 soundfile==0.13.1 numpy==2.2.6
+check: "import torch, transformers; transformers.SeamlessM4TFeatureExtractor; assert torch.cuda.is_available()"

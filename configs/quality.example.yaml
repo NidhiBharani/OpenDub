@@ -1,0 +1,19 @@
+# Merge into providers in your active settings.yaml; do not replace existing credentials.
+providers:
+  quality.runtime:
+    tts_attempts: 3
+    max_cer: 0.20
+    max_clipping_fraction: 0.01
+    require_verification: false  # enable after installing/configuring the local verifier
+    asr_model: ""             # absolute local Faster-Whisper model directory
+    speaker_model: ""         # absolute local SpeechBrain ECAPA directory
+    emotion_model: auto       # or funasr:/absolute/local/emotion2vec_plus_base
+    emotion_languages: []     # only languages validated for your configured classifier
+    require_emotion_match: true
+    level_outliers: false
+    background_gain_db: 0.0
+    ducking_mix: 0.0
+    terminology: {}           # source name/term -> exact desired target spelling
+  separation.demucs:
+    shifts: 2
+    overlap: 0.5

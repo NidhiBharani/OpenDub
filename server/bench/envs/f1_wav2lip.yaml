@@ -1,0 +1,32 @@
+name: f1_wav2lip
+python: ~/.opendub/envs/f1_wav2lip/bin/python
+description: Wav2Lip (Rudrabha/Wav2Lip @ bac9a81e) on a modern torch; librosa 0.9.2 keeps the positional
+  librosa.filters.mel call in audio.py working.
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+  - test -d {home}/.opendub/src/Wav2Lip || git clone https://github.com/Rudrabha/Wav2Lip {home}/.opendub/src/Wav2Lip
+  - git -C {home}/.opendub/src/Wav2Lip checkout bac9a81e63ecc153202353372e5724b83d9e6322
+  - uv pip install --python {python} librosa==0.9.2 numpy==1.26.4 numba opencv-python-headless==4.10.0.84
+    tqdm gdown
+  - mkdir -p {home}/.opendub/src/Wav2Lip/checkpoints {home}/.opendub/src/Wav2Lip/face_detection/detection/sfd
+  - test -f {home}/.opendub/src/Wav2Lip/checkpoints/wav2lip_gan.pth || {prefix}/bin/gdown 15G3U08c8xsCkOqQxE38Z2XXDnPcOptNk
+    -O {home}/.opendub/src/Wav2Lip/checkpoints/wav2lip_gan.pth
+  - test -f {home}/.opendub/src/Wav2Lip/face_detection/detection/sfd/s3fd.pth || curl -L https://www.adrianbulat.com/downloads/python-fan/s3fd-619a316812.pth
+    -o {home}/.opendub/src/Wav2Lip/face_detection/detection/sfd/s3fd.pth
+  aarch64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+  - test -d {home}/.opendub/src/Wav2Lip || git clone https://github.com/Rudrabha/Wav2Lip {home}/.opendub/src/Wav2Lip
+  - git -C {home}/.opendub/src/Wav2Lip checkout bac9a81e63ecc153202353372e5724b83d9e6322
+  - uv pip install --python {python} librosa==0.9.2 numpy==1.26.4 numba opencv-python-headless==4.10.0.84
+    tqdm gdown
+  - mkdir -p {home}/.opendub/src/Wav2Lip/checkpoints {home}/.opendub/src/Wav2Lip/face_detection/detection/sfd
+  - test -f {home}/.opendub/src/Wav2Lip/checkpoints/wav2lip_gan.pth || {prefix}/bin/gdown 15G3U08c8xsCkOqQxE38Z2XXDnPcOptNk
+    -O {home}/.opendub/src/Wav2Lip/checkpoints/wav2lip_gan.pth
+  - test -f {home}/.opendub/src/Wav2Lip/face_detection/detection/sfd/s3fd.pth || curl -L https://www.adrianbulat.com/downloads/python-fan/s3fd-619a316812.pth
+    -o {home}/.opendub/src/Wav2Lip/face_detection/detection/sfd/s3fd.pth
+check: import torch, librosa, cv2; assert torch.cuda.is_available()
+notes: aarch64 recipe below is the same (pure torch + librosa); the GAN checkpoint lives on the authors'
+  Google Drive (gdown).

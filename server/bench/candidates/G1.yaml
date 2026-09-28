@@ -1,0 +1,290 @@
+# G1 — intelligibility judge (ASR round-trip). Candidates are recognisers ranked by how well
+# their CER / defect score detects defective takes (spec: bench/arena/specs/g1.py).
+# Sources: research = "OpenDub Model Research" G1 ledger (rank), compute-tiers = G1 picks/alts.
+capability: G1
+candidates:
+  - id: whisper-large-v3
+    worker: asr_faster_whisper
+    env: server
+    kind: local
+    params: {model: large-v3, compute_type: float16, beam_size: 5, word_timestamps: false,
+             condition_on_previous_text: false}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 4.5}
+    baseline: true
+    url: https://huggingface.co/openai/whisper-large-v3
+    params_b: 1.55
+    sources: [research:G1:2, compute-tiers:G1:spark, compute-tiers:G1:big]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      The judgelib ASR-panel default (asr_roundtrip "whisper"); same params, so its G1 rank is
+      the rank of the judge every TTS spec uses. Seq2seq with a language prior: may repair
+      misreadings.
+  - id: whisper-large-v3-turbo
+    worker: asr_faster_whisper
+    env: server
+    kind: local
+    params: {model: large-v3-turbo, compute_type: float16, beam_size: 5, word_timestamps: false,
+             condition_on_previous_text: false}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2.5}
+    url: https://huggingface.co/openai/whisper-large-v3-turbo
+    params_b: 0.809
+    sources: [a4-baseline]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: OpenDub's current ASR (A4 baseline); cheaper Whisper-family judge.
+  - id: qwen3-asr-1.7b
+    worker: asr_qwen3
+    env: qwen3asr
+    kind: local
+    params: {model: Qwen/Qwen3-ASR-1.7B, revision: 7278e1e70fe206f11671096ffdd38061171dd6e5,
+             dtype: bfloat16, attn: sdpa}
+    languages: [en, hi, ja, zh, ko, de, fr, es, it, pt, ru]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 5}
+    url: https://huggingface.co/Qwen/Qwen3-ASR-1.7B
+    params_b: 1.7
+    sources: [plan:G1-panel]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      judgelib panel member "qwen3" (A4 winner for hi). Strong LLM prior: the research warns it
+      recovers surface-correct text from wrong readings (false negatives).
+  - id: kotoba-whisper-v2
+    worker: asr_faster_whisper
+    env: server
+    kind: local
+    params: {model: kotoba-tech/kotoba-whisper-v2.0-faster, compute_type: float16, beam_size: 5,
+             word_timestamps: false, condition_on_previous_text: false}
+    languages: [ja]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2}
+    url: https://huggingface.co/kotoba-tech/kotoba-whisper-v2.0-faster
+    params_b: 0.756
+    sources: [plan:G1-panel-ja]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: Plan G1 row names kotoba-whisper for the ja panel. Distil-Whisper lineage (Whisper family).
+  - id: mms-1b-all-ctc
+    worker: g1_ctc
+    env: server
+    kind: local
+    params: {model: facebook/mms-1b-all, mode: greedy, dtype: float16}
+    languages: [en, hi, ja, zh, ko, de, fr, es, it, pt, ru, ta, te, bn, ar]
+    license: CC-BY-NC-4.0
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 5}
+    url: https://huggingface.co/facebook/mms-1b-all
+    params_b: 1.0
+    sources: [research:G1:6, compute-tiers:G1:spark, compute-tiers:G1:big-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      The "strict" judge: wav2vec2 CTC with per-language adapters (ISO 639-3), greedy, no LM, so
+      misreadings stay visible. judgelib panel member "mms". Japanese output script of the jpn
+      adapter not checked (CER assumes native script).
+  - id: mms-1b-all-forced
+    worker: g1_ctc
+    env: server
+    kind: local
+    params: {model: facebook/mms-1b-all, mode: forced, dtype: float16}
+    languages: [en, hi, ja, zh, ko, de, fr, es, it, pt, ru, ta, te, bn, ar]
+    license: CC-BY-NC-4.0
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 5}
+    url: https://huggingface.co/facebook/mms-1b-all
+    params_b: 1.0
+    sources: [research:G1:6]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Forced-alignment posterior instead of free decoding: defect_score = CTC NLL of the intended
+      line per label (cannot hallucinate). Characters outside the adapter vocabulary are dropped.
+  - id: wav2vec2-large-960h-lv60-self
+    worker: g1_ctc
+    env: server
+    kind: local
+    params: {model: facebook/wav2vec2-large-960h-lv60-self, adapters: false, mode: greedy,
+             dtype: float16}
+    languages: [en]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2}
+    url: https://huggingface.co/facebook/wav2vec2-large-960h-lv60-self
+    params_b: 0.317
+    sources: [research:G1:6, compute-tiers:G1:spark]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: Apache-licensed English CTC (third lineage, no LM); upper-case character vocabulary.
+  - id: whisper-mms-panel
+    worker: g1_panel
+    env: server
+    kind: method
+    params: {combine: max, whisper: {model: large-v3, compute_type: float16},
+             ctc: {model: facebook/mms-1b-all, dtype: float16}}
+    languages: [en, hi, ja]
+    license: MIT + CC-BY-NC-4.0
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 10}
+    url: https://github.com/SYSTRAN/faster-whisper
+    params_b: 2.55
+    sources: [compute-tiers:G1:big, research:G1:2]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Two lineage-disjoint recognisers (Whisper seq2seq + MMS CTC) gated on agreement: defect
+      score = max CER of the two. Stand-in for the unconstrained "cross-family rank ensemble".
+  - id: parakeet-tdt-0.6b-v3
+    worker: a4_nemo
+    env: a4_nemo
+    kind: local
+    params: {model: nvidia/parakeet-tdt-0.6b-v3, family: asr, timestamps: false,
+             languages: [en, de, fr, es, it, pt, ru, nl, pl, uk, cs, sk, bg, hr, da, et, fi, el,
+                         hu, lv, lt, mt, ro, sl, sv]}
+    languages: [en, de, fr, es, it, pt, ru, nl, pl, uk, cs, sk, bg, hr, da, et, fi, el, hu, lv,
+                lt, mt, ro, sl, sv]
+    license: CC-BY-4.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3}
+    url: https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+    params_b: 0.6
+    sources: [research:G1:5, compute-tiers:G1:spark]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      Spark verifier pick (TDT decoder cannot free-hallucinate). 25 European languages: no hi/ja,
+      so it only judges en here. Reuses the A4 NeMo worker. Never pair with Canary as the two
+      opinions (same FastConformer lineage).
+  - id: canary-1b-v2
+    worker: a4_nemo
+    env: a4_nemo
+    kind: local
+    params: {model: nvidia/canary-1b-v2, family: canary, timestamps: false}
+    languages: [en, de, fr, es, it, pt, ru, nl, pl, uk, cs, sk, bg, hr, da, et, fi, el, hu, lv,
+                lt, mt, ro, sl, sv]
+    license: CC-BY-4.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 5}
+    url: https://huggingface.co/nvidia/canary-1b-v2
+    params_b: 0.978
+    sources: [research:G1:1, compute-tiers:G1:spark-alt, compute-tiers:G1:big-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: 'Research #1 primary (NeMo lineage, disjoint from Whisper). European languages only.'
+  - id: canary-qwen-2.5b
+    worker: a4_nemo
+    env: a4_nemo
+    kind: local
+    params: {model: nvidia/canary-qwen-2.5b, family: salm, max_new_tokens: 256}
+    languages: [en]
+    license: CC-BY-4.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 8}
+    url: https://huggingface.co/nvidia/canary-qwen-2.5b
+    params_b: 2.5
+    sources: [research:G1:1]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: 'English-only SALM (LLM decoder: expect more "repair" than Canary-1B-v2).'
+  - id: voxtral-small-24b
+    worker: a4_hf_asr
+    env: a4_transformers
+    kind: local
+    params: {model: mistralai/Voxtral-Small-24B-2507, family: voxtral, dtype: bfloat16}
+    languages: [en, es, fr, pt, hi, de, nl, it]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 56, disk_gb: 50}
+    url: https://huggingface.co/mistralai/Voxtral-Small-24B-2507
+    params_b: 24
+    sources: [research:G1:4, compute-tiers:G1:spark-alt, compute-tiers:G1:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      Strongest open multilingual recogniser (audio-LLM). BF16 ~48 GB weights + activations
+      (estimate): Spark only. No ja.
+  - id: elevenlabs-scribe-v2
+    worker: a4_elevenlabs
+    env: server
+    kind: api
+    params: {model_id: scribe_v2, usd_per_hour: 0.22}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ELEVENLABS_API_KEY]}
+    url: https://elevenlabs.io/docs/api-reference/speech-to-text/convert
+    sources: [research:G1:3, compute-tiers:G1:api]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: API pick; use as the reported evaluator, never as a verifier optimised into.
+  - id: assemblyai-universal-3-5-pro
+    worker: a4_assemblyai
+    env: server
+    kind: api
+    params: {speech_model: universal-3-5-pro, usd_per_hour: 0.21}
+    languages: [en, hi, ja, es, fr, de, it, pt, nl, zh, ko, ru, tr, pl, uk, vi, ar, sv]
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ASSEMBLYAI_API_KEY]}
+    url: https://www.assemblyai.com/docs/api-reference/transcripts/submit
+    sources: [compute-tiers:G1:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      Compute-tiers names "Universal 3 Pro"; the A4 worker's current model is universal-3-5-pro
+      (18 languages incl. hi, ja per the worker docstring; list above not individually checked).
+  - id: gemini-3.5-transcribe
+    worker: a4_gemini_transcribe
+    env: server
+    kind: api
+    params: {model: gemini-3.5-transcribe, usd_per_min: 0.005}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    url: https://ai.google.dev/gemini-api/docs/transcribe
+    sources: [compute-tiers:G1:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: Released 2026-08-26, 85+ languages (compute-tiers). Reuses the A4 worker.
+  - id: cohere-transcribe
+    worker: a4_hf_asr
+    env: a4_transformers
+    kind: local
+    params: {family: cohere, model: CohereLabs/cohere-transcribe}
+    languages: [en]
+    license: unknown
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 6}
+    enabled: false
+    url: https://huggingface.co/CohereLabs
+    sources: [research:G1:7]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      Research lists it as an evaluate-only commercial API; the A4 worker has a "cohere" family.
+      Model id / licence not verified here: copy the A4 registration and enable.
+  - id: indicconformer-600m
+    worker: asr_indicconformer
+    env: indicconformer
+    kind: local
+    params: {model: ai4bharat/indic-conformer-600m-multilingual,
+             revision: e9b71b369c048e2c6b634d4c131061c34e441179, decoding: ctc}
+    languages: [hi]
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3, api_keys: [HF_TOKEN]}
+    enabled: false
+    url: https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
+    params_b: 0.6
+    sources: [plan:G1-panel-indic]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: Plan's Indic panel member; disabled per user decision 2026-09-28 (gated repo).
+  - id: cross-family-rank-ensemble
+    worker: g1_panel
+    env: server
+    kind: method
+    params: {combine: mean, lineages: [whisper, wav2vec2, voxtral-or-canary]}
+    languages: [en]
+    license: mixed
+    ship_ok: null
+    enabled: false
+    url: https://github.com/SYSTRAN/faster-whisper
+    sources: [compute-tiers:G1:big]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      Three-lineage rank ensemble (Yu & Kang, ICML 2026 workshop) needs recognisers from different
+      envs in one judgement; compose it from G1 outputs as a derived metric once the single
+      judges are ranked. whisper-mms-panel is the implemented two-lineage version.

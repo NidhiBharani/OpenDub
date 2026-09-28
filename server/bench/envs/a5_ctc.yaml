@@ -1,0 +1,16 @@
+name: a5_ctc
+python: ~/.opendub/envs/a5_ctc/bin/python
+description: ctc-forced-aligner (BSD; default MMS-300m aligner checkpoint is CC BY-NC 4.0) on torchaudio.functional.forced_align
+  (kept in torchaudio 2.11).
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} git+https://github.com/MahmoudAshraf97/ctc-forced-aligner.git soundfile
+    librosa numpy
+  aarch64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} git+https://github.com/MahmoudAshraf97/ctc-forced-aligner.git soundfile
+    librosa numpy
+check: import ctc_forced_aligner

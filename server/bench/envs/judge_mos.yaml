@@ -1,0 +1,23 @@
+name: judge_mos
+python: ~/.opendub/envs/judge_mos/bin/python
+description: >-
+  MOS predictors (workers/judge_mos.py): UTMOSv2 (git, pinned), Distill-MOS 0.9.1 (+ its
+  xls-r-sqa teacher package), Audiobox Aesthetics 0.0.4, NISQA + DNSMOS via torchmetrics 1.9
+  (DNSMOS ONNX on CPU), NISQA-TTS via the NISQA repo (weights/nisqa_tts.tar ships in the repo).
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} "utmosv2 @ git+https://github.com/sarulab-speech/UTMOSv2.git@cc2700db57bb83ee13dc31ebe1b868c254e15d09" distillmos==0.9.1 xls-r-sqa==0.1.0 audiobox_aesthetics==0.0.4 torchmetrics==1.9.0 librosa onnxruntime requests soundfile numpy pandas scipy matplotlib seaborn pyyaml tqdm
+    - test -d {home}/.opendub/src/NISQA || git clone https://github.com/gabrielmittag/NISQA {home}/.opendub/src/NISQA
+    - git -C {home}/.opendub/src/NISQA checkout fe84f0f252abec382b24367d5b22498a7ce34dbb
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} "utmosv2 @ git+https://github.com/sarulab-speech/UTMOSv2.git@cc2700db57bb83ee13dc31ebe1b868c254e15d09" distillmos==0.9.1 xls-r-sqa==0.1.0 audiobox_aesthetics==0.0.4 torchmetrics==1.9.0 librosa onnxruntime requests soundfile numpy pandas scipy matplotlib seaborn pyyaml tqdm
+    - test -d {home}/.opendub/src/NISQA || git clone https://github.com/gabrielmittag/NISQA {home}/.opendub/src/NISQA
+    - git -C {home}/.opendub/src/NISQA checkout fe84f0f252abec382b24367d5b22498a7ce34dbb
+check: "import torch, utmosv2, distillmos, audiobox_aesthetics, torchmetrics, onnxruntime, xls_r_sqa; assert torch.cuda.is_available()"
+notes: >-
+  NISQA (and NISQA-TTS) weights are CC BY-NC-SA 4.0; torchmetrics fetches nisqa.tar and the DNSMOS
+  ONNX files from GitHub on first use. Dependency set not yet resolved together on either arch.

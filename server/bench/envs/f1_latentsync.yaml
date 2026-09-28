@@ -1,0 +1,40 @@
+name: f1_latentsync
+python: ~/.opendub/envs/f1_latentsync/bin/python
+description: 'LatentSync 1.5 + 1.6 (bytedance/LatentSync @ a229c394, June 2025) on torch 2.11 — the same
+  stack as the user''s working clone at ~/sources/LatentSync (torch 2.11+cu128). Both UNets side by side:
+  checkpoints/latentsync_unet.pt (1.6) and checkpoints/1.5/latentsync_unet.pt.'
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+  - test -d {home}/.opendub/src/LatentSync || git clone https://github.com/bytedance/LatentSync {home}/.opendub/src/LatentSync
+  - git -C {home}/.opendub/src/LatentSync checkout a229c3948406bc2cf6eaf4873e662e70c6a04746
+  - uv pip install --python {python} diffusers==0.32.2 transformers==4.48.0 accelerate==0.26.1 einops==0.7.0
+    omegaconf==2.3.0 opencv-python==4.9.0.80 python_speech_features==0.6 librosa==0.10.1 ffmpeg-python==0.2.0
+    imageio==2.31.1 imageio-ffmpeg==0.5.1 lpips==0.1.4 huggingface-hub==0.30.2 numpy==1.26.4 kornia==0.8.0
+    insightface==0.7.3 DeepCache==0.1.1 soundfile scenedetect==0.6.1 face-alignment==1.4.1 decord==0.6.0
+    mediapipe==0.10.11 onnxruntime-gpu==1.21.0
+  - cd {home}/.opendub/src/LatentSync && uvx --from huggingface_hub hf download ByteDance/LatentSync-1.6
+    whisper/tiny.pt latentsync_unet.pt --local-dir checkpoints
+  - cd {home}/.opendub/src/LatentSync && uvx --from huggingface_hub hf download ByteDance/LatentSync-1.5
+    latentsync_unet.pt --local-dir checkpoints/1.5
+  aarch64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+  - test -d {home}/.opendub/src/LatentSync || git clone https://github.com/bytedance/LatentSync {home}/.opendub/src/LatentSync
+  - git -C {home}/.opendub/src/LatentSync checkout a229c3948406bc2cf6eaf4873e662e70c6a04746
+  - uv pip install --python {python} diffusers==0.32.2 transformers==4.48.0 accelerate==0.26.1 einops==0.7.0
+    omegaconf==2.3.0 opencv-python==4.9.0.80 python_speech_features==0.6 librosa==0.10.1 ffmpeg-python==0.2.0
+    imageio==2.31.1 imageio-ffmpeg==0.5.1 lpips==0.1.4 huggingface-hub==0.30.2 numpy==1.26.4 kornia==0.8.0
+    insightface==0.7.3 DeepCache==0.1.1 soundfile scenedetect==0.6.1 face-alignment==1.4.1 eva-decord==0.6.1
+    onnxruntime
+  - cd {home}/.opendub/src/LatentSync && uvx --from huggingface_hub hf download ByteDance/LatentSync-1.6
+    whisper/tiny.pt latentsync_unet.pt --local-dir checkpoints
+  - cd {home}/.opendub/src/LatentSync && uvx --from huggingface_hub hf download ByteDance/LatentSync-1.5
+    latentsync_unet.pt --local-dir checkpoints/1.5
+check: import torch, diffusers, decord, insightface; assert torch.cuda.is_available()
+notes: 'Shortcut on Thalassa: set python to ~/sources/LatentSync/.venv/bin/python and params.repo_dir
+  to ~/sources/LatentSync (checkpoints already there; add the 1.5 UNet under checkpoints/1.5). aarch64:
+  decord has no wheel (eva-decord provides the module), onnxruntime-gpu has no PyPI aarch64 wheel (CPU
+  onnxruntime for insightface face detection, slower; or the sm_121 wheel from dgx-spark-wheels), mediapipe
+  is only used by the training data pipeline and is skipped. Unverified on aarch64.'

@@ -1,0 +1,15 @@
+name: a1_msst
+python: ~/.opendub/envs/a1_msst/bin/python
+description: ZFTurbo Music-Source-Separation-Training via the msst 0.1.0 PyPI package (the repo lists
+  wxPython as a core dep; the package moves it to the gui extra) — BandIt v2 / BandIt Plus / Mel-Band
+  RoFormer checkpoints for A1 and A2.
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} 'msst[bandit]==0.1.0' soundfile librosa numpy
+  aarch64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} 'msst[bandit]==0.1.0' soundfile librosa numpy
+check: import msst, torch; assert torch.cuda.is_available()

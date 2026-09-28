@@ -5,7 +5,7 @@ Mounted under /api by main.py. See ARCHITECTURE.md "HTTP API".
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
@@ -99,7 +99,7 @@ async def list_projects() -> list[ProjectSummary]:
 
 @router.post("/projects")
 async def create_project(
-    file: UploadFile = File(...),
+    file: Annotated[UploadFile, File()],
     name: str | None = Form(None),
     source_lang: str = Form("ja"),
     target_lang: str = Form("en"),

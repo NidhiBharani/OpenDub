@@ -1,0 +1,229 @@
+# C1 — dub-line segmentation (timed word list → speakable lines). Pack language = source
+# language. LLM candidates reuse the C2 workers with params.task: segment.
+capability: C1
+candidates:
+- id: pause-splitter
+  worker: c1_pause
+  env: server
+  kind: local
+  params: {min_pause: 0.35, max_line_seconds: 12.0}
+  languages: '*'
+  license: MIT (OpenDub)
+  ship_ok: true
+  requires: {}
+  baseline: true
+  sources: ['research:C1:6', 'plan:§7:C1']
+  verified: {license: true, languages: true, vram: true, runs: false}
+  notes: 'segmentation.pause: split on pauses ≥ 0.35 s or sentence ends, cap 12 s.'
+  url: server/app/pipeline/segmentation.py
+- id: sat-12l-sm
+  worker: c1_sat
+  env: c1_sat
+  kind: local
+  params: {model: segment-any-text/sat-12l-sm}
+  languages: '*'
+  license: MIT
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 1.5, disk_gb: 1.5}
+  sources: ['research:C1:1', 'compute-tiers:C1:spark', 'plan:§7:C1']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 0.3B, 85 languages; boundary probs drive the pause/duration DP search.
+  url: https://huggingface.co/segment-any-text/sat-12l-sm
+  params_b: 0.3
+- id: sat-3l-sm
+  worker: c1_sat
+  env: c1_sat
+  kind: local
+  params: {model: segment-any-text/sat-3l-sm}
+  languages: '*'
+  license: MIT
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 1, disk_gb: 0.5}
+  sources: ['research:C1:1']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'Fast variant (runs on CPU with device: cpu).'
+  url: https://huggingface.co/segment-any-text/sat-3l-sm
+- id: sat-12l-ted-lora
+  worker: c1_sat
+  env: c1_sat
+  kind: local
+  params: {model: segment-any-text/sat-12l, style_or_domain: ted}
+  languages: [en, hi, ja]
+  license: MIT
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 1.5, disk_gb: 1.5}
+  sources: ['research:C1:1', 'compute-tiers:C1:spark']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: ASR-style (TED, corrupted text) LoRA; loras/ted2020-corrupted has hi and ja. Language taken from
+    the pack.
+  url: https://huggingface.co/segment-any-text/sat-12l
+  params_b: 0.3
+- id: hwtsc-parse-pause
+  worker: c1_pause
+  env: server
+  kind: method
+  params: {}
+  languages: '*'
+  license: n/a
+  enabled: false
+  sources: ['research:C1:2']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'HW-TSC IWSLT 2024 parsing-informed pause selector: needs a constituency/dependency parser per
+    language (not in any env yet); reimplementable.'
+  url: https://aclanthology.org/events/iwslt-2024/
+- id: shas
+  worker: c1_pause
+  env: server
+  kind: local
+  params: {}
+  languages: [en]
+  license: MIT
+  enabled: false
+  sources: ['research:C1:4', 'compute-tiers:C1:alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'SHAS audio segmentation (MIT): checkpoints only for en/es/fr/it/pt (no hi/ja) and it needs an
+    audio-input worker; not written.'
+  url: https://github.com/mt-upc/SHAS
+  params_b: 0.3
+- id: apptek-line-segmenter
+  worker: c1_pause
+  env: server
+  kind: api
+  params: {}
+  languages: '*'
+  license: proprietary
+  enabled: false
+  sources: ['research:C1:5']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'AppTek neural line segmenter with hard constraints: proprietary.'
+  url: https://aclanthology.org/2025.iwslt-1.21/
+- id: qwen3-14b-awq-segment
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: Qwen/Qwen3-14B-AWQ
+    server_args: [--max-model-len, '8192', --gpu-memory-utilization, '0.85']
+    extra_body:
+      chat_template_kwargs: {enable_thinking: false}
+    task: segment
+  languages: [en, hi, ja]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 14, disk_gb: 10}
+  sources: ['plan:§7:C1']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'AWQ int4 (~9.5 GB weights) on vLLM with thinking disabled; vLLM reserves 85% of the card. Card:
+    100+ languages incl. hi/ja. Plan seed ''14B LLM''.'
+  url: https://huggingface.co/Qwen/Qwen3-14B-AWQ
+  params_b: 14.8
+- id: qwen3.8-27b-fp8-segment
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: Qwen/Qwen3.8-27B-FP8
+    server_args: [--max-model-len, '16384', --gpu-memory-utilization, '0.4']
+    extra_body:
+      chat_template_kwargs: {enable_thinking: false}
+    task: segment
+  languages: [en, hi, ja]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 44, disk_gb: 30}
+  sources: ['compute-tiers:C1:alt']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: 'Dense 27B VL (hybrid Gated DeltaNet), 262K context; Spark (FP8 official). The artifact''s NVFP4
+    recipe is faster but NVFP4 on GB10 is immature. The card lists no languages: hi/ja unverified. enable_thinking
+    assumed to follow Qwen3.'
+  url: https://huggingface.co/Qwen/Qwen3.8-27B-FP8
+  params_b: 27.0
+- id: claude-opus-5-segment
+  worker: c2_anthropic
+  env: c2_api
+  kind: api
+  params: {model: claude-opus-5, effort: high, task: segment}
+  languages: '*'
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [ANTHROPIC_API_KEY]
+  sources: ['compute-tiers:C1:api', 'research:C1:3', 'compute-tiers:C1:big']
+  verified: {license: true, languages: false, vram: true, runs: false, price: true}
+  notes: List price $5/$25 per 1M tokens (Anthropic list price).
+  url: https://platform.claude.com/docs/en/about-claude/models/overview
+- id: gemini-3.1-pro-segment
+  worker: c2_gemini
+  env: c2_api
+  kind: api
+  params:
+    model: gemini-3.1-pro-preview
+    price: [2.0, 12.0]
+    task: segment
+  languages: '*'
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [GEMINI_API_KEY]
+  sources: ['compute-tiers:C1:alt', 'research:C1:3', 'compute-tiers:C1:big']
+  verified: {license: true, languages: false, vram: true, runs: false, price: true}
+  notes: List price $2/$12 per 1M tokens (≤200K prompt), 2026-09-28.
+  url: https://ai.google.dev/gemini-api/docs/models
+- id: gpt-6-astra-segment
+  worker: c2_openai
+  env: c2_api
+  kind: api
+  params:
+    model: gpt-6-astra
+    price: [10.0, 50.0]
+    task: segment
+  languages: '*'
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [OPENAI_API_KEY]
+  sources: ['compute-tiers:C1:alt', 'research:C1:3', 'compute-tiers:C1:big']
+  verified: {license: true, languages: false, vram: true, runs: false, price: true}
+  notes: List price $10/$50 per 1M tokens, 2026-09-28.
+  url: https://developers.openai.com/api/docs/models
+- id: frontier-joint-seg-translate
+  worker: c2_openai_compat
+  env: server
+  kind: method
+  params: {}
+  languages: '*'
+  license: n/a
+  enabled: false
+  sources: ['compute-tiers:C1:big']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Joint segmentation + translation + length budget in one scene pass with QE best-of-N: a cascade
+    method whose output is C2, not C1; measured in the cascade view.'
+  url: docs/model-candidates-by-compute.md
+- id: glm-5.3-segment
+  worker: c2_openai_compat
+  env: server
+  kind: local
+  params: {}
+  languages: '*'
+  license: GLM-5.3 licence
+  enabled: false
+  sources: ['compute-tiers:C1:alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'GLM-5.3 (744B): cluster-scale.'
+  url: https://kingy.ai/blog/glm-5-3-specs-benchmarks-api-how-to-use/
+  params_b: 744.0
+- id: qwen3.8-2.4t-a95b-segment
+  worker: c2_openai_compat
+  env: server
+  kind: local
+  params: {}
+  languages: '*'
+  license: unknown
+  enabled: false
+  sources: ['compute-tiers:C1:alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Qwen3.8-2.4T-A95B open flagship: cluster-scale.'
+  url: https://en.wikipedia.org/wiki/Qwen
+  params_b: 2400.0

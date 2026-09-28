@@ -1,0 +1,13 @@
+name: e2_clearvoice
+python: ~/.opendub/envs/e2_clearvoice/bin/python
+description: ClearerVoice-Studio toolkit (clearvoice 0.1.2, Apache-2.0) for MossFormer2_SR_48K
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.10
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} clearvoice==0.1.2
+  aarch64:
+    - uv venv {prefix} --python 3.10
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} clearvoice==0.1.2
+check: "from clearvoice import ClearVoice; import torch; assert torch.cuda.is_available()"

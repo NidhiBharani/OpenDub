@@ -1,0 +1,28 @@
+name: f2_gfpgan
+python: ~/.opendub/envs/f2_gfpgan/bin/python
+description: 'GFPGAN (TencentARC/GFPGAN @ 7552a779): GFPGANv1.4 and RestoreFormer weights from the GitHub
+  releases (auto-download by inference_gfpgan.py).'
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+  - test -d {home}/.opendub/src/GFPGAN || git clone https://github.com/TencentARC/GFPGAN {home}/.opendub/src/GFPGAN
+  - git -C {home}/.opendub/src/GFPGAN checkout 7552a7791caa
+  - uv pip install --python {python} basicsr==1.4.2 facexlib==0.3.0 realesrgan==0.3.0 opencv-python-headless
+    numpy==1.26.4
+  - uv pip install --python {python} --no-deps -e {home}/.opendub/src/GFPGAN
+  - sed -i 's/torchvision.transforms.functional_tensor/torchvision.transforms.functional/' $({python}
+    -c 'import basicsr, os; print(os.path.dirname(basicsr.__file__))')/data/degradations.py
+  aarch64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+  - test -d {home}/.opendub/src/GFPGAN || git clone https://github.com/TencentARC/GFPGAN {home}/.opendub/src/GFPGAN
+  - git -C {home}/.opendub/src/GFPGAN checkout 7552a7791caa
+  - uv pip install --python {python} basicsr==1.4.2 facexlib==0.3.0 realesrgan==0.3.0 opencv-python-headless
+    numpy==1.26.4
+  - uv pip install --python {python} --no-deps -e {home}/.opendub/src/GFPGAN
+  - sed -i 's/torchvision.transforms.functional_tensor/torchvision.transforms.functional/' $({python}
+    -c 'import basicsr, os; print(os.path.dirname(basicsr.__file__))')/data/degradations.py
+check: import torch, gfpgan, basicsr; assert torch.cuda.is_available()
+notes: The sed patches basicsr 1.4.2's removed torchvision import (the check imports basicsr only after
+  it).

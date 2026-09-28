@@ -1,0 +1,298 @@
+# D2 — expressive / style transfer.
+# Rows from both research artifacts: data/research/model-research.html ledger (research:D2:<rank>)
+# and data/research/compute-tiers.html picks (compute-tiers:D2:spark|big|api, alternates *-alt),
+# docs/model-candidates-by-compute.md and plan §7 (plan:§7:D2).
+# requires places each row: vram ≤ 15 → Thalassa (x86_64 16 GB) and Spark; vram > 16 → Spark only;
+# arch [x86_64] where deps have no aarch64 wheels; kind api → API keys. d_unwired = registered only.
+capability: D2
+candidates:
+- id: f5-v1-base
+  worker: d1_f5_tts
+  env: server
+  kind: local
+  params:
+    model: F5TTS_v1_Base
+    languages: [en, zh]
+  languages: [en, zh]
+  license: CC-BY-NC-4.0
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 3, disk_gb: 2}
+  sources: ['plan:§7:D1']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: Stock F5-TTS v1 Base (en/zh vocab); single take. The app provider adds Whisper verification +
+    speed retries (see the best-of-N row). Conditions on the line's own source audio (the app's segment_style).
+  url: https://huggingface.co/SWivid/F5-TTS
+  params_b: 0.34
+  baseline: true
+- id: f5-hindi-small
+  worker: d1_f5_tts
+  env: server
+  kind: local
+  params:
+    model: F5TTS_Small
+    ckpt_file: hf://SPRINGLab/F5-Hindi-24KHz/model_2500000.safetensors
+    vocab_file: hf://SPRINGLab/F5-Hindi-24KHz/vocab.txt
+    languages: [hi]
+  languages: [hi]
+  license: CC-BY-4.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 2, disk_gb: 1}
+  sources: ['plan:§7:D1']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'SPRINGLab F5-Hindi-24KHz (F5TTS_Small config, as in the app provider''s placeholder). Non-Devanagari
+    reference transcripts are outside its vocab: see the translit row.'
+  url: https://huggingface.co/SPRINGLab/F5-Hindi-24KHz
+  params_b: 0.16
+  baseline: true
+- id: indextts-2.5-emo-audio
+  worker: d1_indextts
+  env: d1_indextts
+  kind: local
+  params: {version: '2.5', emotion: audio, emo_alpha: 0.8}
+  languages: [zh, en, ja, es, ar]
+  license: bilibili-model-license
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 8, disk_gb: 12}
+  sources: ['research:D2:1', 'compute-tiers:D2:spark']
+  verified: {license: false, languages: true, vram: false, runs: false}
+  notes: 'IndexTTS 2.5 (2026-08-10, 0.8B): lang ZH/EN/JA/ES/AR, no Hindi. bilibili Model Use License:
+    commercial terms need reading → ship_ok false. VRAM estimated (T2S + S2M + BigVGAN + w2v-BERT + Qwen
+    emo). Source line doubles as the emotion prompt (emo_audio_prompt).'
+  url: https://huggingface.co/IndexTeam/IndexTTS-2.5
+  params_b: 0.8
+- id: indextts-2-emo-audio
+  worker: d1_indextts
+  env: d1_indextts
+  kind: local
+  params: {version: '2', emotion: audio, emo_alpha: 0.8}
+  languages: [zh, en]
+  license: bilibili-model-license
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 10, disk_gb: 12}
+  sources: ['research:D2:1']
+  verified: {license: false, languages: true, vram: false, runs: false}
+  notes: 'IndexTTS2: zh/en only. bilibili Model Use License: commercial terms need reading → ship_ok false.
+    VRAM estimated (T2S + S2M + BigVGAN + w2v-BERT + Qwen emo).'
+  url: https://huggingface.co/IndexTeam/IndexTTS-2
+  params_b: 1.5
+- id: step-audio-editx-emotion
+  worker: d2_step_audio_editx
+  env: d2_step_audio_editx
+  kind: local
+  params: {mode: clone+emotion, edit_iterations: 1}
+  languages: [zh, en, ja, ko]
+  license: Apache-2.0
+  ship_ok: true
+  requires:
+    gpu: true
+    vram_gb: 15
+    disk_gb: 12
+    arch: [x86_64]
+  sources: ['research:D2:2', 'compute-tiers:D2:spark-alt']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: Clone, then an emotion edit pass when inputs.emotion is one of its 14 labels. x86 only.
+  url: https://huggingface.co/stepfun-ai/Step-Audio-EditX
+  params_b: 3.0
+- id: step-audio-editx-awq-emotion
+  worker: d2_step_audio_editx
+  env: d2_step_audio_editx
+  kind: local
+  params: {mode: clone+emotion, quantization: awq, model_path: ~/.opendub/src/Step-Audio-EditX/Step-Audio-EditX-AWQ-4bit}
+  languages: [zh, en, ja, ko]
+  license: Apache-2.0
+  ship_ok: true
+  requires:
+    gpu: true
+    vram_gb: 8
+    disk_gb: 6
+    arch: [x86_64]
+  sources: ['research:D2:2']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: 'AWQ 4-bit (6–8 GB per the README): the Thalassa-safe entry (checkpoint fetched by the env recipe).'
+  url: https://huggingface.co/stepfun-ai/Step-Audio-EditX-AWQ-4bit
+  params_b: 3.0
+- id: fish-s2-pro-tags
+  worker: d1_fish_speech
+  env: d1_fish_speech
+  kind: local
+  params: {checkpoint_dir: checkpoints/s2-pro, temperature: 0.7, top_p: 0.7, emotion_tags: true}
+  languages: [zh, en, ja, ko, es, pt, ar, ru, fr, de, sv, it, tr, 'no', nl, cy, eu, ca, da, gl, ta, hu,
+    fi, pl, et, hi, la, ur, th, vi, jw, bn, yo, sl, cs, sw, nn, he, ms, uk, id, kk, bg, lv, my, tl, sk,
+    ne, fa, af, el, bo, hr, ro, sn, mi, yi, am, be, km, is, az, sd, br, sq, ps, mn, ht, ml, sr, sa, te,
+    ka, bs, pa, lt, kn, si, hy, mr, as, gu, fo]
+  license: Fish-Audio-Research-License (NC)
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 24, disk_gb: 12}
+  sources: ['research:D2:3', 'compute-tiers:D2:big']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'fishaudio/s2-pro @1de9996. Docs recommend ≥24 GB → Spark. SGLang fast path unverified on aarch64/sm_121:
+    plain PyTorch api_server. [<emotion>] free-form tags.'
+  url: https://huggingface.co/fishaudio/s2-pro
+  params_b: 4.56
+- id: elevenlabs-v3-tags
+  worker: d1_elevenlabs
+  env: server
+  kind: api
+  params: {model: eleven_v3, mode: clone, output_format: pcm_24000, emotion_tags: true}
+  languages: [en, hi, ja, zh, ko, de, fr, es, it, pt, ru, ar, ta, te, bn, pl, nl, tr, sv, id, fil, uk,
+    vi, cs, ro, el, hu]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [ELEVENLABS_API_KEY]
+  sources: ['research:D2:4', 'compute-tiers:D2:api']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Mirrors app/providers/tts/elevenlabs.py; IVC voices are deleted at job end. Prices in _cost_usd
+    are estimates.
+  url: https://elevenlabs.io/docs/api-reference/text-to-speech/convert
+- id: voxcpm2-instruct
+  worker: d1_voxcpm
+  env: d1_voxcpm
+  kind: local
+  params: {model: openbmb/VoxCPM2, revision: 32279effe8c19989596f05d353d1447f51d9e915, mode: clone, cfg_value: 2.0,
+    inference_timesteps: 10, emotion_style: true}
+  languages: [ar, my, zh, da, nl, en, fi, fr, de, el, he, hi, id, it, ja, km, ko, lo, ms, 'no', pl, pt,
+    ru, es, sw, sv, tl, th, tr, vi]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 9, disk_gb: 6}
+  sources: ['research:D2:5']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: ~8 GB on a 4090 per the README; 48 kHz output; no language argument (the model reads the script).
+    (<emotion>) instruction prefix from inputs.emotion.
+  url: https://huggingface.co/openbmb/VoxCPM2
+  params_b: 2.0
+- id: cosyvoice3-instruct
+  worker: d2_cosyvoice3
+  env: d2_cosyvoice3
+  kind: local
+  params: {model_dir: pretrained_models/Fun-CosyVoice3-0.5B, mode: instruct, instruction: 'Please speak
+      in a {emotion} tone.'}
+  languages: [zh, en, ja, ko, de, es, fr, it, ru]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 5, disk_gb: 4}
+  sources: ['research:D2:6']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: Compute-tiers says drop (no expressive gain from scale); kept as the niche row.
+  url: https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
+  params_b: 0.5
+- id: emovoice
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'EmoVoice (1.5B, ACM MM 2025): licence unknown, no worker.'}
+  languages: '*'
+  license: unknown
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['research:D2:7']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'EmoVoice (1.5B, ACM MM 2025): licence unknown, no worker.'
+  url: https://arxiv.org/abs/2504.12867
+  params_b: 1.5
+- id: emosteer-ted-tts
+  worker: d_unwired
+  env: server
+  kind: method
+  params: {why: 'EmoSteer-TTS / TED-TTS: training-free steering layers over a base model; code availability
+      unverified — a method worker over a D1 model later.'}
+  languages: '*'
+  license: unknown
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['research:D2:8']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'EmoSteer-TTS / TED-TTS: training-free steering layers over a base model; code availability unverified
+    — a method worker over a D1 model later.'
+  url: https://arxiv.org/abs/2508.03543
+- id: higgs-audio-v3-4b-tags
+  worker: d1_higgs_audio
+  env: d1_higgs_audio
+  kind: local
+  params: {model: bosonai/higgs-tts-3-4b, revision: 239f63fb7b02b1aa085f98d9efae5e35cc5523e8, server: vllm-omni,
+    gpu_memory_utilization: 0.85, emotion_tags: true}
+  languages: [en, hi, ja, zh, ko, de, fr, es, it, pt, ru, ar, ta, te, bn]
+  license: Boson Higgs TTS 3 Research and Non-Commercial License
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 24, disk_gb: 12}
+  sources: ['compute-tiers:D2:spark-alt']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: '100+ languages per the card (listed: the in-scope subset). Served by vLLM-Omni (the card cites
+    ≥24 GB reported, 40 GB for SGLang-Omni) → Spark. Request fields from the repo''s AGENTS.md; not run
+    yet. <|emotion:x|> inline control tokens.'
+  url: https://huggingface.co/bosonai/higgs-tts-3-4b
+  params_b: 4.0
+- id: moss-tts-v1.5-8b
+  worker: d1_moss_tts
+  env: d1_moss_tts
+  kind: local
+  params:
+    model: OpenMOSS-Team/MOSS-TTS-v1.5
+    revision: cdd3b911b1585e3f2dbc7775ef10f9926f58850a
+    mode: clone
+    dtype: bfloat16
+    attn: sdpa
+    languages: &id001 [zh, yue, en, ar, cs, da, de, nl, es, fr, fi, el, he, hi, hu, ja, it, ko, mk, ms,
+      ru, fa, pl, pt, sv, ro, sw, tl, th, tr, vi]
+  languages: *id001
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 20, disk_gb: 19.678}
+  sources: ['compute-tiers:D2:big-alt']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 8.49B params (HF safetensors total); VRAM = bf16 weights + codec, estimated.
+  url: https://huggingface.co/OpenMOSS-Team/MOSS-TTS-v1.5
+  params_b: 8.49
+- id: qwen-audio-3.0-tts-plus
+  worker: d1_dashscope
+  env: server
+  kind: api
+  params:
+    backend: openrouter
+    model: qwen/qwen-audio-3.0-tts-plus
+    voices:
+      '*': {female: longanlingxin, male: longanlufeng}
+  languages: [zh, en, ja, ko, de, fr, ru, pt, es, it]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [OPENROUTER_API_KEY]
+  sources: ['compute-tiers:D2:api-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'OpenRouter exposes two preset voices and no instruction field: it cannot take the source line''s
+    emotion → disabled for D2 (kept in D5/D7).'
+  url: https://openrouter.ai/qwen/qwen-audio-3.0-tts-plus
+  enabled: false
+- id: cartesia-sonic-3.6
+  worker: d1_cartesia
+  env: server
+  kind: api
+  params: {model: sonic-3.6-2026-08-27, mode: clone}
+  languages: [en, hi, ja, zh, ko, de, fr, es, it, pt, ru, ar, ta, te, bn]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [CARTESIA_API_KEY]
+  sources: ['compute-tiers:D2:api-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Sonic 3.6 (44 languages, $49/M chars per Cartesia, 2026-08). Clone endpoint not re-verified.
+    Infers emotional subtext from the transcript (no tags).
+  url: https://docs.cartesia.ai/build-with-cartesia/tts-models/latest
+- id: hume-octave-2
+  worker: d2_hume
+  env: server
+  kind: api
+  params: {description: 'Speaking in a {emotion} way, {gender} voice.', version: '2'}
+  languages: [en, ja, ko, es, fr, pt, it, de, ru, hi, ar]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [HUME_API_KEY]
+  sources: ['task:api-list']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Acting instructions from inputs.emotion; designed voice (no clone). Endpoint and languages not
+    re-verified.
+  url: https://dev.hume.ai/docs/text-to-speech-tts/overview

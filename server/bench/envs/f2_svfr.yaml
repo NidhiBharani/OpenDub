@@ -1,0 +1,20 @@
+name: f2_svfr
+python: ~/.opendub/envs/f2_svfr/bin/python
+description: 'SVFR (wangzhiyaoo/SVFR @ 3a453905; code MIT, weights non-commercial). Base: stabilityai/stable-
+  video-diffusion-img2vid-xt; SVFR weights from the authors'' Google Drive (gdown folder).'
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+  - test -d {home}/.opendub/src/SVFR || git clone https://github.com/wangzhiyaoo/SVFR {home}/.opendub/src/SVFR
+  - git -C {home}/.opendub/src/SVFR checkout 3a4539054281
+  - grep -v -i -E '^(torch|torchvision|torchaudio)' {home}/.opendub/src/SVFR/requirements.txt > {home}/.opendub/src/SVFR/requirements.arena.txt
+  - uv pip install --python {python} -r {home}/.opendub/src/SVFR/requirements.arena.txt huggingface-hub
+    gdown decord
+  - uvx --from huggingface_hub hf download stabilityai/stable-video-diffusion-img2vid-xt --local-dir {home}/.opendub/src/SVFR/models/stable-video-diffusion-img2vid-xt
+  - cd {home}/.opendub/src/SVFR && {prefix}/bin/gdown --folder https://drive.google.com/drive/folders/1nzy9Vk-yA_DwXm1Pm4dyE2o0r7V6_5mn
+    -O models
+check: import torch, decord; assert torch.cuda.is_available()
+notes: x86_64 only (decord). The Google Drive folder id above is the one linked from the README at the
+  pinned commit as reported by the research pass — verify; the HF mirror zsxkib/SVFR-Weights is an alternative.
+  SVD img2vid-xt may need accepting its licence on HF.

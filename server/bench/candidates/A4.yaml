@@ -1,0 +1,708 @@
+# A4 — transcription with word timing. Seed list: docs/plans/model-ranking.md §7.
+capability: A4
+candidates:
+  - id: fw-large-v3-turbo
+    url: https://huggingface.co/mobiuslabsgmbh/faster-whisper-large-v3-turbo
+    params_b: 0.81
+    worker: asr_faster_whisper
+    params: {model: large-v3-turbo, compute_type: float16, beam_size: 5}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2.5}
+    baseline: true
+    verified: {license: true, languages: true, vram: false}
+    notes: current asr.faster_whisper default
+  - id: fw-large-v3
+    url: https://huggingface.co/Systran/faster-whisper-large-v3
+    params_b: 1.55
+    worker: asr_faster_whisper
+    params: {model: large-v3, compute_type: float16, beam_size: 5}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 4.5}
+    verified: {license: true, languages: true, vram: false}
+  - id: fw-medium
+    url: https://huggingface.co/Systran/faster-whisper-medium
+    params_b: 0.77
+    worker: asr_faster_whisper
+    params: {model: medium, compute_type: float16, beam_size: 5}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2}
+    verified: {license: true, languages: true, vram: false}
+  - id: kotoba-whisper-v2
+    url: https://huggingface.co/kotoba-tech/kotoba-whisper-v2.0-faster
+    params_b: 0.76
+    worker: asr_faster_whisper
+    params: {model: kotoba-tech/kotoba-whisper-v2.0-faster, compute_type: float16, beam_size: 5,
+             word_timestamps: false}  # distil alignment heads segfault CTranslate2
+    languages: [ja]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2}
+    verified: {license: false, languages: true, vram: false}
+    notes: distil-whisper fine-tuned on ReazonSpeech (ja only)
+  - id: qwen3-asr-1.7b
+    url: https://huggingface.co/Qwen/Qwen3-ASR-1.7B
+    params_b: 1.7
+    worker: asr_qwen3
+    env: qwen3asr
+    params: {model: Qwen/Qwen3-ASR-1.7B, revision: 7278e1e70fe206f11671096ffdd38061171dd6e5,
+             dtype: bfloat16, attn: sdpa, aligner: Qwen/Qwen3-ForcedAligner-0.6B,
+             aligner_revision: c7cbfc2048c462b0d63a45797104fc9db3ad62b7}
+    languages: [en, hi, ja]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 7}
+    verified: {license: true, languages: true, vram: true}
+    notes: >-
+      qwen-asr transformers backend, language forced; word timestamps from Qwen3-ForcedAligner-0.6B
+      for en/ja (the aligner does not cover hi, so hi outputs are text-only). Measured peak
+      6.7 GB with the aligner (en/ja), 4.7 GB without (hi)
+  - id: indicconformer-600m
+    url: https://huggingface.co/ai4bharat/indic-conformer-600m-multilingual
+    params_b: 0.6
+    worker: asr_indicconformer
+    env: indicconformer
+    params: {model: ai4bharat/indic-conformer-600m-multilingual,
+             revision: e9b71b369c048e2c6b634d4c131061c34e441179, decoding: ctc}
+    languages: [hi]
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3, api_keys: [HF_TOKEN]}
+    enabled: false  # user 2026-09-28: not for now
+    verified: {license: true, languages: true, vram: false}
+    notes: >-
+      Gated repo (accept the conditions on HF and set HF_TOKEN before running). The card lists 22
+      Indic languages; only hi is in our set. CTC greedy decoding.
+  # ---- appended by the phase-A pass (2026-09-28): every other A4 row in model-research A4 and
+  # compute-tiers A4, plus the API ASR vendors. Language lists are vendor-declared (abbreviated
+  # where the vendor claims 50+; see notes).
+  - id: fw-large-v2
+    worker: asr_faster_whisper
+    params: {model: large-v2, compute_type: float16, beam_size: 5}
+    url: https://huggingface.co/Systran/faster-whisper-large-v2
+    params_b: 1.55
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 4.5}
+    sources: [research:A4:7]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: CTranslate2 GPU wheels are x86_64 only (aarch64 PyPI wheels are CPU-only)
+  - id: fw-distil-large-v3.5
+    worker: asr_faster_whisper
+    params: {model: distil-whisper/distil-large-v3.5-ct2, compute_type: float16, beam_size: 5,
+             word_timestamps: false}
+    url: https://huggingface.co/distil-whisper/distil-large-v3.5-ct2
+    params_b: 0.756
+    languages: [en]
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2}
+    sources: [research:A4:7]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: English-only distil model; word timestamps off (distil alignment heads crash CTranslate2, as with kotoba)
+  - id: hf-whisper-large-v3
+    worker: a4_hf_asr
+    env: a4_transformers
+    params: {family: whisper, model: openai/whisper-large-v3, dtype: float16, chunk_s: 30}
+    url: https://huggingface.co/openai/whisper-large-v3
+    params_b: 1.55
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 6}
+    sources: [research:A4:7]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: transformers Whisper with word timestamps — the Whisper route on the Spark, where CTranslate2 has no GPU build
+  - id: whisperx-large-v3
+    worker: a4_whisperx
+    env: a4_whisperx
+    params: {model: large-v3, compute_type: float16, batch_size: 16}
+    url: https://github.com/m-bain/whisperX
+    params_b: 1.55
+    languages: "*"
+    license: BSD-2-Clause (code); MIT (Whisper)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 6, arch: [x86_64]}
+    sources: [research:A4:4]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: VAD-batched faster-whisper + wav2vec2 alignment; languages without an align model fail alignment
+  - id: crisperwhisper
+    worker: a4_hf_asr
+    env: a4_crisper
+    params: {family: whisper, model: nyrahealth/CrisperWhisper, dtype: float16, chunk_s: 30}
+    url: https://huggingface.co/nyrahealth/CrisperWhisper
+    params_b: 1.55
+    languages: [en, de]
+    license: CC-BY-NC-4.0
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 6}
+    sources: [research:A4:2]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: verbatim (fillers kept) with retuned word timing; needs nyrahealth's transformers fork; repo now nyralabs/CrisperWhisper
+  - id: crisperwhisper-2.0
+    worker: a4_hf_asr
+    env: a4_crisper
+    params: {family: whisper, model: nyralabs/CrisperWhisper2.0_large, dtype: float16}
+    url: https://huggingface.co/nyralabs/CrisperWhisper2.0_large
+    languages: "*"
+    license: unknown
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 6}
+    enabled: false
+    sources: [research:A4:2]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: 2.0 "works across most Whisper languages" — licence and language list unconfirmed
+  - id: calm-whisper
+    worker: asr_faster_whisper
+    params: {}
+    url: https://arxiv.org/abs/2505.12969
+    languages: "*"
+    license: not stated
+    ship_ok: null
+    requires: {gpu: true}
+    enabled: false
+    sources: [research:A4:6]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: hallucination-targeted decoder-head fine-tune — paper only, no released weights
+  - id: qwen3-asr-0.6b
+    worker: asr_qwen3
+    env: qwen3asr
+    params: {model: Qwen/Qwen3-ASR-0.6B, dtype: bfloat16, attn: sdpa,
+             aligner: Qwen/Qwen3-ForcedAligner-0.6B,
+             aligner_revision: c7cbfc2048c462b0d63a45797104fc9db3ad62b7}
+    url: https://huggingface.co/Qwen/Qwen3-ASR-0.6B
+    params_b: 0.9
+    languages: [en, hi, ja]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 5}
+    sources: [research:A4:1, compute-tiers:A4:spark]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      30 languages per the card (the core worker's language map covers 11); word timestamps from
+      the aligner except hi. Revision not pinned yet.
+  - id: parakeet-tdt-0.6b-v3
+    worker: a4_nemo
+    env: a4_nemo
+    params: {model: nvidia/parakeet-tdt-0.6b-v3, family: asr, timestamps: true,
+             languages: [bg, hr, cs, da, nl, en, et, fi, fr, de, el, hu, it, lv, lt, mt, pl, pt,
+                         ro, sk, sl, es, sv, ru, uk]}
+    url: https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3
+    params_b: 0.6
+    languages: [bg, hr, cs, da, nl, en, et, fi, fr, de, el, hu, it, lv, lt, mt, pl, pt, ro, sk,
+                sl, es, sv, ru, uk]
+    license: CC-BY-4.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3}
+    sources: [research:A4:3, compute-tiers:A4:spark-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: 25 European languages, no hi/ja (runs only on en in our set); no language switch (auto)
+  - id: parakeet-tdt-ctc-0.6b-ja
+    worker: a4_nemo
+    env: a4_nemo
+    params: {model: nvidia/parakeet-tdt_ctc-0.6b-ja, family: asr, timestamps: true, languages: [ja]}
+    url: https://huggingface.co/nvidia/parakeet-tdt_ctc-0.6b-ja
+    params_b: 0.6
+    languages: [ja]
+    license: CC-BY-4.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3}
+    sources: [research:A4:3]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: Japanese Parakeet (ReazonSpeech v2, 35k h); NeMo word timestamps not documented on the card
+  - id: canary-1b-v2
+    worker: a4_nemo
+    env: a4_nemo
+    params: {model: nvidia/canary-1b-v2, family: canary, timestamps: true}
+    url: https://huggingface.co/nvidia/canary-1b-v2
+    params_b: 0.978
+    languages: [bg, hr, cs, da, nl, en, et, fi, fr, de, el, hu, it, lv, lt, mt, pl, pt, ro, sk,
+                sl, es, sv, ru, uk]
+    license: CC-BY-4.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 5}
+    sources: [research:A4:8]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: language forced (source_lang = target_lang)
+  - id: canary-1b-flash
+    worker: a4_nemo
+    env: a4_nemo
+    params: {model: nvidia/canary-1b-flash, family: canary, timestamps: true}
+    url: https://huggingface.co/nvidia/canary-1b-flash
+    params_b: 0.883
+    languages: [en, de, fr, es]
+    license: CC-BY-4.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 4}
+    sources: [research:A4:8]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: word timestamps marked experimental
+  - id: canary-qwen-2.5b
+    worker: a4_nemo
+    env: a4_nemo
+    params: {model: nvidia/canary-qwen-2.5b, family: salm, max_new_tokens: 256}
+    url: https://huggingface.co/nvidia/canary-qwen-2.5b
+    params_b: 2.5
+    languages: [en]
+    license: CC-BY-4.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 8}
+    sources: [research:A4:8, compute-tiers:A4:spark-alt, compute-tiers:A4:big]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: Open ASR Leaderboard leader (English only), no timestamps; VRAM estimated
+  - id: nemotron-3.5-asr-streaming-0.6b
+    worker: a4_nemo
+    env: a4_nemo
+    params: {model: nvidia/nemotron-3.5-asr-streaming-0.6b, family: asr, timestamps: true}
+    url: https://huggingface.co/nvidia/nemotron-3.5-asr-streaming-0.6b
+    params_b: 0.6
+    languages: [en, hi, ja]
+    license: OpenMDW-1.1
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3}
+    sources: [plan:user-request]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      2026-06 streaming FastConformer-RNNT; 19 "transcription-ready" languages incl. hi and ja
+      (only those in our set listed here). Language forcing and timestamps not documented.
+  - id: vibevoice-asr
+    worker: a4_hf_asr
+    env: a4_transformers
+    params: {family: vibevoice, model: microsoft/VibeVoice-ASR-HF, dtype: bfloat16}
+    url: https://huggingface.co/microsoft/VibeVoice-ASR-HF
+    params_b: 8
+    languages: [en, zh, ja]
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 24, disk_gb: 20}
+    sources: [compute-tiers:A4:big-alt, plan:model-ranking:7]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      50+ languages claimed (hi not confirmed, so not declared); no language switch — the
+      language goes in as prompt context. Segment-level times only. VRAM estimated → Spark.
+  - id: vibevoice-asr-int8
+    worker: a4_hf_asr
+    env: a4_transformers
+    params: {family: vibevoice, model: Dubedo/VibeVoice-ASR-HF-INT8, dtype: bfloat16}
+    url: https://huggingface.co/Dubedo/VibeVoice-ASR-HF-INT8
+    params_b: 8
+    languages: [en, zh, ja]
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 13}
+    sources: [plan:model-ranking:7]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: community INT8 (LLM part only) — the plan's Thalassa variant; needs bitsandbytes (not in the env yet), unverified
+  - id: moss-transcribe-diarize
+    worker: a4_moss_td
+    env: a4_moss
+    params: {model: OpenMOSS-Team/MOSS-Transcribe-Diarize, dtype: bfloat16, max_new_tokens: 4096}
+    url: https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize
+    params_b: 0.9
+    languages: [en, zh, ja]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 8}
+    sources: [compute-tiers:A4:spark-alt, compute-tiers:A4:big]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      50+ languages claimed; sources disagree on Hindi (Urdu is listed), so hi is not declared —
+      add it after checking. No language switch; segment-level times. VRAM estimated.
+  - id: granite-speech-4.1-2b
+    worker: a4_hf_asr
+    env: a4_transformers
+    params: {family: granite, model: ibm-granite/granite-speech-4.1-2b, dtype: bfloat16}
+    url: https://huggingface.co/ibm-granite/granite-speech-4.1-2b
+    params_b: 2
+    languages: [en, fr, de, es, pt, ja]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 7}
+    sources: [research:A4:8]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: no language switch (prompted transcription); VRAM estimated
+  - id: granite-speech-4.1-2b-plus
+    worker: a4_hf_asr
+    env: a4_transformers
+    params: {family: granite, model: ibm-granite/granite-speech-4.1-2b-plus, dtype: bfloat16,
+             word_timestamps: true}
+    url: https://huggingface.co/ibm-granite/granite-speech-4.1-2b-plus
+    params_b: 2
+    languages: [en, fr, de, es, pt]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 7}
+    sources: [research:A4:8]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: word end-times via [T:N] tags (start = previous end)
+  - id: cohere-transcribe-2b
+    worker: a4_hf_asr
+    env: a4_transformers
+    params: {family: cohere, model: CohereLabs/cohere-transcribe-03-2026, dtype: bfloat16}
+    url: https://huggingface.co/CohereLabs/cohere-transcribe-03-2026
+    params_b: 2
+    languages: [en, de, fr, it, es, pt, el, nl, pl, ar, vi, zh, ja, ko]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 6, api_keys: [HF_TOKEN]}
+    sources: [research:A4:8]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: gated repo; no timestamps
+  - id: ark-asr-3b
+    worker: a4_hf_asr
+    env: a4_transformers
+    params: {model: AutoArk-AI/ARK-ASR-3B}
+    url: https://huggingface.co/AutoArk-AI/ARK-ASR-3B
+    params_b: 3
+    languages: [en, zh, ja]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 9}
+    enabled: false
+    sources: [research:A4:8]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: 19 languages incl. ja (no hi); trust_remote_code inference API not verified — add a family to a4_hf_asr first
+  - id: voxtral-mini-3b
+    worker: a4_hf_asr
+    env: a4_transformers
+    params: {family: voxtral, model: mistralai/Voxtral-Mini-3B-2507, dtype: bfloat16}
+    url: https://huggingface.co/mistralai/Voxtral-Mini-3B-2507
+    params_b: 4.7
+    languages: [en, es, fr, pt, hi, de, nl, it]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 10}
+    sources: [plan:model-ranking:7]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: language forced via apply_transcription_request; no timestamps (G1 panel member in the plan)
+  - id: whisper-hindi-large-v2
+    worker: a4_hf_asr
+    env: a4_transformers
+    params: {family: whisper, model: vasista22/whisper-hindi-large-v2, dtype: float16}
+    url: https://huggingface.co/vasista22/whisper-hindi-large-v2
+    params_b: 1.55
+    languages: [hi]
+    license: unknown
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 6}
+    sources: [plan:user-request]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: IITM / Bhashini Hindi fine-tune
+  - id: whisper-large-v3-vaani-hindi
+    worker: a4_hf_asr
+    env: a4_transformers
+    params: {family: whisper, model: ARTPARK-IISc/whisper-large-v3-vaani-hindi, dtype: float16}
+    url: https://huggingface.co/ARTPARK-IISc/whisper-large-v3-vaani-hindi
+    params_b: 1.55
+    languages: [hi]
+    license: unknown
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 6}
+    sources: [plan:user-request]
+    verified: {license: false, languages: true, vram: false, runs: false}
+  - id: kotoba-whisper-v2.2
+    worker: a4_hf_asr
+    env: a4_transformers
+    params: {family: whisper, model: kotoba-tech/kotoba-whisper-v2.2, dtype: float16}
+    url: https://huggingface.co/kotoba-tech/kotoba-whisper-v2.2
+    params_b: 0.756
+    languages: [ja]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3}
+    sources: [plan:model-ranking:7]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: plain Whisper pipeline (the repo's custom pyannote-diarization pipeline is not used)
+  - id: sensevoice-small
+    worker: a4_sensevoice
+    env: a4_funasr
+    params: {model: FunAudioLLM/SenseVoiceSmall, hub: hf, use_itn: true}
+    url: https://huggingface.co/FunAudioLLM/SenseVoiceSmall
+    params_b: 0.234
+    languages: [zh, yue, en, ja, ko]
+    license: FunASR model licence
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 2}
+    sources: [plan:model-ranking:7]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: non-autoregressive, very fast; no word timestamps
+  - id: mms-1b-all
+    worker: a4_hf_asr
+    env: a4_transformers
+    params: {family: mms, model: facebook/mms-1b-all}
+    url: https://huggingface.co/facebook/mms-1b-all
+    params_b: 1
+    languages: [en, hi, ja, zh, ko, de, fr, es, ta, te, bn]
+    license: CC-BY-NC-4.0
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 5}
+    sources: [plan:model-ranking:7]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: 1,162 languages via adapters (only the mapped ISO codes listed); CTC with no LM — the plan's "does not repair misreadings" judge family
+  - id: omniasr-llm-1b-v2
+    worker: a4_omniasr
+    env: a4_omniasr
+    params: {model_card: omniASR_LLM_1B_v2, batch_size: 1}
+    url: https://github.com/facebookresearch/omnilingual-asr
+    params_b: 1
+    languages: [en, hi, ja, zh, ko, de, fr, es, ta, te, bn, pt]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 5, arch: [x86_64]}
+    sources: [plan:user-request]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: clips < 40 s; language codes hin_Deva / jpn_Jpan assumed
+  - id: omniasr-llm-7b-v2
+    worker: a4_omniasr
+    env: a4_omniasr
+    params: {model_card: omniASR_LLM_7B_v2, batch_size: 1}
+    url: https://huggingface.co/facebook/omniASR-LLM-7B
+    params_b: 7
+    languages: [en, hi, ja, zh, ko, de, fr, es, ta, te, bn, pt]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 17, arch: [x86_64]}
+    sources: [plan:user-request]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: ~17 GB → neither Thalassa (16 GB) nor the Spark (x86-only fairseq2) today; kept for a bigger x86 box
+  - id: qwen3-omni-30b-a3b-asr
+    worker: a8_qwen_omni
+    env: a8_qwen_omni
+    params: {model: Qwen/Qwen3-Omni-30B-A3B-Instruct, task: asr, max_new_tokens: 1024}
+    url: https://huggingface.co/Qwen/Qwen3-Omni-30B-A3B-Instruct
+    params_b: 30
+    languages: [en, zh, ja, ko, de, fr, es, it, pt, ru]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 80, disk_gb: 70}
+    sources: [compute-tiers:A4:big-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: 19 speech-input languages (no Hindi; subset listed); prompted transcription; Spark only
+  - id: rover-fusion
+    worker: asr_qwen3
+    env: qwen3asr
+    kind: method
+    params: {}
+    url: https://github.com/NidhiBharani/OpenDub
+    languages: [en, ja]
+    license: mixed
+    ship_ok: true
+    requires: {gpu: true}
+    enabled: false
+    sources: [compute-tiers:A4:big]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: unconstrained pick (ROVER of Qwen3-ASR + Canary-Qwen + MOSS, LLM-arbitrated, re-aligned) — composition, add after the parts are ranked
+  - id: scribe-v2
+    worker: a4_elevenlabs
+    kind: api
+    params: {model_id: scribe_v2, usd_per_hour: 0.22}
+    url: https://elevenlabs.io/docs/api-reference/speech-to-text/convert
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ELEVENLABS_API_KEY]}
+    sources: [research:A4:5, compute-tiers:A4:api]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: API pick (90+ languages; hi/ja in the "excellent" tier); $0.22/h read 2026-09-28 — lower than expected, re-check
+  - id: scribe-v1
+    worker: a4_elevenlabs
+    kind: api
+    params: {model_id: scribe_v1, usd_per_hour: 0.40}
+    url: https://elevenlabs.io/docs/api-reference/speech-to-text/convert
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ELEVENLABS_API_KEY]}
+    sources: [research:A4:5]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: previous Scribe generation; price param not re-read
+  - id: openai-gpt-transcribe
+    worker: a4_openai
+    kind: api
+    params: {model: gpt-transcribe}
+    url: https://developers.openai.com/api/docs/guides/speech-to-text
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [OPENAI_API_KEY]}
+    sources: [plan:user-request]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: released 2026-07-28, $0.0045/min; language as a languages[] hint; no timestamps
+  - id: openai-gpt-4o-transcribe
+    worker: a4_openai
+    kind: api
+    params: {model: gpt-4o-transcribe}
+    url: https://developers.openai.com/api/docs/guides/speech-to-text
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [OPENAI_API_KEY]}
+    sources: [plan:user-request]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: $0.006/min; no timestamps
+  - id: openai-gpt-4o-mini-transcribe
+    worker: a4_openai
+    kind: api
+    params: {model: gpt-4o-mini-transcribe}
+    url: https://developers.openai.com/api/docs/guides/speech-to-text
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [OPENAI_API_KEY]}
+    sources: [plan:user-request]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: $0.003/min; no timestamps
+  - id: openai-whisper-1
+    worker: a4_openai
+    kind: api
+    params: {model: whisper-1}
+    url: https://developers.openai.com/api/docs/guides/speech-to-text
+    params_b: 1.55
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [OPENAI_API_KEY]}
+    sources: [plan:user-request]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: hosted Whisper large-v2; the only OpenAI model with word timestamps; $0.006/min
+  - id: gemini-3.5-transcribe
+    worker: a4_gemini_transcribe
+    kind: api
+    params: {model: gemini-3.5-transcribe, usd_per_min: 0.005}
+    url: https://ai.google.dev/gemini-api/docs/transcribe
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    sources: [compute-tiers:A4:api-alt, compute-tiers:A3:api]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: launched 2026-08-26; 85+ locales incl. hi-IN / ja-JP; word timestamps; 30 min cap with timestamps
+  - id: assemblyai-universal-3-5-pro
+    worker: a4_assemblyai
+    kind: api
+    params: {speech_model: universal-3-5-pro}
+    url: https://www.assemblyai.com/docs/api-reference/transcripts/submit
+    languages: [en, hi, ja, es, fr, de, it, pt, nl, zh, ko, ru]
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ASSEMBLYAI_API_KEY]}
+    sources: [research:A6:8]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: $0.21/h; 18 languages (list abbreviated); words in ms
+  - id: assemblyai-universal-2
+    worker: a4_assemblyai
+    kind: api
+    params: {speech_model: universal-2}
+    url: https://www.assemblyai.com/docs/api-reference/transcripts/submit
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ASSEMBLYAI_API_KEY]}
+    sources: [research:A6:8]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: $0.15/h; 99 languages
+  - id: deepgram-nova-3
+    worker: a4_deepgram
+    kind: api
+    params: {model: nova-3, usd_per_min: 0.0077}
+    url: https://developers.deepgram.com/docs/models-languages-overview
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [DEEPGRAM_API_KEY]}
+    sources: [research:A6:8]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: hi and ja covered by nova-3; price from the official page (third-party quotes lower)
+  - id: speechmatics-enhanced
+    worker: a4_speechmatics
+    kind: api
+    params: {operating_point: enhanced, usd_per_hour: 0.30}
+    url: https://docs.speechmatics.com
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [SPEECHMATICS_API_KEY]}
+    sources: [research:A6:8]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: batch jobs API; hi/ja support and price unverified
+  - id: azure-mai-transcribe-2
+    worker: a4_azure_fast
+    kind: api
+    params: {model: mai-transcribe-2, usd_per_hour: 0.10}
+    url: https://learn.microsoft.com/azure/ai-services/speech-service/fast-transcription-create
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [AZURE_SPEECH_KEY, AZURE_SPEECH_REGION]}
+    sources: [compute-tiers:A4:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: Microsoft MAI-Transcribe-2 (2026-09-03; 2.0 % AA-WER) through Azure fast transcription; $0.10/h launch price to end of 2026
+  - id: mistral-voxtral-mini-transcribe
+    worker: a4_mistral
+    kind: api
+    params: {model: voxtral-mini-2602, usd_per_min: 0.003}
+    url: https://docs.mistral.ai/studio/audio/speech_to_text/offline_transcription
+    languages: [en, zh, hi, es, ar, fr, pt, ru, de, ja, ko, it, nl]
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [MISTRAL_API_KEY]}
+    sources: [plan:model-ranking:7]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: word timestamps cannot be combined with a forced language, so text only
+  - id: sarvam-saaras-v3
+    worker: a4_sarvam
+    kind: api
+    params: {model: saaras:v3, mode: transcribe, usd_per_hour: 0.34}
+    url: https://docs.sarvam.ai/api-reference-docs/speech-to-text/transcribe
+    languages: [hi, bn, ta, te, kn, ml, mr, gu, pa, od, en]
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [SARVAM_API_KEY]}
+    sources: [plan:user-request]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: Indian languages only; REST clips < 30 s; ₹30/h
+  - id: stepaudio-3-asr-max
+    worker: a4_openai
+    kind: api
+    params: {}
+    url: https://platform.stepfun.ai/docs/en/guides/models/stepaudio-3-asr
+    languages: [zh, en, ja, ko, fr, es]
+    license: proprietary API
+    ship_ok: true
+    requires: {}
+    enabled: false
+    sources: [compute-tiers:A4:api-alt]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: 2026-09 accuracy leader (1.7 % WER); HTTP+SSE endpoint, auth details not fetched — worker not written; no Hindi
+  - id: muse-voice-transcribe
+    worker: a4_openai
+    kind: api
+    params: {}
+    url: https://dev.meta.ai/models/muse-voice-transcribe
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {}
+    enabled: false
+    sources: [compute-tiers:A4:api-alt]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: Meta (2026-09-01, $0.18/h) — endpoint and word timestamps not documented; weights not released
+  - id: aws-transcribe
+    worker: a4_openai
+    kind: api
+    params: {}
+    url: https://aws.amazon.com/transcribe/
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [AWS_ACCESS_KEY_ID]}
+    enabled: false
+    sources: [research:A6:8]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: batch jobs need S3 + boto3 — worker not written

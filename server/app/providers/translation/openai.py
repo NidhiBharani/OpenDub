@@ -62,7 +62,7 @@ class OpenAITranslationProvider(TranslationProvider):
             if resp.status_code >= 400:
                 return False, f"OpenAI API returned HTTP {resp.status_code}: {resp.text[:200]}"
             return True, "ready"
-        except Exception as e:
+        except (httpx.HTTPError, httpx.InvalidURL, OSError, ValueError) as e:
             return False, f"could not reach {base_url}: {e}"
 
     async def translate(

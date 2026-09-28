@@ -1,0 +1,15 @@
+name: a7_wespeaker
+python: ~/.opendub/envs/a7_wespeaker/bin/python
+description: WeSpeaker (Apache-2.0), pinned commit; models from HF Wespeaker/* repos.
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} git+https://github.com/wenet-e2e/wespeaker.git@9fecd6cb4f47475d01761d87c826298dff4ef18c
+    huggingface_hub soundfile librosa numpy
+  aarch64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} git+https://github.com/wenet-e2e/wespeaker.git@9fecd6cb4f47475d01761d87c826298dff4ef18c
+    huggingface_hub soundfile librosa numpy
+check: import wespeaker

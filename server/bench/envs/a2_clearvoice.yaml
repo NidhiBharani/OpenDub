@@ -1,0 +1,13 @@
+name: a2_clearvoice
+python: ~/.opendub/envs/a2_clearvoice/bin/python
+description: 'ClearerVoice-Studio (clearvoice 0.1.2, Apache-2.0): MossFormer2_SE_48K, FRCRN_SE_16K.'
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} clearvoice==0.1.2 soundfile librosa numpy
+  aarch64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} clearvoice==0.1.2 soundfile librosa numpy
+check: import clearvoice

@@ -1,0 +1,251 @@
+# A8 — paralinguistic / delivery tagging. Sources: model-research A8 ledger (8 rows) and
+# compute-tiers A8 picks + alternates, deduplicated. Audio-LLM workers share the a8_llm prompts.
+capability: A8
+candidates:
+  - id: prosody-dsp
+    worker: a8_prosody
+    env: server
+    kind: method
+    params: {high_arousal_db: 8.0, low_energy_db: -35.0}
+    url: https://github.com/NidhiBharani/OpenDub
+    languages: "*"
+    license: n/a (own code)
+    ship_ok: true
+    requires: {}
+    baseline: true
+    sources: [research:A8:2, compute-tiers:A8:spark]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: tier one — OpenDub's acoustic_prosody (rate/loudness/F0/pauses) with a transparent rule label + arousal proxy (a floor)
+  - id: hubert-large-superb-er
+    worker: a8_hf_emotion
+    env: a4_transformers
+    kind: local
+    params: {family: classifier, model: superb/hubert-large-superb-er}
+    url: https://huggingface.co/superb/hubert-large-superb-er
+    params_b: 0.316
+    languages: [en]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2}
+    sources: [plan:model-ranking:7]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: the English IEMOCAP 4-class classifier OpenDub's emotion module loads today (neu/hap/ang/sad)
+  - id: emotion2vec-plus-large
+    worker: a8_emotion2vec
+    env: a4_funasr
+    kind: local
+    params: {model: emotion2vec/emotion2vec_plus_large, hub: hf}
+    url: https://huggingface.co/emotion2vec/emotion2vec_plus_large
+    params_b: 0.3
+    languages: "*"
+    license: MIT code; model-license (read the card)
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 2}
+    sources: [research:A8:3, compute-tiers:A8:spark-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: 9 classes (angry, disgusted, fearful, happy, neutral, other, sad, surprised, unknown)
+  - id: emotion2vec-plus-base
+    worker: a8_emotion2vec
+    env: a4_funasr
+    kind: local
+    params: {model: emotion2vec/emotion2vec_plus_base, hub: hf}
+    url: https://huggingface.co/emotion2vec/emotion2vec_plus_base
+    params_b: 0.09
+    languages: "*"
+    license: MIT code; model-license (read the card)
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 1}
+    sources: [research:A8:3]
+    verified: {license: false, languages: false, vram: false, runs: false}
+  - id: audeering-msp-dim
+    worker: a8_hf_emotion
+    env: a4_transformers
+    kind: local
+    params: {family: msp_dim, model: audeering/wav2vec2-large-robust-12-ft-emotion-msp-dim}
+    url: https://huggingface.co/audeering/wav2vec2-large-robust-12-ft-emotion-msp-dim
+    params_b: 0.165
+    languages: "*"
+    license: CC-BY-NC-SA-4.0
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 2}
+    sources: [research:A8:4, compute-tiers:A8:big-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: dimensional only (arousal / dominance / valence) → scores CCC, not macro-F1
+  - id: qwen3-omni-30b-a3b-delivery
+    worker: a8_qwen_omni
+    env: a8_qwen_omni
+    kind: local
+    params: {model: Qwen/Qwen3-Omni-30B-A3B-Instruct, task: delivery, max_new_tokens: 1024}
+    url: https://huggingface.co/Qwen/Qwen3-Omni-30B-A3B-Instruct
+    params_b: 30
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 80, disk_gb: 70}
+    sources: [research:A8:5, compute-tiers:A8:spark]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: Spark pick tier two (delivery-note writer); FP8/NVFP4 would free memory but is not wired
+  - id: qwen3.5-omni-plus-delivery
+    worker: a8_dashscope_omni
+    env: server
+    kind: api
+    params: {model: qwen3.5-omni-plus, task: delivery}
+    url: https://www.alibabacloud.com/help/en/model-studio/qwen-omni
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [DASHSCOPE_API_KEY]}
+    sources: [research:A8:5, compute-tiers:A8:big, compute-tiers:A8:api]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: unconstrained + API pick; price not verified (usd_per_call param)
+  - id: gemini-2.5-pro-delivery
+    worker: a8_gemini
+    env: server
+    kind: api
+    params: {model: gemini-2.5-pro, task: delivery, usd_per_m_audio_tokens: 1.25, usd_per_m_out_tokens: 10.0}
+    url: https://ai.google.dev/gemini-api/docs/audio
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    sources: [research:A8:1]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: the 3 September primary ("Gemini 2.5/3 Pro class"); prices are params, not re-read for 2.5 Pro
+  - id: gemini-3.1-pro-delivery
+    worker: a8_gemini
+    env: server
+    kind: api
+    params: {model: gemini-3.1-pro, task: delivery, usd_per_m_audio_tokens: 2.0, usd_per_m_out_tokens: 12.0}
+    url: https://ai.google.dev/gemini-api/docs/models
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    sources: [compute-tiers:A8:api-alt]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: "\"Gemini 3.1 Pro for batch\" — model id string and prices unverified"
+  - id: gemini-3.8-live-delivery
+    worker: a8_gemini
+    env: server
+    kind: api
+    params: {}
+    url: https://ai.google.dev/gemini-api/docs/live
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    enabled: false
+    sources: [compute-tiers:A8:api-alt, compute-tiers:A3:api]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: Gemini 3.8 Live Extended Thinking is a Live (WebSocket) API — no batch worker
+  - id: gpt-audio-1.5-delivery
+    worker: a8_openai_audio
+    env: server
+    kind: api
+    params: {model: gpt-audio-1.5, task: delivery}
+    url: https://developers.openai.com/api/docs/models/gpt-audio-1.5
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [OPENAI_API_KEY]}
+    sources: [research:A8:1, compute-tiers:A8:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: current successor of the ledger's "GPT-4o Audio"; audio in $32 / 1M tokens
+  - id: gpt-live-1
+    worker: a8_openai_audio
+    env: server
+    kind: api
+    params: {}
+    url: https://developers.openai.com/api/docs/models
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [OPENAI_API_KEY]}
+    enabled: false
+    sources: [compute-tiers:A8:api-alt]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: realtime (session) model released 2026-09-17 — no batch chat-completions worker
+  - id: audio-flamingo-next-think-delivery
+    worker: a8_audio_flamingo
+    env: a4_transformers
+    kind: local
+    params: {model: nvidia/audio-flamingo-next-think-hf, family: next, task: delivery}
+    url: https://huggingface.co/nvidia/audio-flamingo-next-think-hf
+    params_b: 8
+    languages: "*"
+    license: NVIDIA OneWay Noncommercial
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 20, disk_gb: 20}
+    sources: [compute-tiers:A8:spark-alt, compute-tiers:A8:big-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: "\"fits in ~16 GB\" per compute-tiers but 8B bf16 needs ~18–24 GB (estimate) → Spark; eval-only"
+  - id: ced-base-nonverbal
+    worker: a3_audiotag
+    env: a3_audiotag
+    kind: local
+    params: {family: ced, model: mispeech/ced-base, task: events, window_s: 1.0, hop_s: 0.25, threshold: 0.3}
+    url: https://huggingface.co/mispeech/ced-base
+    params_b: 0.086
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    sources: [research:A8:8]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: AudioSet laughter / crying / sigh / scream … events → nonverbal event F1 (no emotion label)
+  - id: scribe-v2-nonverbal
+    worker: a4_elevenlabs
+    env: server
+    kind: api
+    params: {model_id: scribe_v2, task: events, tag_audio_events: true, usd_per_hour: 0.22}
+    url: https://elevenlabs.io/docs/api-reference/speech-to-text/convert
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ELEVENLABS_API_KEY]}
+    sources: [compute-tiers:A3:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: inline audio-event tags (laughter …) aligned to words
+  - id: voc2vec
+    worker: a8_hf_emotion
+    env: a4_transformers
+    kind: local
+    params: {}
+    url: https://huggingface.co/alkiskoudounas/voc2vec
+    params_b: 0.095
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    enabled: false
+    sources: [research:A8:7]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: non-verbal-vocalisation encoder without a classification head — needs a trained head
+  - id: wavlm-text-fusion
+    worker: a8_hf_emotion
+    env: a4_transformers
+    kind: method
+    params: {}
+    url: https://arxiv.org/search/?query=Interspeech+2025+naturalistic+speech+emotion+recognition+challenge
+    languages: "*"
+    license: per recipe
+    ship_ok: null
+    requires: {gpu: true}
+    enabled: false
+    sources: [research:A8:6]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: challenge recipes (WavLM-large + text branch) — training code, no packaged checkpoint
+  - id: specialist-prior-llm
+    worker: a8_qwen_omni
+    env: a8_qwen_omni
+    kind: method
+    params: {}
+    url: https://github.com/NidhiBharani/OpenDub
+    languages: "*"
+    license: mixed
+    ship_ok: null
+    requires: {gpu: true}
+    enabled: false
+    sources: [compute-tiers:A8:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: emotion2vec+ / audEERING priors feeding a large LLM — composition, add after the parts are ranked

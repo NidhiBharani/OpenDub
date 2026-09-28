@@ -1,0 +1,242 @@
+# D4 — regional / low-resource voices.
+# Rows from both research artifacts: data/research/model-research.html ledger (research:D4:<rank>)
+# and data/research/compute-tiers.html picks (compute-tiers:D4:spark|big|api, alternates *-alt),
+# docs/model-candidates-by-compute.md and plan §7 (plan:§7:D4).
+# requires places each row: vram ≤ 15 → Thalassa (x86_64 16 GB) and Spark; vram > 16 → Spark only;
+# arch [x86_64] where deps have no aarch64 wheels; kind api → API keys. d_unwired = registered only.
+capability: D4
+candidates:
+- id: f5-hindi-small
+  worker: d1_f5_tts
+  env: server
+  kind: local
+  params:
+    model: F5TTS_Small
+    ckpt_file: hf://SPRINGLab/F5-Hindi-24KHz/model_2500000.safetensors
+    vocab_file: hf://SPRINGLab/F5-Hindi-24KHz/vocab.txt
+    languages: [hi]
+  languages: [hi]
+  license: CC-BY-4.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 2, disk_gb: 1}
+  sources: ['plan:§7:D1']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'SPRINGLab F5-Hindi-24KHz (F5TTS_Small config, as in the app provider''s placeholder). Non-Devanagari
+    reference transcripts are outside its vocab: see the translit row.'
+  url: https://huggingface.co/SPRINGLab/F5-Hindi-24KHz
+  params_b: 0.16
+  baseline: true
+- id: voxcpm2
+  worker: d1_voxcpm
+  env: d1_voxcpm
+  kind: local
+  params: {model: openbmb/VoxCPM2, revision: 32279effe8c19989596f05d353d1447f51d9e915, mode: clone, cfg_value: 2.0,
+    inference_timesteps: 10}
+  languages: [ar, my, zh, da, nl, en, fi, fr, de, el, he, hi, id, it, ja, km, ko, lo, ms, 'no', pl, pt,
+    ru, es, sw, sv, tl, th, tr, vi]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 9, disk_gb: 6}
+  sources: ['research:D4:1', 'compute-tiers:D4:spark']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: ~8 GB on a 4090 per the README; 48 kHz output; no language argument (the model reads the script).
+  url: https://huggingface.co/openbmb/VoxCPM2
+  params_b: 2.0
+- id: indicf5
+  worker: d4_indicf5
+  env: d4_indicf5
+  kind: local
+  params: {model: ai4bharat/IndicF5, revision: ba85abedf18dc479a447eaa0eccbd76ab78a47d5}
+  languages: [as, bn, gu, hi, kn, ml, mr, or, pa, ta, te]
+  license: MIT
+  ship_ok: true
+  requires:
+    gpu: true
+    vram_gb: 3
+    disk_gb: 2
+    api_keys: [HF_TOKEN]
+  sources: ['research:D4:2', 'compute-tiers:D4:spark-alt']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: Gated repo (HF_TOKEN). The Indic specialist with the cleanest licence.
+  url: https://huggingface.co/ai4bharat/IndicF5
+  params_b: 0.4
+- id: chatterbox-multilingual
+  worker: d1_chatterbox
+  env: d1_chatterbox
+  kind: local
+  params: {mode: tts, t3_model: v3}
+  languages: [ar, da, de, el, en, es, fi, fr, he, hi, it, ja, ko, ms, nl, 'no', pl, pt, ru, sv, sw, tr,
+    zh]
+  license: MIT
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 5, disk_gb: 4}
+  sources: ['research:D4:3']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: chatterbox-tts 0.1.7 installed --no-deps over torch 2.11 (it pins torch 2.6, no sm_120 kernels).
+  url: https://github.com/resemble-ai/chatterbox
+  params_b: 0.5
+- id: higgs-audio-v3-4b
+  worker: d1_higgs_audio
+  env: d1_higgs_audio
+  kind: local
+  params: {model: bosonai/higgs-tts-3-4b, revision: 239f63fb7b02b1aa085f98d9efae5e35cc5523e8, server: vllm-omni,
+    gpu_memory_utilization: 0.85}
+  languages: [en, hi, ja, zh, ko, de, fr, es, it, pt, ru, ar, ta, te, bn]
+  license: Boson Higgs TTS 3 Research and Non-Commercial License
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 24, disk_gb: 12}
+  sources: ['research:D4:4', 'compute-tiers:D4:spark-alt']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: '100+ languages per the card (listed: the in-scope subset). Served by vLLM-Omni (the card cites
+    ≥24 GB reported, 40 GB for SGLang-Omni) → Spark. Request fields from the repo''s AGENTS.md; not run
+    yet.'
+  url: https://huggingface.co/bosonai/higgs-tts-3-4b
+  params_b: 4.0
+- id: fish-s2-pro
+  worker: d1_fish_speech
+  env: d1_fish_speech
+  kind: local
+  params: {checkpoint_dir: checkpoints/s2-pro, temperature: 0.7, top_p: 0.7}
+  languages: [zh, en, ja, ko, es, pt, ar, ru, fr, de, sv, it, tr, 'no', nl, cy, eu, ca, da, gl, ta, hu,
+    fi, pl, et, hi, la, ur, th, vi, jw, bn, yo, sl, cs, sw, nn, he, ms, uk, id, kk, bg, lv, my, tl, sk,
+    ne, fa, af, el, bo, hr, ro, sn, mi, yi, am, be, km, is, az, sd, br, sq, ps, mn, ht, ml, sr, sa, te,
+    ka, bs, pa, lt, kn, si, hy, mr, as, gu, fo]
+  license: Fish-Audio-Research-License (NC)
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 24, disk_gb: 12}
+  sources: ['research:D4:5', 'compute-tiers:D4:big']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'fishaudio/s2-pro @1de9996. Docs recommend ≥24 GB → Spark. SGLang fast path unverified on aarch64/sm_121:
+    plain PyTorch api_server.'
+  url: https://huggingface.co/fishaudio/s2-pro
+  params_b: 4.56
+- id: omnivoice
+  worker: d4_omnivoice
+  env: d4_omnivoice
+  kind: local
+  params: {model: k2-fsa/OmniVoice, revision: c5fdb5ccb189668d56333f77ba2629f4cd7535f4, mode: clone}
+  languages: '*'
+  license: code Apache-2.0; weights CC-BY-NC
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 3, disk_gb: 2}
+  sources: ['research:D4:6', 'compute-tiers:D4:spark-alt']
+  verified: {license: false, languages: true, vram: false, runs: false}
+  notes: '600+ languages; NC weights: a coverage/evaluation tool.'
+  url: https://huggingface.co/k2-fsa/OmniVoice
+  params_b: 0.61
+- id: sarvam-bulbul-v2
+  worker: d4_sarvam
+  env: server
+  kind: api
+  params:
+    model: bulbul:v2
+    speakers:
+      '*': {female: anushka, male: abhilash}
+  languages: [hi, bn, ta, te, kn, ml, mr, gu, pa, or, en]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [SARVAM_API_KEY]
+  sources: ['research:D4:7']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Stock speakers (no cloning). Endpoint/speakers as known for bulbul:v2; not re-verified.
+  url: https://docs.sarvam.ai/api-reference-docs/text-to-speech/convert
+- id: sarvam-bulbul-v3
+  worker: d4_sarvam
+  env: server
+  kind: api
+  params:
+    model: bulbul:v3
+    speakers:
+      '*': {female: anushka, male: abhilash}
+  languages: [hi, bn, ta, te, kn, ml, mr, gu, pa, or, en]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [SARVAM_API_KEY]
+  sources: ['research:D4:7', 'compute-tiers:D4:api-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Model id and v3 speaker names unverified; Bulbul V4 announced 2026-07-30 (set model when public).
+  url: https://docs.sarvam.ai/api-reference-docs/text-to-speech/convert
+- id: jaitts-pattern
+  worker: d_unwired
+  env: server
+  kind: method
+  params: {why: 'Per-language adaptation of a strong base (JaiTTS on VoxCPM, Thai): an approach, and Thai/African/Vietnamese
+      are outside en/hi/ja.'}
+  languages: '*'
+  license: unknown
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['research:D4:8']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Per-language adaptation of a strong base (JaiTTS on VoxCPM, Thai): an approach, and Thai/African/Vietnamese
+    are outside en/hi/ja.'
+  url: https://arxiv.org/
+- id: intron-sahara
+  worker: d_unwired
+  env: server
+  kind: api
+  params: {why: 'Intron Sahara v2 (African languages, commercial API): out of scope.'}
+  languages: '*'
+  license: proprietary API
+  ship_ok: true
+  requires: {}
+  enabled: false
+  sources: ['research:D4:8']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Intron Sahara v2 (African languages, commercial API): out of scope.'
+  url: https://www.intron.io
+- id: cartesia-sonic-3.6
+  worker: d1_cartesia
+  env: server
+  kind: api
+  params: {model: sonic-3.6-2026-08-27, mode: clone}
+  languages: [en, hi, ja, zh, ko, de, fr, es, it, pt, ru, ar, ta, te, bn]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [CARTESIA_API_KEY]
+  sources: ['compute-tiers:D4:api']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Sonic 3.6 (44 languages, $49/M chars per Cartesia, 2026-08). Clone endpoint not re-verified.
+  url: https://docs.cartesia.ai/build-with-cartesia/tts-models/latest
+- id: azure-mai-voice-2
+  worker: d5_azure
+  env: server
+  kind: api
+  params:
+    voices:
+      hi: {female: 'hi-IN-Kavya:MAI-Voice-2', male: 'hi-IN-Dhruv:MAI-Voice-2'}
+      en: {female: 'en-US-Harper:MAI-Voice-2', male: 'en-US-Ethan:MAI-Voice-2'}
+  languages: [en, hi]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [AZURE_SPEECH_KEY, AZURE_SPEECH_REGION]
+  sources: ['compute-tiers:D4:api-alt']
+  verified: {license: false, languages: true, vram: false, runs: false}
+  notes: Stock voices (cloning is gated). No ja-JP MAI voice.
+  url: https://learn.microsoft.com/en-us/azure/ai-services/speech-service/mai-voices
+- id: moss-tts-v1.5-8b
+  worker: d1_moss_tts
+  env: d1_moss_tts
+  kind: local
+  params:
+    model: OpenMOSS-Team/MOSS-TTS-v1.5
+    revision: cdd3b911b1585e3f2dbc7775ef10f9926f58850a
+    mode: clone
+    dtype: bfloat16
+    attn: sdpa
+    languages: &id001 [zh, yue, en, ar, cs, da, de, nl, es, fr, fi, el, he, hi, hu, ja, it, ko, mk, ms,
+      ru, fa, pl, pt, sv, ro, sw, tl, th, tr, vi]
+  languages: *id001
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 20, disk_gb: 19.678}
+  sources: ['compute-tiers:D4:big-alt']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 8.49B params (HF safetensors total); VRAM = bf16 weights + codec, estimated.
+  url: https://huggingface.co/OpenMOSS-Team/MOSS-TTS-v1.5
+  params_b: 8.49

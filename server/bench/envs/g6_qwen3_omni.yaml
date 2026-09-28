@@ -1,0 +1,19 @@
+name: g6_qwen3_omni
+python: ~/.opendub/envs/g6_qwen3_omni/bin/python
+description: >-
+  Qwen3-Omni-30B-A3B-Instruct via transformers (workers/g6_qwen3_omni.py), BF16, SDPA attention
+  (no flash-attn: no aarch64 sm_121 wheel). Spark-class memory (card: 78.85 GB for a 15 s video).
+setup:
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} "transformers>=4.57" accelerate "qwen-omni-utils[decord]" soundfile numpy av
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} "transformers>=4.57" accelerate "qwen-omni-utils[decord]" soundfile numpy av
+check: "import torch, transformers, qwen_omni_utils; from transformers import Qwen3OmniMoeForConditionalGeneration; assert torch.cuda.is_available()"
+notes: >-
+  decord has no aarch64 wheel; if the [decord] extra fails on Spark install plain qwen-omni-utils
+  (it falls back to torchvision / PyAV video reading). The x86_64 recipe is for large-memory x86
+  hosts only (≥ 96 GB GPU); it cannot run on Thalassa.

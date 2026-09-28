@@ -8,8 +8,9 @@ from __future__ import annotations
 import importlib
 import pkgutil
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -203,7 +204,7 @@ def get_provider_class(provider_id: str) -> type[Provider]:
 
 def load_all() -> None:
     """Import every module in the kind sub-packages so @register side effects run."""
-    from . import asr, diarization, lipsync, separation, translation, tts  # noqa: F401
+    from . import asr, diarization, lipsync, separation, translation, tts
 
     for pkg in (asr, diarization, lipsync, separation, translation, tts):
         for mod in pkgutil.iter_modules(pkg.__path__):

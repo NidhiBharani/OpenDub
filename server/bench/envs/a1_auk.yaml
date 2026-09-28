@@ -1,0 +1,23 @@
+name: a1_auk
+python: ~/.opendub/envs/a1_auk/bin/python
+description: Tencent AuK / AuK-Flash (MIT; repo pinned) — pins torch>=2.7,<2.8 and transformers<5; also
+  pulls Qwen/Qwen2.5-Omni-3B on first run.
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.11
+  - git clone https://github.com/Tencent-Hunyuan/AuK {home}/.opendub/src/AuK || true
+  - git -C {home}/.opendub/src/AuK checkout da1f31b18e212697388a9ecd6988082db3cd2a87
+  - uv pip install --python {python} torch==2.7.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} -e {home}/.opendub/src/AuK
+  - uv pip install --python {python} huggingface_hub soundfile librosa numpy
+  - '{prefix}/bin/hf download tencent/AuK-Flash --local-dir {home}/.opendub/src/AuK/ckpts/AuK-Flash'
+  aarch64:
+  - uv venv {prefix} --python 3.11
+  - git clone https://github.com/Tencent-Hunyuan/AuK {home}/.opendub/src/AuK || true
+  - git -C {home}/.opendub/src/AuK checkout da1f31b18e212697388a9ecd6988082db3cd2a87
+  - uv pip install --python {python} torch==2.7.1 torchaudio==2.7.1 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} -e {home}/.opendub/src/AuK
+  - uv pip install --python {python} huggingface_hub soundfile librosa numpy
+  - '{prefix}/bin/hf download tencent/AuK-Flash --local-dir {home}/.opendub/src/AuK/ckpts/AuK-Flash'
+check: import auk, torch; assert torch.cuda.is_available()
+notes: aarch64 uses the torch 2.7.1 cu128 sbsa wheel; GB10 (SM 12.1) support under cu128 is unverified.

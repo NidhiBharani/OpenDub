@@ -1,0 +1,12 @@
+name: a2_resemble
+python: ~/.opendub/envs/a2_resemble/bin/python
+description: Resemble Enhance 0.0.1 (MIT). Its metadata pins torch 2.1.1/deepspeed/gradio; installed --no-deps
+  on torch 2.4.1 cu124 with the runtime deps. x86_64 only.
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.4.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu124
+  - uv pip install --python {python} --no-deps resemble-enhance==0.0.1
+  - uv pip install --python {python} celluloid omegaconf pandas ptflops rich resampy tabulate tqdm matplotlib
+    deepspeed==0.12.4 huggingface_hub soundfile librosa numpy
+check: import resemble_enhance.enhancer.inference, torch; assert torch.cuda.is_available()

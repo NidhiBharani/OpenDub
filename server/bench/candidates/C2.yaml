@@ -1,0 +1,690 @@
+# C2 — translation + dubbing adaptation. Sources: data/research/model-research.html (C2 ledger),
+# data/research/compute-tiers.html (C2 picks/alternates), docs/model-candidates-by-compute.md,
+# plan §7 seed list. Pack languages are directions (ja-en, ja-hi, en-hi, hi-en, en-ja).
+# LLM workers take params.task/params.prompt (bench/arena/workers/c_common.py). The GEMBA judge
+# is a DeepSeek model, so no candidate here may be a DeepSeek model (tests enforce it).
+capability: C2
+candidates:
+- id: qwen2.5-14b-ollama-opendub
+  worker: c2_openai_compat
+  env: server
+  kind: local
+  params: {backend: ollama, model: 'qwen2.5:14b', num_ctx: 8192, task: translate, prompt: opendub}
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Apache-2.0
+  ship_ok: true
+  requires:
+    gpu: true
+    vram_gb: 10.5
+    disk_gb: 9.5
+    tools: [ollama]
+  sources: ['plan:§7:C2']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: 'Ollama Q4_K_M tag (9 GB). Qwen2.5 does not list Hindi among its 29+ languages; kept in every
+    direction because it is today''s default. `ollama pull qwen2.5:14b` first; the worker unloads it with
+    keep_alive 0 at the end of the job. Baseline: today''s translation.openai_compatible default with
+    today''s prompt (15 English chars/s budget for every language).'
+  baseline: true
+  url: https://ollama.com/library/qwen2.5
+  params_b: 14.7
+- id: qwen2.5-14b-ollama-dub
+  worker: c2_openai_compat
+  env: server
+  kind: local
+  params: {backend: ollama, model: 'qwen2.5:14b', num_ctx: 8192, task: translate, prompt: dub}
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Apache-2.0
+  ship_ok: true
+  requires:
+    gpu: true
+    vram_gb: 10.5
+    disk_gb: 9.5
+    tools: [ollama]
+  sources: ['plan:§7:C2']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: 'Ollama Q4_K_M tag (9 GB). Qwen2.5 does not list Hindi among its 29+ languages; kept in every
+    direction because it is today''s default. `ollama pull qwen2.5:14b` first; the worker unloads it with
+    keep_alive 0 at the end of the job. Same model, syllable/mora budget prompt: isolates the prompt change.'
+  url: https://ollama.com/library/qwen2.5
+  params_b: 14.7
+- id: qwen3-14b-awq
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: Qwen/Qwen3-14B-AWQ
+    server_args: [--max-model-len, '8192', --gpu-memory-utilization, '0.85']
+    extra_body:
+      chat_template_kwargs: {enable_thinking: false}
+    task: translate
+    prompt: dub
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 14, disk_gb: 10}
+  sources: ['plan:§7:C2']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'AWQ int4 (~9.5 GB weights) on vLLM with thinking disabled; vLLM reserves 85% of the card. Card:
+    100+ languages incl. hi/ja.'
+  url: https://huggingface.co/Qwen/Qwen3-14B-AWQ
+  params_b: 14.8
+- id: gemma3-12b-ollama
+  worker: c2_openai_compat
+  env: server
+  kind: local
+  params: {backend: ollama, model: 'gemma3:12b', num_ctx: 8192, task: translate, prompt: dub}
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Gemma Terms of Use
+  ship_ok: true
+  requires:
+    gpu: true
+    vram_gb: 9.5
+    disk_gb: 8.5
+    tools: [ollama]
+  sources: ['plan:§7:C2']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: Ollama Q4_K_M (8.1 GB; measured 8.9 GB resident). 140+ languages. `ollama pull gemma3:12b` first;
+    unloaded with keep_alive 0.
+  url: https://ollama.com/library/gemma3
+  params_b: 12.2
+- id: hunyuan-mt-7b-fp8
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: tencent/Hunyuan-MT-7B-fp8
+    task: translate
+    prompt: hunyuan_mt
+    server_args: [--max-model-len, '8192', --gpu-memory-utilization, '0.85']
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Tencent Hunyuan Community License
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 12, disk_gb: 9}
+  sources: ['research:C2:2', 'plan:§7:C2']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'WMT25 best constrained system (as Shy-hunyuan-MT). Tencent Hunyuan Community License: not licensed
+    in the EU, UK or South Korea; needs Tencent''s permission above 100M MAU. Model-card prompt template;
+    no budget control (duration gate decides).'
+  url: https://huggingface.co/tencent/Hunyuan-MT-7B-fp8
+  params_b: 8.03
+- id: hunyuan-mt-chimera-7b-fp8
+  worker: c2_openai_compat
+  env: server
+  kind: local
+  params: {}
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Tencent Hunyuan Community License
+  enabled: false
+  sources: ['research:C2:2']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Fusion model: takes ~6 candidate translations and fuses them; needs a method worker that feeds
+    it other candidates'' outputs (not written). tencent/Hunyuan-MT-Chimera-7B-fp8. Tencent Hunyuan Community
+    License: not licensed in the EU, UK or South Korea; needs Tencent''s permission above 100M MAU.'
+  ship_ok: false
+  url: https://huggingface.co/tencent/Hunyuan-MT-Chimera-7B-fp8
+  params_b: 8.03
+- id: hy-mt1.5-7b-fp8
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: tencent/HY-MT1.5-7B-FP8
+    task: translate
+    prompt: hunyuan_mt
+    server_args: [--max-model-len, '8192', --gpu-memory-utilization, '0.85']
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Tencent HY Community License
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 12, disk_gb: 9}
+  sources: ['research:C2:2']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 36 languages; terminology/context/format controls not used by the arena prompt. Same territory
+    exclusion as Hunyuan-MT. Superseded by Hy-MT2 per its card.
+  url: https://huggingface.co/tencent/HY-MT1.5-7B-FP8
+  params_b: 8.03
+- id: hy-mt1.5-1.8b
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: tencent/HY-MT1.5-1.8B
+    task: translate
+    prompt: hunyuan_mt
+    server_args: [--max-model-len, '8192', --gpu-memory-utilization, '0.85']
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Tencent HY Community License
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 8, disk_gb: 4.5}
+  sources: ['research:C2:2']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: bf16 (2.0B params). Same territory exclusion as Hunyuan-MT.
+  url: https://huggingface.co/tencent/HY-MT1.5-1.8B
+  params_b: 2.04
+- id: hy-mt2-7b-fp8
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: tencent/Hy-MT2-7B-FP8
+    task: translate
+    prompt: hunyuan_mt
+    server_args: [--max-model-len, '8192', --gpu-memory-utilization, '0.85']
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 12, disk_gb: 9}
+  sources: ['compute-tiers:C2:spark']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: Hy-MT2 family (2026-05-21). Prompt template assumed to match Hunyuan-MT (unverified).
+  url: https://huggingface.co/tencent/Hy-MT2-7B-FP8
+  params_b: 8.03
+- id: hy-mt2-1.8b
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: tencent/Hy-MT2-1.8B
+    task: translate
+    prompt: hunyuan_mt
+    server_args: [--max-model-len, '8192', --gpu-memory-utilization, '0.85']
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 8, disk_gb: 4.5}
+  sources: ['compute-tiers:C2:spark']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: bf16. Prompt template assumed (unverified).
+  url: https://huggingface.co/tencent/Hy-MT2-1.8B
+  params_b: 1.8
+- id: hy-mt2-30b-a3b-fp8
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: tencent/Hy-MT2-30B-A3B-FP8
+    task: translate
+    prompt: hunyuan_mt
+    server_args: [--max-model-len, '16384', --gpu-memory-utilization, '0.35']
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 40, disk_gb: 32}
+  sources: ['compute-tiers:C2:spark']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'Spark pick: 30B/3B-active MoE, FP8 ~32 GB. New HYV3ForCausalLM architecture: at release it needed
+    transformers>=5.6 and vLLM from source — if vllm 0.30.0 cannot load it use backend vllm_docker with
+    a nightly image. Card recommends ≤4096 generated tokens.'
+  url: https://huggingface.co/tencent/Hy-MT2-30B-A3B-FP8
+  params_b: 30.06
+- id: qwen3.8-27b-fp8
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: Qwen/Qwen3.8-27B-FP8
+    server_args: [--max-model-len, '16384', --gpu-memory-utilization, '0.4']
+    extra_body:
+      chat_template_kwargs: {enable_thinking: false}
+    task: translate
+    prompt: dub
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 44, disk_gb: 30}
+  sources: ['compute-tiers:C2:alt', 'compute-tiers:C2:spark']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: 'Dense 27B VL (hybrid Gated DeltaNet), 262K context; Spark (FP8 official). The artifact''s NVFP4
+    recipe is faster but NVFP4 on GB10 is immature. The card lists no languages: hi/ja unverified. enable_thinking
+    assumed to follow Qwen3. Artifact: the long-context adaptation model on the Spark.'
+  url: https://huggingface.co/Qwen/Qwen3.8-27B-FP8
+  params_b: 27.0
+- id: gpt-oss-20b
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: openai/gpt-oss-20b
+    task: translate
+    prompt: dub
+    server_args: [--max-model-len, '8192', --gpu-memory-utilization, '0.90']
+    extra_body: {reasoning_effort: low}
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 15, disk_gb: 14}
+  sources: ['plan:§7:C2']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: '21B/3.6B-active MXFP4 (~13 GB): fits a 16 GB card only just (vLLM at 0.90). Fallback: Ollama
+    gpt-oss:20b.'
+  url: https://huggingface.co/openai/gpt-oss-20b
+  params_b: 21.0
+- id: gpt-oss-120b
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: openai/gpt-oss-120b
+    server_args: [--max-model-len, '16384', --gpu-memory-utilization, '0.6']
+    extra_body: {reasoning_effort: low}
+    task: translate
+    prompt: dub
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 70, disk_gb: 66}
+  sources: ['compute-tiers:C2:alt']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: '117B/5.1B-active MXFP4 (~63 GB); Spark only. English-centric, no published multilingual MT numbers
+    (artifact: better as critic than translator).'
+  url: https://huggingface.co/openai/gpt-oss-120b
+  params_b: 117.0
+- id: translategemma-4b
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: google/translategemma-4b-it
+    task: translate
+    prompt: translategemma
+    server_args: [--max-model-len, '8192', --gpu-memory-utilization, '0.85']
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Gemma Terms of Use
+  ship_ok: true
+  requires:
+    gpu: true
+    vram_gb: 11
+    disk_gb: 9
+    api_keys: [HF_TOKEN]
+  sources: ['research-delta:C2:TranslateGemma']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: 'Gated (accept the Gemma terms). 55 languages (hi/ja stated, list not seen). Structured chat
+    content item per the card — vLLM must pass source_lang_code/target_lang_code through to the template
+    (unverified). Trained with MetricX-QE in its RL loop: its MetricX rank is optimistic.'
+  url: https://huggingface.co/google/translategemma-4b-it
+  params_b: 4.0
+- id: translategemma-12b
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: google/translategemma-12b-it
+    task: translate
+    prompt: translategemma
+    server_args: [--max-model-len, '16384', --gpu-memory-utilization, '0.3']
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Gemma Terms of Use
+  ship_ok: true
+  requires:
+    gpu: true
+    vram_gb: 30
+    disk_gb: 25
+    api_keys: [HF_TOKEN]
+  sources: ['research-delta:C2:TranslateGemma']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: 'bf16 24 GB: Spark (or a quantised build on 16 GB — none official). Same caveats as translategemma-4b.'
+  url: https://huggingface.co/google/translategemma-12b-it
+  params_b: 12.0
+- id: translategemma-27b
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: google/translategemma-27b-it
+    task: translate
+    prompt: translategemma
+    server_args: [--max-model-len, '16384', --gpu-memory-utilization, '0.55']
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Gemma Terms of Use
+  ship_ok: true
+  requires:
+    gpu: true
+    vram_gb: 62
+    disk_gb: 55
+    api_keys: [HF_TOKEN]
+  sources: ['research-delta:C2:TranslateGemma']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: 'bf16 ~54 GB: Spark. Same caveats as translategemma-4b.'
+  url: https://huggingface.co/google/translategemma-27b-it
+  params_b: 27.0
+- id: seed-x-ppo-7b
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: ByteDance-Seed/Seed-X-PPO-7B
+    task: translate
+    prompt: seed_x
+    server_args: [--max-model-len, '16384', --gpu-memory-utilization, '0.18']
+  languages: [ja-en, en-ja]
+  license: OpenMDW
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 18, disk_gb: 15}
+  sources: ['research:C2:3']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: '28 languages, no Hindi. bf16 ~15 GB: Spark (official GPTQ-8bit / AWQ-4bit builds would fit 16
+    GB; repo ids not verified). Needs the <ja>/<en> target tag, which the seed_x prompt adds.'
+  url: https://huggingface.co/ByteDance-Seed/Seed-X-PPO-7B
+  params_b: 7.0
+- id: seed-x-instruct-7b
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: ByteDance-Seed/Seed-X-Instruct-7B
+    task: translate
+    prompt: seed_x
+    server_args: [--max-model-len, '16384', --gpu-memory-utilization, '0.18']
+  languages: [ja-en, en-ja]
+  license: OpenMDW
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 18, disk_gb: 15}
+  sources: ['research:C2:3']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: As seed-x-ppo-7b.
+  url: https://huggingface.co/ByteDance-Seed/Seed-X-Instruct-7B
+  params_b: 7.0
+- id: tower-plus-9b
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: Unbabel/Tower-Plus-9B
+    task: translate
+    prompt: tower
+    server_args: [--max-model-len, '16384', --gpu-memory-utilization, '0.2']
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: CC-BY-NC-SA-4.0
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 22, disk_gb: 19}
+  sources: ['research:C2:7']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'Gemma-2 base, 22 languages incl. hi/ja; non-commercial (header says CC-BY-NC-SA-4.0, text CC-BY-NC-4.0).
+    bf16 18 GB: Spark.'
+  url: https://huggingface.co/Unbabel/Tower-Plus-9B
+  params_b: 9.0
+- id: tower-plus-72b
+  worker: c2_openai_compat
+  env: server
+  kind: local
+  params: {}
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: CC-BY-NC-4.0
+  enabled: false
+  sources: ['research:C2:7']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Unbabel/Tower-Plus-72B (Qwen2.5 base, CC-BY-NC-4.0): ~145 GB in bf16 and no official quantised
+    checkpoint, so it exceeds the Spark.'
+  ship_ok: false
+  url: https://huggingface.co/Unbabel/Tower-Plus-72B
+  params_b: 72.0
+- id: gemini-3.1-pro
+  worker: c2_gemini
+  env: c2_api
+  kind: api
+  params:
+    model: gemini-3.1-pro-preview
+    price: [2.0, 12.0]
+    task: translate
+    prompt: dub
+  languages: '*'
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [GEMINI_API_KEY]
+  sources: ['compute-tiers:C2:big', 'compute-tiers:C2:api']
+  verified: {license: true, languages: false, vram: true, runs: false, price: true}
+  notes: List price $2/$12 per 1M tokens (≤200K prompt), 2026-09-28. Preview model id. Strongest published
+    MT evidence (WMT25 lineage).
+  url: https://ai.google.dev/gemini-api/docs/models
+- id: gemini-2.5-pro
+  worker: c2_gemini
+  env: c2_api
+  kind: api
+  params:
+    model: gemini-2.5-pro
+    price: [1.25, 10.0]
+    task: translate
+    prompt: dub
+  languages: '*'
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [GEMINI_API_KEY]
+  sources: ['research:C2:1']
+  verified: {license: true, languages: false, vram: true, runs: false, price: true}
+  notes: List price $1.25/$10 per 1M tokens (≤200K prompt). WMT25 best system overall (thinking mode).
+  url: https://ai.google.dev/gemini-api/docs/models
+- id: claude-opus-5
+  worker: c2_anthropic
+  env: c2_api
+  kind: api
+  params: {model: claude-opus-5, effort: high, task: translate, prompt: dub}
+  languages: '*'
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [ANTHROPIC_API_KEY]
+  sources: ['compute-tiers:C2:alt']
+  verified: {license: true, languages: false, vram: true, runs: false, price: true}
+  notes: List price $5/$25 per 1M tokens (Anthropic list price).
+  url: https://platform.claude.com/docs/en/about-claude/models/overview
+- id: claude-fable-5-1
+  worker: c2_anthropic
+  env: c2_api
+  kind: api
+  params: {model: claude-fable-5-1, effort: high, task: translate, prompt: dub}
+  languages: '*'
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [ANTHROPIC_API_KEY]
+  sources: ['compute-tiers:C2:alt']
+  verified: {license: true, languages: false, vram: true, runs: false, price: true}
+  notes: List price $10/$50 per 1M tokens.
+  url: https://platform.claude.com/docs/en/about-claude/models/overview
+- id: claude-sonnet-5
+  worker: c2_anthropic
+  env: c2_api
+  kind: api
+  params: {model: claude-sonnet-5, effort: high, task: translate, prompt: dub}
+  languages: '*'
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [ANTHROPIC_API_KEY]
+  sources: ['brief:C2:anthropic']
+  verified: {license: true, languages: false, vram: true, runs: false, price: true}
+  notes: List price $2/$10 per 1M tokens.
+  url: https://platform.claude.com/docs/en/about-claude/models/overview
+- id: gpt-6-astra
+  worker: c2_openai
+  env: c2_api
+  kind: api
+  params:
+    model: gpt-6-astra
+    price: [10.0, 50.0]
+    task: translate
+    prompt: dub
+  languages: '*'
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [OPENAI_API_KEY]
+  sources: ['compute-tiers:C2:alt']
+  verified: {license: true, languages: false, vram: true, runs: false, price: true}
+  notes: List price $10/$50 per 1M tokens, 2026-09-28.
+  url: https://developers.openai.com/api/docs/models
+- id: gpt-5.6-sol
+  worker: c2_openai
+  env: c2_api
+  kind: api
+  params:
+    model: gpt-5.6-sol
+    price: [4.0, 20.0]
+    task: translate
+    prompt: dub
+  languages: '*'
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [OPENAI_API_KEY]
+  sources: ['compute-tiers:C2:alt']
+  verified: {license: true, languages: false, vram: true, runs: false, price: true}
+  notes: List price $4/$20 per 1M tokens, 2026-09-28.
+  url: https://developers.openai.com/api/docs/models
+- id: gpt-5.5
+  worker: c2_openai
+  env: c2_api
+  kind: api
+  params:
+    model: gpt-5.5
+    price: [5.0, 30.0]
+    task: translate
+    prompt: dub
+  languages: '*'
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [OPENAI_API_KEY]
+  sources: ['compute-tiers:C2:alt']
+  verified: {license: true, languages: false, vram: true, runs: false, price: true}
+  notes: List price $5/$30 per 1M tokens (<272K context). The OpenAI version with published FLORES-200
+    MT numbers (Hy-MT2 report).
+  url: https://developers.openai.com/api/docs/models
+- id: deepl-quality
+  worker: c2_deepl
+  env: server
+  kind: api
+  params: {model_type: quality_optimized, context: true, price_per_mchar: 25.0}
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [DEEPL_API_KEY]
+  sources: ['research:C2:8']
+  verified: {license: true, languages: true, vram: true, runs: false, price: false}
+  notes: 'Dedicated MT, no duration budget. HI and JA are supported targets (HI: basic translation only).
+    Price per 1M characters unverified (API Pro reportedly replaced by Developer/Growth plans in 2026-07):
+    set price_per_mchar.'
+  url: https://developers.deepl.com/docs
+- id: google-translate-nmt
+  worker: c2_google_translate
+  env: server
+  kind: api
+  params: {model: nmt, price_per_mchar: 20.0}
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [GOOGLE_API_KEY]
+  sources: ['research:C2:8']
+  verified: {license: true, languages: true, vram: true, runs: false, price: false}
+  notes: ONLINE-G-style reference; Cloud Translation Basic v2, $20 per 1M chars (search snippet of the
+    pricing page).
+  url: https://cloud.google.com/translate/docs
+- id: microsoft-translator
+  worker: c2_openai_compat
+  env: server
+  kind: api
+  params: {}
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: proprietary API
+  enabled: false
+  sources: ['research:C2:8']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'ONLINE-B-style commercial MT: no worker written yet.'
+  url: https://learn.microsoft.com/azure/ai-services/translator/
+- id: homura-qwen3-8b
+  worker: c2_openai_compat
+  env: server
+  kind: local
+  params: {}
+  languages: '*'
+  license: research-only
+  enabled: false
+  sources: ['research:C2:4', 'compute-tiers:C6:alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'HOMURA syllable-budget GRPO on Qwen3-8B (Bilibili): code and the Sand-Glass benchmark are research-use
+    only; no weights released.'
+  url: https://arxiv.org/abs/2601.10187
+  params_b: 8.2
+- id: apptek-lcmt
+  worker: c2_openai_compat
+  env: server
+  kind: api
+  params: {}
+  languages: '*'
+  license: proprietary
+  enabled: false
+  sources: ['research:C2:5']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'AppTek length-controlled NMT with iterative re-translation: proprietary, no public API.'
+  url: https://aclanthology.org/2025.iwslt-1.21/
+- id: microsoft-lsst-labs
+  worker: c2_openai_compat
+  env: server
+  kind: method
+  params: {}
+  languages: '*'
+  license: proprietary
+  enabled: false
+  sources: ['research:C2:6']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Length-Sensitive Speech Translation + Length-Aware Beam Search (Interspeech 2025): paper only,
+    no weights or API.'
+- id: hy-mt2-30b-bestofn-metricx
+  worker: c2_openai_compat
+  env: server
+  kind: method
+  params: {}
+  languages: '*'
+  license: n/a
+  enabled: false
+  sources: ['compute-tiers:C2:spark']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Best-of-N with QE reranking (artifact''s scaling lever): a method worker composing a generator
+    and judge_mt_qe; not written, and MetricX as reranker + judge is circular (plan §4.7) — rerank with
+    CometKiwi if built.'
+  url: docs/model-candidates-by-compute.md
+- id: kimi-k3
+  worker: c2_openai_compat
+  env: server
+  kind: local
+  params: {}
+  languages: '*'
+  license: unknown
+  enabled: false
+  sources: ['compute-tiers:C2:alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Moonshot Kimi K3 (2.8T open weights): cluster-scale, beyond the Spark.'
+  url: https://kingy.ai/news/best-open-weight-ai-models-in-2026-glm-5-2-vs-deepseek-v4-vs-kimi-k2-6-vs-qwen-vs-mistral/
+  params_b: 2800.0
+- id: glm-5.3
+  worker: c2_openai_compat
+  env: server
+  kind: local
+  params: {}
+  languages: '*'
+  license: GLM-5.3 licence
+  enabled: false
+  sources: ['compute-tiers:C2:alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Zhipu GLM-5.3 (744B-A40B, 756 GB FP8): cluster-scale, beyond the Spark; bespoke licence.'
+  url: https://kingy.ai/blog/glm-5-3-specs-benchmarks-api-how-to-use/
+  params_b: 744.0

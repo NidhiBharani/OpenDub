@@ -1,0 +1,18 @@
+name: b_hf
+python: ~/.opendub/envs/b_hf/bin/python
+description: >-
+  Transformers picture models for phase B: SigLIP 2 (zero-shot and linear probe), Perception
+  Encoder via open_clip, HF image classifiers, and local Qwen3-VL (transformers ≥ 4.57).
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} 'transformers>=4.57,<5' accelerate pillow numpy open_clip_torch timm
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} 'transformers>=4.57,<5' accelerate pillow numpy open_clip_torch timm
+check: "import transformers, open_clip, torch; assert torch.cuda.is_available()"
+notes: >-
+  Qwen3-VL FP8 checkpoints load through transformers' fine-grained FP8 path (triton kernels,
+  compute capability ≥ 8.9); unverified on sm_120/sm_121.

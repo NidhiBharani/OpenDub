@@ -1,0 +1,269 @@
+# G6 — multimodal reviewer, ranked by per-defect detection on the injected-defect pack
+# (spec: specs/g6.py). Protocol and prompts: workers/g6_rubric.py (holistic vs decomposed).
+# Prices (USD / 1M tokens) checked 2026-09-28: ai.google.dev pricing, developers.openai.com.
+capability: G6
+candidates:
+  - id: gemini-3.7-flash-holistic
+    worker: g6_gemini
+    env: g6_api
+    kind: api
+    params: {model: gemini-3.7-flash, task: review, protocol: holistic,
+             prices: {in: 0.75, out: 3.75}}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    url: https://ai.google.dev/gemini-api/docs/models
+    sources: [compute-tiers:G6:api]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: API pick (audio + video natively). Promo price through 2026-12-31, then $1.50 / $7.50.
+  - id: gemini-3.7-flash-decomposed
+    worker: g6_gemini
+    env: g6_api
+    kind: api
+    params: {model: gemini-3.7-flash, task: review, protocol: decomposed,
+             prices: {in: 0.75, out: 3.75}}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    url: https://ai.google.dev/gemini-api/docs/models
+    sources: [compute-tiers:G6:api, compute-tiers:G6:big]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: AudioJudge-style decomposition (lexical / identity both orders / signal / sync sub-judges).
+  - id: gemini-3.8-flash-decomposed
+    worker: g6_gemini
+    env: g6_api
+    kind: api
+    params: {model: gemini-3.8-flash, task: review, protocol: decomposed,
+             prices: {in: 0.75, out: 3.75}}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    url: https://ai.google.dev/gemini-api/docs/models
+    sources: [gemini-pricing-page:2026-09-28]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: Newer than both research artifacts (listed on the pricing page 2026-09-28).
+  - id: gemini-3.1-pro-decomposed
+    worker: g6_gemini
+    env: g6_api
+    kind: api
+    params: {model: gemini-3.1-pro-preview, task: review, protocol: decomposed,
+             prices: {in: 2.0, out: 12.0}}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    url: https://ai.google.dev/gemini-api/docs/models
+    sources: [research:G6:1, compute-tiers:G6:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: The model class with the published reliability study (calibration drift noted).
+  - id: gemini-3.5-flash-holistic
+    worker: g6_gemini
+    env: g6_api
+    kind: api
+    params: {model: gemini-3.5-flash, task: review, protocol: holistic,
+             prices: {in: 1.5, out: 9.0}}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    url: https://ai.google.dev/gemini-api/docs/models
+    sources: [research:G6:1, compute-tiers:G6:delta]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: The Sept-3 primary (superseded by 3.7 Flash); kept to measure the change.
+  - id: gpt-audio-1.5-holistic
+    worker: g6_openai
+    env: g6_api
+    kind: api
+    params: {model: gpt-audio-1.5, task: review, protocol: holistic,
+             prices: {text_in: 2.5, audio_in: 32.0, out: 10.0}}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [OPENAI_API_KEY]}
+    url: https://developers.openai.com/api/docs/models/gpt-audio-1.5
+    sources: [research:G6:3, compute-tiers:G6:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: Independent vendor; audio only (off-sync items count as misses).
+  - id: gpt-audio-1.5-decomposed
+    worker: g6_openai
+    env: g6_api
+    kind: api
+    params: {model: gpt-audio-1.5, task: review, protocol: decomposed,
+             prices: {text_in: 2.5, audio_in: 32.0, out: 10.0}}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [OPENAI_API_KEY]}
+    url: https://developers.openai.com/api/docs/models/gpt-audio-1.5
+    sources: [research:G6:3, compute-tiers:G6:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: Audit found GPT-Audio 0.97 position-locked on A/B; the identity sub-judge averages both orders.
+  - id: qwen3.5-omni-plus
+    worker: g6_openai
+    env: g6_api
+    kind: api
+    params: {model: qwen3.5-omni-plus, task: review, protocol: decomposed,
+             base_url: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+             api_key_env: DASHSCOPE_API_KEY, video: true, data_url: true, stream: true}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [DASHSCOPE_API_KEY]}
+    url: https://www.alibabacloud.com/help/en/model-studio/qwen-omni
+    sources: [research:G6:2, compute-tiers:G6:delta]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: >-
+      API-only (no weights). OpenAI-compatible DashScope endpoint; request shape for video/audio
+      data URLs and streaming follows the Model Studio docs but is unverified; no price pinned
+      (no _cost_usd recorded).
+  - id: qwen3-omni-30b-a3b-instruct-decomposed
+    worker: g6_qwen3_omni
+    env: g6_qwen3_omni
+    kind: local
+    params: {model: Qwen/Qwen3-Omni-30B-A3B-Instruct, task: review, protocol: decomposed,
+             dtype: bfloat16, attn: sdpa}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 90, disk_gb: 70}
+    url: https://huggingface.co/Qwen/Qwen3-Omni-30B-A3B-Instruct
+    params_b: 30.5
+    sources: [research:G6:2, compute-tiers:G6:spark, compute-tiers:G6:big]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      Spark pick (open weights, audio + video). Card: 78.85 GB peak for a 15 s video in BF16
+      (talker disabled here). transformers, not vLLM (vLLM sm_121 issue #36821).
+  - id: qwen3-omni-30b-a3b-instruct-holistic
+    worker: g6_qwen3_omni
+    env: g6_qwen3_omni
+    kind: local
+    params: {model: Qwen/Qwen3-Omni-30B-A3B-Instruct, task: review, protocol: holistic,
+             dtype: bfloat16, attn: sdpa}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 90, disk_gb: 70}
+    url: https://huggingface.co/Qwen/Qwen3-Omni-30B-A3B-Instruct
+    params_b: 30.5
+    sources: [research:G6:2, compute-tiers:G6:spark]
+    verified: {license: true, languages: false, vram: false, runs: false}
+  - id: audio-flamingo-3-decomposed
+    worker: g6_audio_flamingo
+    env: g6_audio_flamingo
+    kind: local
+    params: {model: nvidia/audio-flamingo-3-hf, task: review, protocol: decomposed}
+    languages: "*"
+    license: NVIDIA OneWay Noncommercial
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 20, disk_gb: 18}
+    url: https://huggingface.co/nvidia/audio-flamingo-3-hf
+    params_b: 8
+    sources: [research:G6:4, compute-tiers:G6:big-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: Audio only (off-sync = miss); VRAM estimated (8B BF16 ≈ 17 GB weights) → Spark / 24 GB+.
+  - id: transcript-review-claude-opus-5
+    worker: g6_transcript_review
+    env: g6_api
+    kind: method
+    params: {model: claude-opus-5, asr: {model: large-v3, compute_type: float16, device: cuda},
+             prices: {in: 5.0, out: 25.0}}
+    languages: "*"
+    license: proprietary API + MIT (Whisper)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 4.5, api_keys: [ANTHROPIC_API_KEY]}
+    url: https://docs.claude.com/en/api/overview
+    sources: [research:G6:6, compute-tiers:G6:spark-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      Transcript + language-ID + clipping measurements reviewed by Claude (text-only). Cannot
+      judge voice identity or sync (reports 0 → misses by design). On aarch64 set asr device cpu.
+  - id: claude-opus-5-direct
+    worker: g6_transcript_review
+    env: g6_api
+    kind: api
+    params: {model: claude-opus-5, direct_media: true}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ANTHROPIC_API_KEY]}
+    enabled: false
+    url: https://docs.claude.com/en/docs/about-claude/models/overview
+    sources: [compute-tiers:G6:api-alt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: Claude models take text + images only (no audio/video input), so no direct review is possible.
+  - id: qwen3-omni-30b-a3b-thinking
+    worker: g6_qwen3_omni
+    env: g6_qwen3_omni
+    kind: local
+    params: {model: Qwen/Qwen3-Omni-30B-A3B-Thinking, task: review, protocol: decomposed}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 80}
+    enabled: false
+    url: https://huggingface.co/Qwen/Qwen3-Omni-30B-A3B-Thinking
+    params_b: 30.5
+    sources: [compute-tiers:G6:spark]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: Excluded on evidence (100% position-locked in the 2026 judge audit; "never Thinking").
+  - id: qwen3-omni-captioner-text-judge
+    worker: g6_qwen3_omni
+    env: g6_qwen3_omni
+    kind: method
+    params: {model: Qwen/Qwen3-Omni-30B-A3B-Captioner, task: review, protocol: captioner}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 80}
+    enabled: false
+    url: https://huggingface.co/Qwen/Qwen3-Omni-30B-A3B-Captioner
+    params_b: 30.5
+    sources: [compute-tiers:G6:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Captioner describing the take for a text judge; "captioner" protocol not implemented.
+  - id: audio-flamingo-next
+    worker: g6_audio_flamingo
+    env: g6_audio_flamingo
+    kind: local
+    params: {model: nvidia/audio-flamingo-next, task: review, protocol: decomposed}
+    languages: "*"
+    license: NVIDIA OneWay Noncommercial
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 20}
+    enabled: false
+    url: https://arxiv.org/abs/2604.10905
+    params_b: 8
+    sources: [compute-tiers:G6:spark-alt, compute-tiers:G6:big]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: 30-min audio context, timestamp-grounded CoT; HF id / transformers class not verified.
+  - id: sq-llm-judge
+    worker: g6_audio_flamingo
+    env: g6_audio_flamingo
+    kind: local
+    params: {model: sq-llm}
+    languages: "*"
+    license: varies
+    ship_ok: null
+    enabled: false
+    url: https://arxiv.org/abs/2510.14664
+    sources: [research:G6:5]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Fine-tuned SpeechLLM quality judge; weight release not verified.
+  - id: qwen3-omni-self-consistency-af-next
+    worker: g6_qwen3_omni
+    env: g6_qwen3_omni
+    kind: method
+    params: {model: Qwen/Qwen3-Omni-30B-A3B-Instruct, task: review, protocol: decomposed,
+             samples: 16}
+    languages: "*"
+    license: Apache-2.0 + NVIDIA OneWay Noncommercial
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 100}
+    enabled: false
+    url: https://huggingface.co/Qwen/Qwen3-Omni-30B-A3B-Instruct
+    sources: [compute-tiers:G6:big]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Unconstrained pick (16-64-way self-consistency + AF-Next ensemble); sampling mode not implemented.

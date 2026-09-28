@@ -1,0 +1,198 @@
+# F3 — 2D animation mouth retiming. Research verdict (both artifacts): nothing credible edits
+# drawn mouths in finished animation; decline and move the effort to C3 flap-aware script
+# fitting. So the ledger is mostly methods, negative controls and disabled rows.
+# Spec: bench/arena/specs/f3.py. Pack: scene_dub (SPY×FAMILY picture + official en/hi dub).
+capability: F3
+candidates:
+  - id: decline-export-cues
+    url: server/bench/arena/workers/f3_decline.py  # own method (in this repo)
+    params_b: 0
+    worker: f3_decline
+    env: server
+    kind: method
+    params: {}
+    languages: "*"
+    license: n/a
+    ship_ok: true
+    requires: {}
+    baseline: true
+    sources: ["research:F3:1", "compute-tiers:F3:big"]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      Picture unchanged (today's behaviour) + the dub's speech track exported as open/closed cues
+      for C3 flap fitting. mouth_open = the original line timing (src_speech) or a VAD of the
+      source audio — a proxy for the drawn flaps.
+
+  - id: rhubarb-1.14
+    url: https://github.com/DanielSWolf/rhubarb-lip-sync/releases/tag/v1.14.0
+    params_b: 0
+    worker: f3_rhubarb
+    env: f3_rhubarb
+    kind: local
+    params: {extended_shapes: GHX, dialog: true}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {}
+    sources: ["research:F3:4", "compute-tiers:F3:spark"]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      CPU viseme track (A–F + G/H/X) from the dub audio; pocketSphinx for en, phonetic otherwise
+      (compute-tiers: drive hi from A4/A5 phonemes instead — not wired). A cue exporter: picture
+      unchanged, scored by cue_f1; flap_f1 equals the decline baseline by construction.
+      v1.14.0 has no arm64 binary: the aarch64 recipe builds from source (CMake + Boost).
+
+  - id: latentsync-1.6-negative-control
+    url: https://huggingface.co/ByteDance/LatentSync-1.6
+    params_b: 0.9
+    worker: f1_latentsync
+    env: f1_latentsync
+    kind: local
+    params: {version: "1.6", unet_config: configs/unet/stage2_512.yaml,
+             checkpoint: checkpoints/latentsync_unet.pt, inference_steps: 20,
+             guidance_scale: 1.5, enable_deepcache: true, seed: 1247}
+    languages: "*"
+    license: openrail++ (weights)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 15.0, disk_gb: 8}
+    sources: ["research:F3:text"]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      Research bench plan: run a human-face model on anime as a negative control to price a B4
+      gating failure. No flap track (face detection mostly fails → unsupported items); judged
+      by changed_frac, the sync panel and the user's audit.
+
+  - id: musetalk-1.5-negative-control
+    url: https://huggingface.co/TMElyralab/MuseTalk
+    params_b: null
+    worker: f1_musetalk
+    env: f1_musetalk
+    kind: local
+    params: {version: v15, bbox_shift: 0, use_float16: true}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 5, disk_gb: 6}
+    sources: ["research:F3:text"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: Second negative control named in the research bench plan.
+
+  - id: ltx-2.3-dubit-on-animation
+    url: https://huggingface.co/Lightricks/LTX-2.3-22b-IC-LoRA-DubIt
+    params_b: 22
+    worker: f1_ltx_dubit
+    env: f1_ltx2
+    kind: local
+    params: {hf_repo: Lightricks/LTX-2.3, checkpoint: ltx-2.3-22b-distilled.safetensors,
+             quantization: none}
+    languages: [en, fr, es, de, ru]
+    license: LTX-2 Community License (free below $10M ARR)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 80, api_keys: [HF_TOKEN]}
+    enabled: false
+    sources: ["research:F3:5", "compute-tiers:F3:big-alt"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      "For the record, not recommended": unevaluated on hand-drawn 2D, near-certain to break
+      line art; text-driven, and the SCENE items carry no dub line text. Enable as a Spark
+      negative control once meta.text exists.
+
+  - id: sync-3-3d-only
+    url: https://docs.sync.so/models/lipsync
+    params_b: null
+    worker: f1_sync_api
+    env: server
+    kind: api
+    params: {model: sync-3, sync_mode: cut_off}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [SYNC_API_KEY]}
+    enabled: false
+    sources: ["compute-tiers:F3:api", "compute-tiers:F3:spark-alt"]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: Vendor claims 3D/CG and AI-generated sources, never hand-drawn 2D; the F3 pack is hand-drawn, so disabled (enable for a 3D pack).
+
+  - id: flap-state-resequencing
+    url: server/bench/arena/workers/f3_decline.py  # own method (in this repo)
+    params_b: 0
+    worker: f3_decline
+    kind: method
+    languages: "*"
+    license: n/a
+    enabled: false
+    sources: ["research:F3:3", "compute-tiers:F3:spark-alt"]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: Classify existing drawn mouths into flap states and re-sequence them to the dub; no published implementation and no public mouth-state classifier for anime.
+
+  - id: unisync
+    url: https://arxiv.org/abs/2603.03882
+    params_b: null
+    worker: f1_latentsync
+    kind: local
+    languages: "*"
+    license: unknown
+    enabled: false
+    sources: ["research:F3:2"]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Mango TV 2026 paper trained on 2D/3D cartoons; no code, weights or licence.
+
+  - id: anisora-v3.2
+    url: https://github.com/bilibili/Index-anisora
+    params_b: 14
+    worker: f1_wan_s2v
+    kind: local
+    languages: "*"
+    license: Apache-2.0
+    enabled: false
+    sources: ["research:F3:6"]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: Anime-native generator (Wan2.2 base); generates animation, does not edit mouths to new dialogue. A fine-tune base, not a candidate.
+
+  - id: tooncrafter-toncomposer
+    url: https://arxiv.org/abs/2405.17933
+    params_b: null
+    worker: f1_wan_s2v
+    kind: local
+    languages: "*"
+    license: unknown
+    enabled: false
+    sources: ["research:F3:7"]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Cartoon inbetweening / post-keyframing; no audio conditioning or mouth editing.
+
+  - id: cel-dit-retrained
+    url: ""
+    params_b: null
+    worker: f1_wan_s2v
+    kind: local
+    languages: "*"
+    license: n/a
+    enabled: false
+    sources: ["compute-tiers:F3:big-alt"]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Hypothetical DiT retrained on a cel-animation corpus; no such corpus or model exists.
+
+  - id: domoai
+    url: https://domoai.app/
+    params_b: null
+    worker: f1_replicate
+    kind: api
+    languages: "*"
+    license: proprietary
+    enabled: false
+    sources: ["compute-tiers:F3:api-alt"]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: Markets stylised-character lip sync; no metrics, papers or verified developer API.
+
+  - id: adobe-character-animator
+    url: https://www.adobe.com/products/character-animator.html
+    params_b: null
+    worker: f3_rhubarb
+    kind: api
+    languages: "*"
+    license: proprietary
+    enabled: false
+    sources: ["compute-tiers:F3:api-alt", "research:F3:text"]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: Viseme-driven retiming only for rigs authored inside it; no API, cannot retime delivered footage.

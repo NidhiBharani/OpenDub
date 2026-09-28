@@ -1,0 +1,13 @@
+name: c5_misaki
+python: ~/.opendub/envs/c5_misaki/bin/python
+description: >-
+  misaki 0.9.4 G2P (en, ja; Apache-2.0) and pyopenjtalk 0.4.1 (ja readings). pyopenjtalk is
+  sdist-only: the build needs cmake and a C++ compiler on both architectures.
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} "misaki[en,ja]==0.9.4" pyopenjtalk==0.4.1
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} "misaki[en,ja]==0.9.4" pyopenjtalk==0.4.1
+check: "import misaki, pyopenjtalk; from misaki import en, ja"

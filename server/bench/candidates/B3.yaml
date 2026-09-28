@@ -1,0 +1,349 @@
+# B3 — on-screen text reading. Sources: model-research.html article B3 (ledger 1–8) and
+# compute-tiers.html B3 (Spark / Unconstrained / API picks + alternates); plan §7 seed list.
+# OpenDub has no B3 today, so the classical floor (EasyOCR) is the baseline.
+capability: B3
+candidates:
+  # ---------------------------------------------------------------- classical floor
+  - id: easyocr
+    worker: b3_classic_ocr
+    url: https://github.com/JaidedAI/EasyOCR
+    env: b3_classic_ocr
+    params: {engine: easyocr, gpu: true}
+    languages: [en, hi, ja, zh, ko, ta, te, bn, mr]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2, disk_gb: 1}
+    baseline: true
+    sources: [research:B3:8]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      The floor (0.507 CER on the VideoDB video-frame benchmark). Baseline because OpenDub has no
+      OCR today and this is what "first reach" looks like. Reader langs per pack language.
+  - id: rapidocr
+    worker: b3_classic_ocr
+    url: https://github.com/RapidAI/RapidOCR
+    env: b3_classic_ocr
+    params: {engine: rapidocr}
+    languages: [en, zh, ja]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {}
+    sources: [research:B3:8]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      RapidOCR default (PP-OCR ONNX, CPU onnxruntime). Default models read zh/en; ja coverage via
+      config (Rec.lang_type) unverified. 0.430 CER on VideoDB.
+
+  # ---------------------------------------------------------------- PaddleOCR specialists
+  - id: pp-ocrv6-medium
+    worker: b3_paddleocr
+    url: https://huggingface.co/blog/PaddlePaddle/pp-ocrv6
+    params_b: 0.0345
+    env: b3_paddleocr
+    params: {det_model: PP-OCRv6_medium_det, rec_model: PP-OCRv6_medium_rec, engine: onnxruntime}
+    languages: [en, ja, zh, fr, de, es, pt, it]
+    license: Apache-2.0 (code); CC BY 4.0 (released artefacts)
+    ship_ok: true
+    requires: {disk_gb: 1}
+    sources: [research:B3:1, compute-tiers:B3:spark]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      Spark pick (34.5M params, ~1 GB). onnxruntime engine so no PaddlePaddle GPU build is needed
+      (none exists for aarch64). Covers zh/en/ja + 46 Latin-script languages; no Devanagari —
+      hi is served by the v5 script model below. GPU when onnxruntime-gpu is present, else CPU.
+  - id: pp-ocrv6-small
+    worker: b3_paddleocr
+    url: https://huggingface.co/blog/PaddlePaddle/pp-ocrv6
+    params_b: 0.0077
+    env: b3_paddleocr
+    params: {det_model: PP-OCRv6_small_det, rec_model: PP-OCRv6_small_rec, engine: onnxruntime}
+    languages: [en, ja, zh, fr, de, es, pt, it]
+    license: Apache-2.0 / CC BY 4.0
+    ship_ok: true
+    requires: {disk_gb: 1}
+    sources: [research:B3:1]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: 7.7M-param tier.
+  - id: pp-ocrv6-tiny
+    worker: b3_paddleocr
+    url: https://huggingface.co/blog/PaddlePaddle/pp-ocrv6
+    params_b: 0.0015
+    env: b3_paddleocr
+    params: {det_model: PP-OCRv6_tiny_det, rec_model: PP-OCRv6_tiny_rec, engine: onnxruntime}
+    languages: [en, zh]
+    license: Apache-2.0 / CC BY 4.0
+    ship_ok: true
+    requires: {}
+    sources: [research:B3:1]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      1.5M-param tier. The HF blog says the 50-language coverage is for the medium and small tiers;
+      tiny is registered for en only here (ja unverified).
+  - id: pp-ocrv5-devanagari
+    worker: b3_paddleocr
+    url: https://www.paddleocr.ai/latest/en/version3.x/pipeline_usage/OCR.html
+    env: b3_paddleocr
+    params: {det_model: PP-OCRv6_medium_det, rec_model_by_lang: {hi: devanagari_PP-OCRv5_mobile_rec,
+             mr: devanagari_PP-OCRv5_mobile_rec, ne: devanagari_PP-OCRv5_mobile_rec},
+             engine: onnxruntime}
+    languages: [hi, mr, ne]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {}
+    sources: [research:B3:1]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      Plan §7: PP-OCRv5 script models for Devanagari (v6 has none). PP-OCRv6 medium detector +
+      the ultra-light v5 Devanagari recogniser.
+
+  - id: paddleocr-vl-1.6
+    worker: b3_vlm
+    url: https://huggingface.co/PaddlePaddle/PaddleOCR-VL-1.6
+    params_b: 0.9
+    env: b3_paddleocr_vl
+    params: {provider: local, model: PaddlePaddle/PaddleOCR-VL-1.6, dtype: bfloat16,
+             trust_remote_code: true, prompt_style: "plain:OCR:", max_new_tokens: 1024}
+    languages: [en, ja, zh, hi]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 4, disk_gb: 3}
+    sources: [research:B3:7, compute-tiers:B3:spark-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      0.9B document VLM (96.33% OmniDocBench v1.6), transformers ≥ 5. The "OCR:" prompt returns
+      text without boxes, so it scores on text_f / char_f only; the "Spotting:" prompt (boxes) has
+      an undocumented output format and is not wired. hi coverage unverified.
+  - id: dots-ocr
+    worker: b3_vlm
+    url: https://huggingface.co/rednote-hilab/dots.ocr
+    env: b3_dots_ocr
+    params: {provider: local, model: rednote-hilab/dots.ocr, trust_remote_code: true}
+    languages: "*"
+    license: unconfirmed
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 8}
+    enabled: false
+    sources: [research:B3:7]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      dots.ocr loads as AutoModelForCausalLM + trust_remote_code with qwen_vl_utils, which the
+      shared LocalVlm loader does not do; licence unconfirmed in the research. Not wired.
+  - id: surya
+    worker: b3_surya
+    url: https://github.com/datalab-to/surya
+    params_b: 0.65
+    env: b3_surya
+    params: {}
+    languages: "*"
+    license: code Apache-2.0; weights modified AI Pubs Open RAIL-M (research/personal/<$5M orgs)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 6, disk_gb: 3}
+    sources: [research:B3:5]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      ~650M-param single VLM (91-language internal benchmark). Worker written against the
+      surya-ocr ≥ 0.14 predictor API; confirm Surya 2's API before running. VRAM estimated.
+
+  # ---------------------------------------------------------------- local general VLMs
+  - id: qwen3-vl-8b-fp8
+    worker: b3_vlm
+    url: https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct-FP8
+    params_b: 8.0
+    env: b_hf
+    params: {provider: local, model: Qwen/Qwen3-VL-8B-Instruct-FP8, dtype: auto, attn: sdpa,
+             max_new_tokens: 2048}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 12, disk_gb: 11, min_compute_capability: "8.9"}
+    sources: [research:B3:3]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      Thalassa-sized Qwen3-VL (research: local semantic tier). FP8 checkpoint id and transformers
+      FP8 loading on sm_120 unverified; VRAM estimated (8B × 1 byte + vision tower + KV).
+  - id: qwen3-vl-8b
+    worker: b3_vlm
+    url: https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct
+    params_b: 8.0
+    env: b_hf
+    params: {provider: local, model: Qwen/Qwen3-VL-8B-Instruct, dtype: bfloat16, attn: sdpa,
+             max_new_tokens: 2048}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 22, disk_gb: 18}
+    sources: [research:B3:3]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: bf16 8B — Spark (≈17 GB weights + activations; estimated).
+  - id: qwen3-vl-32b
+    worker: b3_vlm
+    url: https://huggingface.co/Qwen/Qwen3-VL-32B-Instruct
+    params_b: 32.0
+    env: b_hf
+    params: {provider: local, model: Qwen/Qwen3-VL-32B-Instruct, dtype: bfloat16, attn: sdpa,
+             max_new_tokens: 2048}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 75, disk_gb: 66}
+    sources: [research:B3:3]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: bf16 32B — Spark only (≈66 GB weights; estimated). Leads OCRBench-v2 (en) at 32B.
+  - id: qwen3-vl-235b-a22b
+    worker: b3_vlm
+    url: https://huggingface.co/Qwen/Qwen3-VL-235B-A22B-Instruct
+    params_b: 235.0
+    env: b_hf
+    params: {provider: local, model: Qwen/Qwen3-VL-235B-A22B-Instruct}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 480}
+    enabled: false
+    sources: [research:B3:3, compute-tiers:B3:big-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      Does not fit one Spark even at 4-bit (~120 GB+); PP-OCRv6 beats it on recognition per the
+      PP-OCRv6 paper. Registered for the ledger.
+  - id: glm-5.3-flash
+    worker: b3_vlm
+    url: https://huggingface.co/zai-org/GLM-5.3-Flash
+    params_b: 320.0
+    env: b_hf
+    params: {provider: local, model: zai-org/GLM-5.3-Flash}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 170}
+    enabled: false
+    sources: [compute-tiers:B3:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: 320B-A18B MoE; ~160–170 GB at 4-bit — does not fit one 128 GB Spark.
+  - id: gomatching-pp
+    worker: b3_gomatching
+    url: https://arxiv.org/abs/2505.22228
+    env: b3_paddleocr
+    kind: method
+    params: {}
+    languages: "*"
+    license: unknown
+    ship_ok: false
+    enabled: false
+    sources: [research:B3:6, compute-tiers:B3:spark-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      GoMatching++ video text spotting (arXiv 2505.22228): scene-text research code, licence and
+      en/hi/ja checkpoints unconfirmed; a design reference for temporal dedup, not wired.
+  - id: ppocrv6+paddleocr-vl+gomatching
+    worker: b3_consensus
+    url: https://huggingface.co/blog/PaddlePaddle/pp-ocrv6
+    env: b3_paddleocr
+    kind: method
+    params: {}
+    languages: "*"
+    license: Apache-2.0 / CC BY 4.0
+    ship_ok: true
+    enabled: false
+    sources: [compute-tiers:B3:big]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      Unconstrained pick (PP-OCRv6 + PaddleOCR-VL consensus with GoMatching++ track voting).
+      Compose once the members are ranked; needs GoMatching++.
+
+  # ---------------------------------------------------------------- APIs
+  - id: gemini-3.1-pro
+    worker: b3_vlm
+    url: https://ai.google.dev/gemini-api/docs/models
+    env: b_api
+    kind: api
+    params: {provider: gemini, model: gemini-3.1-pro-preview, price_in_per_mtok: 2.0,
+             price_out_per_mtok: 12.0, frame_side: 1536}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY], tools: [ffmpeg]}
+    sources: [compute-tiers:B3:api]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      API pick; box_2d output (0–1000, [ymin, xmin, ymax, xmax]). $2/$12 per M tokens (≤200k),
+      ai.google.dev pricing 2026-09-28.
+  - id: gemini-3.8-flash
+    worker: b3_vlm
+    url: https://ai.google.dev/gemini-api/docs/models
+    env: b_api
+    kind: api
+    params: {provider: gemini, model: gemini-3.8-flash, price_in_per_mtok: 0.75,
+             price_out_per_mtok: 3.75, frame_side: 1536}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY], tools: [ffmpeg]}
+    sources: [research:B3:2, compute-tiers:B3:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      Volume tier ("Gemini 3.x Flash" in the research). $0.75/$3.75 per M tokens through
+      2026-12-31, then $1.50/$7.50 (ai.google.dev pricing 2026-09-28).
+  - id: claude-opus-5
+    worker: b3_vlm
+    url: https://docs.claude.com/en/docs/about-claude/models/overview
+    env: b_api
+    kind: api
+    params: {provider: anthropic, model: claude-opus-5, price_in_per_mtok: 5.0,
+             price_out_per_mtok: 25.0, effort: medium, box_order: yxyx, frame_side: 2048,
+             max_tokens: 16000}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ANTHROPIC_API_KEY], tools: [ffmpeg]}
+    sources: [compute-tiers:B3:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      $5/$25 per M tokens (Anthropic pricing 2026-09-28); images up to 2576 px long edge. Asked
+      for the same 0–1000 box_2d convention as Gemini.
+  - id: gpt-4o
+    worker: b3_vlm
+    url: https://developers.openai.com/api/docs/models
+    env: b_api
+    kind: api
+    params: {provider: openai, model: gpt-4o, price_in_per_mtok: 2.5, price_out_per_mtok: 10.0,
+             image_detail: high, frame_side: 2048}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [OPENAI_API_KEY], tools: [ffmpeg]}
+    sources: [research:B3:8]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      The VideoDB video-frame benchmark anchor (0.238 CER) named in the research. $2.50/$10 per M
+      tokens (developers.openai.com pricing 2026-09-28).
+  - id: gpt-6-sol
+    worker: b3_vlm
+    url: https://developers.openai.com/api/docs/models
+    env: b_api
+    kind: api
+    params: {provider: openai, model: gpt-6-sol, price_in_per_mtok: 2.0, price_out_per_mtok: 10.0,
+             image_detail: high, frame_side: 2048}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [OPENAI_API_KEY], tools: [ffmpeg]}
+    sources: [orchestrator:gpt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      Current-generation GPT counterpart of gpt-4o (not in the artifacts). $2/$10 per M tokens,
+      2026-09-28; vision support assumed from the family.
+  - id: google-vi-text
+    worker: b2_google_vi
+    url: https://cloud.google.com/video-intelligence/docs/text-detection
+    env: b_api
+    kind: api
+    params: {feature: TEXT_DETECTION, price_per_min: 0.15, timeout_s: 900}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GOOGLE_APPLICATION_CREDENTIALS], tools: [ffmpeg]}
+    sources: [research:B3:4, compute-tiers:B3:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      Video-native tracked text with boxes; $0.15/min, billed per started minute (so a still image
+      costs a full minute). Deprecated 2026-09-14, shutdown 2027-09-14.

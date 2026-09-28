@@ -1,0 +1,123 @@
+# E5 — watermarking + provenance. DEFERRED by the user (capability map: tier "deferred"; EU AI Act
+# Art. 50 noted in compute-tiers): every candidate is registered disabled, no workers yet.
+# Sources: model-research.html #E5 (ranks 1–7) and compute-tiers.html #E5.
+capability: E5
+candidates:
+  - id: c2pa-c2patool
+    url: https://github.com/contentauth/c2pa-rs
+    params_b: 0
+    worker: e5_c2pa
+    enabled: false
+    languages: "*"
+    license: MIT OR Apache-2.0 (c2pa-rs / c2patool)
+    ship_ok: true
+    requires: {tools: [c2patool]}
+    sources: [research:E5:1, compute-tiers:E5:spark]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: deferred. C2PA 2.4 manifests on WAV/MP3/M4A/MP4; needs a signing certificate (Trust List)
+  - id: audioseal
+    url: https://github.com/facebookresearch/audioseal
+    worker: e5_audioseal
+    enabled: false
+    languages: "*"
+    license: MIT (code and weights)
+    ship_ok: true
+    requires: {gpu: false}
+    sources: [research:E5:2, compute-tiers:E5:spark-alt, compute-tiers:E5:big-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: deferred. Tamper-evident, not robust (flag removed training-free, arXiv 2608.16566)
+  - id: silentcipher
+    url: https://github.com/sony/silentcipher
+    worker: e5_silentcipher
+    enabled: false
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    sources: [research:E5:3]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: deferred; dropped from the Sep 18 shortlist (payload erased by the same attack)
+  - id: synthid-audio
+    url: https://deepmind.google/technologies/synthid/
+    worker: e5_synthid
+    kind: api
+    enabled: false
+    languages: "*"
+    license: proprietary
+    sources: [research:E5:4, compute-tiers:E5:api]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: deferred. Embedder not released; verification only via issuing vendors' APIs
+  - id: wavmark
+    url: https://github.com/wavmark/wavmark
+    worker: e5_wavmark
+    enabled: false
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    sources: [research:E5:5]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: deferred; unmaintained since 2024-01; detector role only
+  - id: generation-time-watermarks
+    url: https://arxiv.org/abs/2606.21365
+    worker: e5_generation_time
+    kind: method
+    enabled: false
+    languages: "*"
+    license: papers CC BY; code unconfirmed
+    sources: [research:E5:6, compute-tiers:E5:spark-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: deferred. LambdaMark (arXiv 2606.21365) etc.; requires control of the generator
+  - id: provcheck-panel
+    worker: e5_panel
+    kind: method
+    enabled: false
+    languages: "*"
+    license: Apache-2.0 (provcheck pattern)
+    sources: [research:E5:7, compute-tiers:E5:big]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: deferred. C2PA hard binding + AudioSeal + latent mark + perceptual hash, cross-checked
+  - id: aware
+    url: https://arxiv.org/abs/2510.17512
+    worker: e5_aware
+    enabled: false
+    languages: "*"
+    license: unknown
+    sources: [compute-tiers:E5:spark-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: deferred. Latent-domain mark (arXiv 2510.17512); survived the 2026 structural attacks
+  - id: voicemark
+    worker: e5_voicemark
+    enabled: false
+    languages: "*"
+    license: unknown
+    sources: [compute-tiers:E5:spark-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: deferred. Speaker-specific RVQ-latent mark, hardened against voice cloning
+  - id: latent-mark
+    url: https://arxiv.org/abs/2603.05310
+    worker: e5_latent_mark
+    enabled: false
+    languages: "*"
+    license: unknown
+    sources: [compute-tiers:E5:spark-alt, compute-tiers:E5:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: deferred; watch item (arXiv 2603.05310, robust to neural codecs)
+  - id: truepic-c2pa
+    url: https://truepic.com/
+    worker: e5_truepic
+    kind: api
+    enabled: false
+    languages: "*"
+    license: proprietary managed signing
+    sources: [compute-tiers:E5:api-alt]
+    verified: {license: false, languages: true, vram: true, runs: false}
+    notes: deferred; managed C2PA signing
+  - id: adobe-content-authenticity
+    url: https://opensource.contentauthenticity.org/
+    worker: e5_adobe_ca
+    kind: api
+    enabled: false
+    languages: "*"
+    license: proprietary (maintains c2pa-rs)
+    sources: [compute-tiers:E5:api-alt]
+    verified: {license: false, languages: true, vram: true, runs: false}
+    notes: deferred; hosted signing on the same C2PA stack

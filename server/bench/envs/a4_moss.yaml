@@ -1,0 +1,21 @@
+name: a4_moss
+python: ~/.opendub/envs/a4_moss/bin/python
+description: MOSS-Transcribe-Diarize (Apache-2.0), repo pinned, installed editable.
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - git clone https://github.com/OpenMOSS/MOSS-Transcribe-Diarize {home}/.opendub/src/MOSS-Transcribe-Diarize
+    || true
+  - git -C {home}/.opendub/src/MOSS-Transcribe-Diarize checkout 61bc29cd4120be7b5d3b761b64cd5dff57263642
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} -e '{home}/.opendub/src/MOSS-Transcribe-Diarize[torch-runtime]' soundfile
+    librosa numpy
+  aarch64:
+  - uv venv {prefix} --python 3.12
+  - git clone https://github.com/OpenMOSS/MOSS-Transcribe-Diarize {home}/.opendub/src/MOSS-Transcribe-Diarize
+    || true
+  - git -C {home}/.opendub/src/MOSS-Transcribe-Diarize checkout 61bc29cd4120be7b5d3b761b64cd5dff57263642
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} -e '{home}/.opendub/src/MOSS-Transcribe-Diarize[torch-runtime]' soundfile
+    librosa numpy
+check: import moss_transcribe_diarize

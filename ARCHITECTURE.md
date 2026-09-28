@@ -232,7 +232,8 @@ Editor layout (an NLE shell):
 
 - Python: ruff-clean, type-hinted, pydantic v2, `pathlib`, async route handlers; blocking/CPU
   work in `asyncio.to_thread` or subprocesses. No global mutable state outside the
-  `jobs.py`/`store.py` singletons.
+  `jobs.py`/`store.py` singletons and the model manager (`providers/_runtime.py`), which every
+  in-process model load goes through so idle models (and Ollama LLMs) are unloaded.
 - All media paths are stored **relative to the project dir**; only `store.py` knows absolute paths.
 - ffmpeg is invoked with `-y -hide_banner -loglevel error` via `media/ffmpeg.py` only.
 - TS: strict mode, no `any` unless quarantined, named exports, function components + hooks.

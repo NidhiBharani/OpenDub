@@ -1,0 +1,19 @@
+name: f4_diffusers
+python: ~/.opendub/envs/f4_diffusers/bin/python
+description: 'Diffusers image editors for F4: FLUX.2 [klein] 4B/9B, FLUX.2 [dev], Qwen-Image-Edit-2511
+  (BF16 and GGUF transformer). diffusers ≥ 0.37 has Flux2KleinPipeline and QwenImageEditPlusPipeline.'
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} diffusers==0.37.0 transformers accelerate sentencepiece protobuf
+    gguf pillow numpy huggingface-hub safetensors
+  aarch64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} diffusers==0.37.0 transformers accelerate sentencepiece protobuf
+    gguf pillow numpy huggingface-hub safetensors
+check: import torch, diffusers; from diffusers import Flux2KleinPipeline, QwenImageEditPlusPipeline; assert
+  torch.cuda.is_available()
+notes: Gated repos (FLUX.2-klein-9B, FLUX.2-dev) need HF_TOKEN and accepted licences. If 0.37.0 predates
+  Qwen-Image-Edit-2511 support, install diffusers from git as the model card suggests.

@@ -1,0 +1,14 @@
+name: a7_redimnet
+python: ~/.opendub/envs/a7_redimnet/bin/python
+description: Plain torch for torch.hub ReDimNet / ReDimNet2 (MIT; code pulled by torch.hub at the ref
+  in params).
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} soundfile librosa numpy
+  aarch64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} soundfile librosa numpy
+check: import torch; assert torch.cuda.is_available()

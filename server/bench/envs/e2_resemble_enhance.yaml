@@ -1,0 +1,15 @@
+name: e2_resemble_enhance
+python: ~/.opendub/envs/e2_resemble_enhance/bin/python
+description: Resemble Enhance 0.0.1 (MIT); deps installed explicitly (upstream pins gradio/torchvision for its demo)
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} --no-deps resemble-enhance==0.0.1
+    - uv pip install --python {python} deepspeed==0.16.4 librosa==0.10.2.post1 numpy==1.26.4 omegaconf==2.3.0 pandas==2.2.3 ptflops==0.7.4 rich==13.9.4 scipy==1.13.1 soundfile==0.13.1 tqdm resampy==0.4.3 tabulate==0.9.0 celluloid==0.2.0 matplotlib==3.8.4
+  aarch64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} --no-deps resemble-enhance==0.0.1
+    - DS_BUILD_OPS=0 uv pip install --python {python} deepspeed==0.16.4 librosa==0.10.2.post1 numpy==1.26.4 omegaconf==2.3.0 pandas==2.2.3 ptflops==0.7.4 rich==13.9.4 scipy==1.13.1 soundfile==0.13.1 tqdm resampy==0.4.3 tabulate==0.9.0 celluloid==0.2.0 matplotlib==3.8.4
+check: "from resemble_enhance.enhancer.inference import enhance; import torch; assert torch.cuda.is_available()"

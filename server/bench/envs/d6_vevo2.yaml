@@ -1,0 +1,18 @@
+name: d6_vevo2
+python: ~/.opendub/envs/d6_vevo2/bin/python
+description: "Vevo2 voice conversion (Amphion repo; checkpoints RMSnow/Vevo2, CC-BY-NC-ND)"
+setup:
+  x86_64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu128 torch==2.11.0 torchaudio==2.11.0"
+    - "test -d {home}/.opendub/src/Amphion || git clone https://github.com/open-mmlab/Amphion {home}/.opendub/src/Amphion && git -C {home}/.opendub/src/Amphion checkout 26f6883110181f1dbfe95c70a7c7dbaf4de5f42a"
+    - "uv pip install --python {python} -r {home}/.opendub/src/Amphion/models/svc/vevo2/requirements.txt transformers accelerate librosa soundfile huggingface-hub"
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('RMSnow/Vevo2', local_dir='{home}/.opendub/src/Amphion/ckpts/Vevo2', revision='2674843cbaa50aa89ee7ccaf5bb15d6ccf46c6c8')\""
+  aarch64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu130 torch==2.11.0 torchaudio==2.11.0"
+    - "test -d {home}/.opendub/src/Amphion || git clone https://github.com/open-mmlab/Amphion {home}/.opendub/src/Amphion && git -C {home}/.opendub/src/Amphion checkout 26f6883110181f1dbfe95c70a7c7dbaf4de5f42a"
+    - "uv pip install --python {python} -r {home}/.opendub/src/Amphion/models/svc/vevo2/requirements.txt transformers accelerate librosa soundfile huggingface-hub"
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('RMSnow/Vevo2', local_dir='{home}/.opendub/src/Amphion/ckpts/Vevo2', revision='2674843cbaa50aa89ee7ccaf5bb15d6ccf46c6c8')\""
+check: "import torch; assert torch.cuda.is_available()"
+notes: "Amphion's full env.sh installs much more; vevo2's own requirements (parselmouth, torchcrepe, openai-whisper) plus transformers are what the pipeline imports (qwen_utils). Verify on first run and extend."

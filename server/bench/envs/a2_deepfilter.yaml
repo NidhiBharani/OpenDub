@@ -1,0 +1,14 @@
+name: a2_deepfilter
+python: ~/.opendub/envs/a2_deepfilter/bin/python
+description: DeepFilterNet3 (deepfilternet 0.5.6; DeepFilterLib wheels exist for cp38-cp311, so Python
+  3.11). aarch64 uses CPU torch (the model is real-time on CPU).
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.11
+  - uv pip install --python {python} torch==2.4.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu124
+  - uv pip install --python {python} deepfilternet==0.5.6 soundfile librosa numpy
+  aarch64:
+  - uv venv {prefix} --python 3.11
+  - uv pip install --python {python} torch==2.4.1 torchaudio==2.4.1
+  - uv pip install --python {python} deepfilternet==0.5.6 soundfile librosa numpy
+check: import df.enhance

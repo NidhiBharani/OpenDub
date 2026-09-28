@@ -1,0 +1,16 @@
+name: judge_emotion
+python: ~/.opendub/envs/judge_emotion/bin/python
+description: >-
+  Emotion judges (workers/judge_emotion.py): emotion2vec+ large through FunASR (ModelScope
+  iic/emotion2vec_plus_large) and the Odyssey-2024 WavLM A/V/D model
+  (3loi/SER-Odyssey-Baseline-WavLM-Multi-Attributes, transformers remote code).
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} "funasr>=1.2" "modelscope>=1.20" "transformers>=4.46,<5" soundfile numpy librosa huggingface_hub
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} "funasr>=1.2" "modelscope>=1.20" "transformers>=4.46,<5" soundfile numpy librosa huggingface_hub
+check: "import torch, funasr, transformers, soundfile; assert torch.cuda.is_available()"

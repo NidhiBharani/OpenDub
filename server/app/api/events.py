@@ -38,7 +38,7 @@ async def project_events(pid: str, request: Request) -> EventSourceResponse:
                     break
                 try:
                     event_name, data = await asyncio.wait_for(queue.get(), timeout=_POLL_INTERVAL)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
                 yield {"event": event_name, "data": data}
         finally:

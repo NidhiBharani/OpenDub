@@ -1,0 +1,11 @@
+name: e2_visqol
+python: ~/.opendub/envs/e2_visqol/bin/python
+description: ViSQOL v3 judge via visqol-python 3.8.0 (Apache-2.0, pure Python; no Bazel); CPU
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} visqol-python==3.8.0 numpy scipy soundfile
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} visqol-python==3.8.0 numpy scipy soundfile
+check: "from visqol import VisqolApi; a = VisqolApi(); a.create(mode='audio')"

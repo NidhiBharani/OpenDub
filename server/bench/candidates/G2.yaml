@@ -1,0 +1,246 @@
+# G2 — speaker-similarity judge, ranked by SRCC with human similarity ratings
+# (spec: bench/arena/specs/g2.py). Encoders run in workers/judge_speaker_sim.py (env judge_speaker).
+capability: G2
+candidates:
+  - id: ecapa-voxceleb
+    worker: judge_speaker_sim
+    env: judge_speaker
+    kind: local
+    params: {encoder: ecapa}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    baseline: true
+    url: https://huggingface.co/speechbrain/spkrec-ecapa-voxceleb
+    params_b: 0.0208
+    sources: [research:G2:4]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      The encoder OpenDub's tts.speaker_similarity slot names (app/pipeline/quality.py). VoxSim
+      paper: pretrained ECAPA LCC 0.768 / SRCC 0.758 (better than WavLM-ECAPA despite worse EER).
+  - id: wavlm-base-plus-sv
+    worker: judge_speaker_sim
+    env: judge_speaker
+    kind: local
+    params: {encoder: wavlm-sv}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1.5}
+    url: https://huggingface.co/microsoft/wavlm-base-plus-sv
+    params_b: 0.095
+    sources: [research:G2:3]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: transformers WavLMForXVector; card threshold 0.86 for same speaker. Licence = UniSpeech repo licence.
+  - id: redimnet2-b6-lm
+    worker: judge_speaker_sim
+    env: judge_speaker
+    kind: local
+    params: {encoder: redimnet2, model_name: b6, train_type: lm}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    url: https://github.com/PalabraAI/redimnet2
+    params_b: 0.0123
+    sources: [research:G2:1, compute-tiers:G2:spark]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: Spark identity-score pick (0.287% VoxCeleb1-O EER). torch.hub pinned to commit c5bbe0b.
+  - id: redimnet2-b3-lm
+    worker: judge_speaker_sim
+    env: judge_speaker
+    kind: local
+    params: {encoder: redimnet2, model_name: b3, train_type: lm}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    url: https://github.com/PalabraAI/redimnet2
+    params_b: 0.0041
+    sources: [research:G2:1]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: The Sept-3 research's working judge (B3); compute-tiers moved to B6.
+  - id: redimnet2-b6-lm-cnc
+    worker: judge_speaker_sim
+    env: judge_speaker
+    kind: local
+    params: {encoder: redimnet2, model_name: b6, train_type: lm, dataset: vb2+vox2+cnc2_v0}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    url: https://github.com/PalabraAI/redimnet2
+    params_b: 0.0123
+    sources: [compute-tiers:G2:big-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      B6 trained with CN-Celeb added (non-English speakers): the cross-lingual variant. Whether
+      the lm train type exists for this dataset tag is not verified (README lists the dataset for
+      B3/B6).
+  - id: eres2netv2
+    worker: judge_speaker_sim
+    env: judge_speaker
+    kind: local
+    params: {encoder: eres2netv2}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    url: https://modelscope.cn/models/iic/speech_eres2netv2_sv_zh-cn_16k-common
+    params_b: 0.0178
+    sources: [research:G2:5, compute-tiers:G2:spark-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      3D-Speaker (Mandarin-heavy 200k-speaker training): the disjoint lineage. CAM++-family
+      judges favour CosyVoice (plan §4.7) — do not rank CosyVoice with 3D-Speaker models alone.
+  - id: wespeaker-resnet293-lm
+    worker: judge_speaker_sim
+    env: judge_speaker
+    kind: local
+    params: {encoder: wespeaker-resnet293, model: Wespeaker/wespeaker-voxceleb-resnet293-LM}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1.5}
+    url: https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet293-LM
+    params_b: 0.028
+    sources: [research:G2:2, compute-tiers:G2:spark-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Best-validated production recipe (VoxCeleb + CN-Celeb); HF repo layout (avg_model.pt + config.yaml) assumed.
+  - id: resemblyzer
+    worker: judge_speaker_sim
+    env: judge_speaker
+    kind: local
+    params: {encoder: resemblyzer}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: false}
+    url: https://github.com/resemble-ai/Resemblyzer
+    params_b: 0.0014
+    sources: [research:G2:6]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: Listed to rule out (GE2E d-vector, hobby-pipeline floor); CPU-viable.
+  - id: gemini-3.7-flash-same-voice
+    worker: g6_gemini
+    env: g6_api
+    kind: api
+    params: {model: gemini-3.7-flash, task: speaker, prices: {in: 0.75, out: 3.75}}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    url: https://ai.google.dev/gemini-api/docs/models
+    sources: [compute-tiers:G2:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      LLM same-speaker rating (1..5), asked in both orders and averaged (open LALMs were
+      0.97-1.00 position-locked). Tie-breaker only per compute-tiers. Prices checked 2026-09-28.
+  - id: voxsim-wavlm-ecapa
+    worker: judge_speaker_sim
+    env: judge_speaker
+    kind: local
+    params: {encoder: voxsim-wavlm-ecapa}
+    languages: "*"
+    license: code unknown; VoxSim data CC BY 4.0
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 3}
+    enabled: false
+    url: https://github.com/kaistmm/voxsim_trainer
+    params_b: 0.4
+    sources: [compute-tiers:G2:spark, compute-tiers:G2:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      Spark perceptual-score pick (WavLM-ECAPA regressor fine-tuned on VoxSim, LCC 0.835). The
+      checkpoint is on Google Drive and the repo only prints corpus Pearson; a per-pair scoring
+      wrapper around its SpeakerNet is not written yet. Note: evaluating it on the VoxSim pack is
+      train/test-adjacent (it was fine-tuned on VoxSim train).
+  - id: wavlm-large-ecapa-seedtts
+    worker: judge_speaker_sim
+    env: judge_speaker
+    kind: local
+    params: {encoder: wavlm-large-ecapa}
+    languages: "*"
+    license: MIT (UniSpeech)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2}
+    enabled: false
+    url: https://github.com/microsoft/UniSpeech/tree/main/downstreams/speaker_verification
+    params_b: 0.317
+    sources: [research:G2:3]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      WavLM-Large + ECAPA head (the Seed-TTS-eval SIM model). Needs the UniSpeech code and a
+      Google-Drive checkpoint; not wired into the worker yet.
+  - id: titanet-large
+    worker: a4_nemo
+    env: a4_nemo
+    kind: local
+    params: {model: nvidia/speakerverification_en_titanet_large, family: speaker}
+    languages: "*"
+    license: CC-BY-4.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    enabled: false
+    url: https://huggingface.co/nvidia/speakerverification_en_titanet_large
+    params_b: 0.023
+    sources: [compute-tiers:G2:api]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      Local stand-in for the API pick (Riva/NIM TitaNet endpoint, used by Hume's benchmark). The
+      NeMo env has TitaNet, but no worker returns speaker-sim payloads from it yet.
+  - id: riva-nim-titanet
+    worker: judge_speaker_sim
+    env: judge_speaker
+    kind: api
+    params: {encoder: nim-titanet}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [NGC_API_KEY]}
+    enabled: false
+    url: https://build.nvidia.com/nvidia
+    sources: [compute-tiers:G2:api]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: 'Hosted TitaNet embedding endpoint; no worker (compute-tiers: nothing hosted beats a local 12M model).'
+  - id: azure-speaker-recognition
+    worker: judge_speaker_sim
+    env: judge_speaker
+    kind: api
+    params: {encoder: azure}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [AZURE_SPEECH_KEY, AZURE_SPEECH_REGION]}
+    enabled: false
+    url: https://learn.microsoft.com/azure/ai-services/speech-service/speaker-recognition-overview
+    sources: [compute-tiers:G2:api-alt]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: No worker; Azure Speaker Recognition was announced for retirement (verify availability).
+  - id: vmc2026-t04-ensemble
+    worker: judge_speaker_sim
+    env: judge_speaker
+    kind: method
+    params: {encoder: ensemble}
+    languages: "*"
+    license: mixed
+    ship_ok: null
+    enabled: false
+    url: https://arxiv.org/abs/2609.13792
+    sources: [compute-tiers:G2:big]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: VoiceMOS 2026 T3 winner (8-model ensemble + listener conditioning); no released weights.
+  - id: redimnet2-sweep-ensemble
+    worker: judge_speaker_sim
+    env: judge_speaker
+    kind: method
+    params: {encoder: redimnet2, sweep: [b0, b1, b2, b3, b4, b5, b6]}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    enabled: false
+    url: https://github.com/PalabraAI/redimnet2
+    sources: [compute-tiers:G2:big-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: Rank ensemble over all ReDimNet2 sizes; needs a multi-model mode in the worker (not written).

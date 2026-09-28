@@ -1,0 +1,14 @@
+name: d6_knn_vc
+python: ~/.opendub/envs/d6_knn_vc/bin/python
+description: "kNN-VC via torch.hub (bshall/knn-vc, MIT)"
+setup:
+  x86_64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu128 torch==2.11.0 torchaudio==2.11.0"
+    - "uv pip install --python {python} numpy soundfile"
+  aarch64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu130 torch==2.11.0 torchaudio==2.11.0"
+    - "uv pip install --python {python} numpy soundfile"
+check: "import torch, torchaudio; assert torch.cuda.is_available()"
+notes: "torch.hub fetches the repo + WavLM-Large + prematched HiFi-GAN on first load."

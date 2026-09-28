@@ -1,0 +1,32 @@
+name: f1_keysync
+python: ~/.opendub/envs/f1_keysync/bin/python
+description: KeySync (antonibigata/keysync @ 5e2503b1; weights toninio19/keysync, Apache-2.0). Upstream
+  pins torch 2.4.1/cu121, which has no sm_120 kernels, so torch 2.11 is used instead (untested upstream).
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.11
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url
+    https://download.pytorch.org/whl/cu128
+  - test -d {home}/.opendub/src/keysync || git clone https://github.com/antonibigata/keysync {home}/.opendub/src/keysync
+  - git -C {home}/.opendub/src/keysync checkout 5e2503b171c6ddb4d88cd4cb9702347dcc4aa370
+  - grep -v -i -E '^(torch|torchvision|torchaudio)' {home}/.opendub/src/keysync/requirements.txt > {home}/.opendub/src/keysync/requirements.arena.txt
+  - uv pip install --python {python} --no-deps -r {home}/.opendub/src/keysync/requirements.arena.txt decord
+  - uv pip install --python {python} omegaconf==2.3.0 antlr4-python3-runtime==4.9.3
+  - test -d {home}/.opendub/src/keysync/pretrained_models || git clone https://huggingface.co/toninio19/keysync
+    {home}/.opendub/src/keysync/pretrained_models
+  aarch64:
+  - uv venv {prefix} --python 3.11
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url
+    https://download.pytorch.org/whl/cu130
+  - test -d {home}/.opendub/src/keysync || git clone https://github.com/antonibigata/keysync {home}/.opendub/src/keysync
+  - git -C {home}/.opendub/src/keysync checkout 5e2503b171c6ddb4d88cd4cb9702347dcc4aa370
+  - grep -v -i -E '^(torch|torchvision|torchaudio|decord|xformers|onnxruntime-gpu)' {home}/.opendub/src/keysync/requirements.txt
+    > {home}/.opendub/src/keysync/requirements.arena.txt
+  - uv pip install --python {python} --no-deps -r {home}/.opendub/src/keysync/requirements.arena.txt eva-decord==0.6.1
+  - uv pip install --python {python} omegaconf==2.3.0 antlr4-python3-runtime==4.9.3
+  - test -d {home}/.opendub/src/keysync/pretrained_models || git clone https://huggingface.co/toninio19/keysync
+    {home}/.opendub/src/keysync/pretrained_models
+check: import torch; assert torch.cuda.is_available()
+notes: requirements.txt is installed with --no-deps (as the README says) minus its torch pins, after the
+  cu128/cu130 torch; missing transitive deps surface in the check. git-lfs is needed for the HF clone
+  of the weights.

@@ -1,0 +1,407 @@
+# D3 — duration-controlled synthesis.
+# Rows from both research artifacts: data/research/model-research.html ledger (research:D3:<rank>)
+# and data/research/compute-tiers.html picks (compute-tiers:D3:spark|big|api, alternates *-alt),
+# docs/model-candidates-by-compute.md and plan §7 (plan:§7:D3).
+# requires places each row: vram ≤ 15 → Thalassa (x86_64 16 GB) and Spark; vram > 16 → Spark only;
+# arch [x86_64] where deps have no aarch64 wheels; kind api → API keys. d_unwired = registered only.
+capability: D3
+candidates:
+- id: f5-v1-free
+  worker: d1_f5_tts
+  env: server
+  kind: local
+  params:
+    model: F5TTS_v1_Base
+    languages: [en, zh]
+    use_target_duration: false
+  languages: [en, zh]
+  license: CC-BY-NC-4.0
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 3, disk_gb: 2}
+  sources: ['plan:§7:D3']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'Stock F5-TTS v1 Base (en/zh vocab); single take. The app provider adds Whisper verification
+    + speed retries (see the best-of-N row). No duration control (use_target_duration false): today''s
+    path, where E1 stretches the take afterwards.'
+  url: https://huggingface.co/SWivid/F5-TTS
+  params_b: 0.34
+  baseline: true
+- id: f5-v1-fixdur
+  worker: d1_f5_tts
+  env: server
+  kind: local
+  params:
+    model: F5TTS_v1_Base
+    languages: [en, zh]
+    use_target_duration: true
+  languages: [en, zh]
+  license: CC-BY-NC-4.0
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 3, disk_gb: 2}
+  sources: ['plan:§7:D3']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: Stock F5-TTS v1 Base (en/zh vocab); single take. The app provider adds Whisper verification +
+    speed retries (see the best-of-N row). F5 fix_duration = prompt + target_s.
+  url: https://huggingface.co/SWivid/F5-TTS
+  params_b: 0.34
+- id: f5-hindi-free
+  worker: d1_f5_tts
+  env: server
+  kind: local
+  params:
+    model: F5TTS_Small
+    ckpt_file: hf://SPRINGLab/F5-Hindi-24KHz/model_2500000.safetensors
+    vocab_file: hf://SPRINGLab/F5-Hindi-24KHz/vocab.txt
+    languages: [hi]
+    use_target_duration: false
+  languages: [hi]
+  license: CC-BY-4.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 2, disk_gb: 1}
+  sources: ['plan:§7:D3']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'SPRINGLab F5-Hindi-24KHz (F5TTS_Small config, as in the app provider''s placeholder). Non-Devanagari
+    reference transcripts are outside its vocab: see the translit row.'
+  url: https://huggingface.co/SPRINGLab/F5-Hindi-24KHz
+  params_b: 0.16
+  baseline: true
+- id: f5-hindi-fixdur
+  worker: d1_f5_tts
+  env: server
+  kind: local
+  params:
+    model: F5TTS_Small
+    ckpt_file: hf://SPRINGLab/F5-Hindi-24KHz/model_2500000.safetensors
+    vocab_file: hf://SPRINGLab/F5-Hindi-24KHz/vocab.txt
+    languages: [hi]
+    use_target_duration: true
+  languages: [hi]
+  license: CC-BY-4.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 2, disk_gb: 1}
+  sources: ['plan:§7:D3']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'SPRINGLab F5-Hindi-24KHz (F5TTS_Small config, as in the app provider''s placeholder). Non-Devanagari
+    reference transcripts are outside its vocab: see the translit row.'
+  url: https://huggingface.co/SPRINGLab/F5-Hindi-24KHz
+  params_b: 0.16
+- id: f5-v1-fixdur-bestof4
+  worker: d3_best_of_n
+  env: server
+  kind: method
+  params:
+    inner:
+      worker: d1_f5_tts
+      params:
+        model: F5TTS_v1_Base
+        languages: [en, zh]
+        use_target_duration: true
+    n: 4
+    verifier: {env: server, model: large-v3-turbo, compute_type: float16}
+    accept_cer: 0.1
+    window: 0.1
+    early_stop: false
+    keep_takes: true
+  languages: [en, zh]
+  license: CC-BY-NC-4.0
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 5, disk_gb: 2}
+  sources: ['plan:§7:D3']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Method: N takes (item seed + k) re-ranked by a large-v3-turbo verifier (not the reporting large-v3/Qwen3/MMS
+    panel) + duration fit. VRAM = inner + ~2 GB verifier. Rejection sampling on the duration window +
+    verifier CER.'
+  url: https://huggingface.co/SWivid/F5-TTS
+  params_b: 0.34
+- id: f5-hindi-fixdur-bestof4
+  worker: d3_best_of_n
+  env: server
+  kind: method
+  params:
+    inner:
+      worker: d1_f5_tts
+      params:
+        model: F5TTS_Small
+        ckpt_file: hf://SPRINGLab/F5-Hindi-24KHz/model_2500000.safetensors
+        vocab_file: hf://SPRINGLab/F5-Hindi-24KHz/vocab.txt
+        languages: [hi]
+        use_target_duration: true
+    n: 4
+    verifier: {env: server, model: large-v3-turbo, compute_type: float16}
+    accept_cer: 0.1
+    window: 0.1
+    early_stop: false
+    keep_takes: true
+  languages: [hi]
+  license: CC-BY-4.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 4, disk_gb: 1}
+  sources: ['plan:§7:D3']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Method: N takes (item seed + k) re-ranked by a large-v3-turbo verifier (not the reporting large-v3/Qwen3/MMS
+    panel) + duration fit. VRAM = inner + ~2 GB verifier. Rejection sampling on the duration window +
+    verifier CER.'
+  url: https://huggingface.co/SPRINGLab/F5-Hindi-24KHz
+  params_b: 0.16
+- id: indextts-2.5-duration
+  worker: d1_indextts
+  env: d1_indextts
+  kind: local
+  params: {version: '2.5', use_target_duration: true}
+  languages: [zh, en, ja, es, ar]
+  license: bilibili-model-license
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 8, disk_gb: 12}
+  sources: ['research:D3:1', 'compute-tiers:D3:spark']
+  verified: {license: false, languages: true, vram: false, runs: false}
+  notes: 'IndexTTS 2.5 (2026-08-10, 0.8B): lang ZH/EN/JA/ES/AR, no Hindi. bilibili Model Use License:
+    commercial terms need reading → ship_ok false. VRAM estimated (T2S + S2M + BigVGAN + w2v-BERT + Qwen
+    emo). Two passes: measure, then duration_factor = d0/target (README speed factor).'
+  url: https://huggingface.co/IndexTeam/IndexTTS-2.5
+  params_b: 0.8
+- id: indextts-2.5-bestof16
+  worker: d3_best_of_n
+  env: d1_indextts
+  kind: method
+  params:
+    inner:
+      worker: d1_indextts
+      params: {version: '2.5', use_target_duration: true}
+    n: 16
+    verifier: {env: server, model: large-v3-turbo, compute_type: float16}
+    accept_cer: 0.1
+    window: 0.1
+    early_stop: false
+    keep_takes: true
+  languages: [zh, en, ja, es, ar]
+  license: bilibili-model-license
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 10, disk_gb: 12}
+  sources: ['compute-tiers:D3:big']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Method: N takes (item seed + k) re-ranked by a large-v3-turbo verifier (not the reporting large-v3/Qwen3/MMS
+    panel) + duration fit. VRAM = inner + ~2 GB verifier. Compute-tiers Unconstrained pick (N=16–32 with
+    duration-window rejection).'
+  url: https://huggingface.co/IndexTeam/IndexTTS-2.5
+  params_b: 0.8
+- id: moss-tts-local-v1.5-4b-tokens
+  worker: d1_moss_tts
+  env: d1_moss_tts
+  kind: local
+  params:
+    model: OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5
+    revision: be7766a6735b98bd793f7c79fb720b4d0f5d13b8
+    mode: clone
+    dtype: bfloat16
+    attn: sdpa
+    languages: &id001 [zh, yue, en, ar, cs, da, de, nl, es, fr, fi, el, he, hi, hu, ja, it, ko, mk, ms,
+      ru, fa, pl, pt, sv, ro, sw, tl, th, tr, vi]
+    use_target_duration: true
+  languages: *id001
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 11, disk_gb: 11.01}
+  sources: ['research:D3:2', 'compute-tiers:D3:spark-alt']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 4.55B params (HF safetensors total); VRAM = bf16 weights + codec, estimated. tokens = round(target_s
+    × 12.5).
+  url: https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5
+  params_b: 4.55
+- id: moss-tts-v1.5-8b-tokens
+  worker: d1_moss_tts
+  env: d1_moss_tts
+  kind: local
+  params:
+    model: OpenMOSS-Team/MOSS-TTS-v1.5
+    revision: cdd3b911b1585e3f2dbc7775ef10f9926f58850a
+    mode: clone
+    dtype: bfloat16
+    attn: sdpa
+    languages: &id002 [zh, yue, en, ar, cs, da, de, nl, es, fr, fi, el, he, hi, hu, ja, it, ko, mk, ms,
+      ru, fa, pl, pt, sv, ro, sw, tl, th, tr, vi]
+    use_target_duration: true
+  languages: *id002
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 20, disk_gb: 19.678}
+  sources: ['research:D3:2', 'compute-tiers:D3:spark-alt']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 8.49B params (HF safetensors total); VRAM = bf16 weights + codec, estimated.
+  url: https://huggingface.co/OpenMOSS-Team/MOSS-TTS-v1.5
+  params_b: 8.49
+- id: moss-tts-local-v1.0-1.7b-tokens
+  worker: d1_moss_tts
+  env: d1_moss_tts
+  kind: local
+  params:
+    model: OpenMOSS-Team/MOSS-TTS-Local-Transformer
+    revision: 12aa734e4f11a7b3fdf4eb0ad2aa2029675ffc2e
+    mode: clone
+    dtype: bfloat16
+    attn: sdpa
+    languages: &id003 [zh, en, de, es, fr, ja, it, he, ko, ru, fa, ar, pl, pt, cs, da, sv, hu, el, tr]
+    use_target_duration: true
+  languages: *id003
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 8, disk_gb: 7.732000000000001}
+  sources: ['research:D3:2']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 3.06B params (HF safetensors total); VRAM = bf16 weights + codec, estimated. v1.0 (superseded
+    by v1.5 4B per compute-tiers); kept for the version delta.
+  url: https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Local-Transformer
+  params_b: 3.06
+- id: omnivoice-duration
+  worker: d4_omnivoice
+  env: d4_omnivoice
+  kind: local
+  params: {model: k2-fsa/OmniVoice, revision: c5fdb5ccb189668d56333f77ba2629f4cd7535f4, mode: clone, use_target_duration: true}
+  languages: '*'
+  license: code Apache-2.0; weights CC-BY-NC
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 3, disk_gb: 2}
+  sources: ['research:D4:6']
+  verified: {license: false, languages: true, vram: false, runs: false}
+  notes: 'generate(duration=target_s): fixed output length.'
+  url: https://huggingface.co/k2-fsa/OmniVoice
+  params_b: 0.61
+- id: maskgct
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'MaskGCT (Amphion, CC-BY-NC weights) takes an explicit target length; worker not wired
+      yet (models/tts/maskgct in Amphion).'}
+  languages: [zh, en, ja, ko, fr, de]
+  license: CC-BY-NC-4.0
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['research:D3:3']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: MaskGCT (Amphion, CC-BY-NC weights) takes an explicit target length; worker not wired yet (models/tts/maskgct
+    in Amphion).
+  url: https://huggingface.co/amphion/MaskGCT
+- id: magic-tts
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'MAGIC-TTS (2026-04 arXiv): no repository or licence found.'}
+  languages: '*'
+  license: unknown
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['research:D3:4']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'MAGIC-TTS (2026-04 arXiv): no repository or licence found.'
+  url: https://arxiv.org/
+- id: voicestar
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'VoiceStar (VoiceCraft lineage, duration-controllable, English): code at jasonppy/VoiceStar,
+      worker not wired.'}
+  languages: [en]
+  license: unknown
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['research:D3:5']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'VoiceStar (VoiceCraft lineage, duration-controllable, English): code at jasonppy/VoiceStar,
+    worker not wired.'
+  url: https://github.com/jasonppy/VoiceStar
+- id: ted-tts
+  worker: d_unwired
+  env: server
+  kind: method
+  params: {why: 'TED-TTS training-free duration steering: code availability unverified; a method over
+      a base model.'}
+  languages: '*'
+  license: unknown
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['research:D3:6']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'TED-TTS training-free duration steering: code availability unverified; a method over a base
+    model.'
+  url: https://arxiv.org/
+- id: phoneme-tsm
+  worker: d_unwired
+  env: server
+  kind: method
+  params: {why: 'Non-isoelastic phoneme-level time-scale modification: a DSP method that belongs to E1
+      (timing fit) — ranked there.'}
+  languages: '*'
+  license: n/a
+  ship_ok: true
+  requires: {}
+  enabled: false
+  sources: ['research:D3:7', 'compute-tiers:D3:big-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Non-isoelastic phoneme-level time-scale modification: a DSP method that belongs to E1 (timing
+    fit) — ranked there.'
+  url: https://github.com/NidhiBharani/OpenDub/blob/main/docs/plans/model-ranking.md
+- id: ps-tts
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'PS-TTS (ICPR 2026): no code release identified.'}
+  languages: '*'
+  license: unknown
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['research:D3:8']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'PS-TTS (ICPR 2026): no code release identified.'
+  url: https://arxiv.org/
+- id: chirp3-hd-rate
+  worker: d5_google_tts
+  env: server
+  kind: api
+  params: {rate_to_target: true}
+  languages: [en, hi, ja]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [GOOGLE_API_KEY]
+  sources: ['compute-tiers:D3:api']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Stock voice + speakingRate from a first pass (two calls when off-target).
+  url: https://cloud.google.com/text-to-speech/docs/chirp3-hd
+- id: azure-mai-voice-2-rate
+  worker: d5_azure
+  env: server
+  kind: api
+  params:
+    rate_to_target: true
+    voices:
+      en: {female: 'en-US-Harper:MAI-Voice-2', male: 'en-US-Ethan:MAI-Voice-2'}
+      hi: {female: 'hi-IN-Kavya:MAI-Voice-2', male: 'hi-IN-Dhruv:MAI-Voice-2'}
+  languages: [en, hi]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [AZURE_SPEECH_KEY, AZURE_SPEECH_REGION]
+  sources: ['compute-tiers:D3:api-alt']
+  verified: {license: false, languages: true, vram: false, runs: false}
+  notes: SSML <prosody rate> from a first pass. MAI-Voice-2 has no ja-JP voice.
+  url: https://learn.microsoft.com/en-us/azure/ai-services/speech-service/mai-voices
+- id: elevenlabs-dubbing-control
+  worker: d_unwired
+  env: server
+  kind: api
+  params: {why: 'ElevenLabs Dubbing does its own isochrony with no per-line duration handle and needs
+      source audio (D3 items are text): compared in D8 instead.'}
+  languages: '*'
+  license: proprietary API
+  ship_ok: true
+  requires: {}
+  enabled: false
+  sources: ['compute-tiers:D3:api-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'ElevenLabs Dubbing does its own isochrony with no per-line duration handle and needs source
+    audio (D3 items are text): compared in D8 instead.'
+  url: https://elevenlabs.io/docs/api-reference/dubbing/create

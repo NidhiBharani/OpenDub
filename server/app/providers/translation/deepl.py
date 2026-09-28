@@ -59,7 +59,7 @@ class DeepLTranslationProvider(TranslationProvider):
             if resp.status_code >= 400:
                 return False, f"DeepL API returned HTTP {resp.status_code}: {resp.text[:200]}"
             return True, "ready"
-        except Exception as e:
+        except (httpx.HTTPError, httpx.InvalidURL, OSError, ValueError) as e:
             return False, f"could not reach DeepL API: {e}"
 
     async def translate(

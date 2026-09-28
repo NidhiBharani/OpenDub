@@ -1,0 +1,19 @@
+name: b3_paddleocr
+python: ~/.opendub/envs/b3_paddleocr/bin/python
+description: >-
+  PaddleOCR 3.x pipelines with the onnxruntime engine (PP-OCRv6 det/rec tiers, PP-OCRv5 script
+  recognisers). No PaddlePaddle GPU build: Paddle has no aarch64 CUDA wheel.
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} 'paddleocr>=3.5,<4' onnxruntime-gpu==1.22.0
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} 'paddleocr>=3.5,<4' onnxruntime==1.22.1
+check: "import paddleocr, onnxruntime; print(onnxruntime.get_available_providers())"
+notes: >-
+  Unverified: the exact paddleocr release that ships PP-OCRv6 (June 2026) and whether
+  engine='onnxruntime' still imports paddlepaddle; if it does, add paddlepaddle (CPU) — the ONNX
+  path still runs the models. aarch64 uses CPU onnxruntime (viable on the 20 Arm cores); for GPU
+  swap in the community onnxruntime-gpu 1.22 cu13/sm_121 wheel (HF Jay0515/onnxruntime-gpu-
+  aarch64-cuda13-sm121) or build ORT with CMAKE_CUDA_ARCHITECTURES=121.

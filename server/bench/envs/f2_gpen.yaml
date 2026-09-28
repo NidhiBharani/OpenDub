@@ -1,0 +1,29 @@
+name: f2_gpen
+python: ~/.opendub/envs/f2_gpen/bin/python
+description: GPEN (yangxy/GPEN @ 2c736702). No licence file. Weights from the authors' OSS bucket (GPEN-
+  BFR-512 + RetinaFace + ParseNet).
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+  - test -d {home}/.opendub/src/GPEN || git clone https://github.com/yangxy/GPEN {home}/.opendub/src/GPEN
+  - git -C {home}/.opendub/src/GPEN checkout 2c7367029833
+  - uv pip install --python {python} opencv-python-headless scikit-image ninja numpy==1.26.4
+  - mkdir -p {home}/.opendub/src/GPEN/weights
+  - cd {home}/.opendub/src/GPEN/weights && for f in RetinaFace-R50.pth ParseNet-latest.pth GPEN-BFR-512.pth
+    realesrnet_x4.pth; do test -f $f || curl -LO https://public-vigen-video.oss-cn-shanghai.aliyuncs.com/robin/models/$f;
+    done
+  aarch64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+  - test -d {home}/.opendub/src/GPEN || git clone https://github.com/yangxy/GPEN {home}/.opendub/src/GPEN
+  - git -C {home}/.opendub/src/GPEN checkout 2c7367029833
+  - uv pip install --python {python} opencv-python-headless scikit-image ninja numpy==1.26.4
+  - mkdir -p {home}/.opendub/src/GPEN/weights
+  - cd {home}/.opendub/src/GPEN/weights && for f in RetinaFace-R50.pth ParseNet-latest.pth GPEN-BFR-512.pth
+    realesrnet_x4.pth; do test -f $f || curl -LO https://public-vigen-video.oss-cn-shanghai.aliyuncs.com/robin/models/$f;
+    done
+check: import torch, cv2; assert torch.cuda.is_available()
+notes: 'GPEN JIT-compiles fused CUDA ops on first run (needs nvcc + ninja): Thalassa has no nvcc — install
+  pip nvidia-cuda-nvcc-cu12 or run on the Spark. The weight file list/URL pattern is from the README and
+  unverified.'

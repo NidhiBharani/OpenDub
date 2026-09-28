@@ -24,6 +24,8 @@ tts = ["f5-tts>=1.1"]
 # benchmarking harness extras (ground-truth metrics). All lazy-imported: without them the bench
 # still runs and reference-free metrics still compute; GT metrics report null with a reason.
 bench = ["jiwer>=3.0", "sacrebleu>=2.4", "soundfile>=0.12", "numpy>=1.26"]
+quality-emotion = ["transformers>=4.40", "torch>=2.2", "torchaudio>=2.2", "funasr>=1.1"]
+quality-speaker = ["speechbrain>=1.0", "torch>=2.2", "torchaudio>=2.2"]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.23", "ruff>=0.5"]
 
 [build-system]

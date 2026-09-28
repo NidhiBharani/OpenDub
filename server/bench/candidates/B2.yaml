@@ -1,0 +1,230 @@
+# B2 — shot boundary detection. Sources: model-research.html article B2 (ledger 1–6) and
+# compute-tiers.html B2 (Spark / Unconstrained / API picks + alternates); plan §7 seed list.
+# Verified 2026-09-28 against the repos / pricing pages named in `notes`.
+capability: B2
+candidates:
+  - id: ffmpeg-scene-0.3
+    worker: b2_ffmpeg_scene
+    url: https://ffmpeg.org/ffmpeg-filters.html#select_002c-aselect
+    env: server
+    kind: method
+    params: {threshold: 0.3}
+    languages: "*"
+    license: LGPL-2.1+ (ffmpeg, invoked as a binary)
+    ship_ok: true
+    requires: {tools: [ffmpeg]}
+    baseline: true
+    sources: [opendub:app/pipeline/analysis.py]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      What OpenDub does today: ffmpeg `scale=320:-2,select='gt(scene,0.3)'` (app/media/ffmpeg.py
+      detect_scene_changes). CPU only.
+
+  # ---------------------------------------------------------------- local learned detectors
+  - id: transnetv2
+    worker: b2_transnetv2
+    url: https://pypi.org/project/transnetv2-pytorch/
+    env: b2_transnetv2
+    params: {threshold: 0.5}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1.5, disk_gb: 1, tools: [ffmpeg]}
+    sources: [research:B2:1, compute-tiers:B2:spark]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      transnetv2-pytorch 1.0.5 wheel (MIT fork allenday/transnetv2_pytorch that bundles converted
+      weights; weak provenance — pass params.weights for a locally converted upstream file).
+      Published F1 96.2 BBC / 93.9 RAI / 77.9 ClipShots. ~1.5 GB per compute-tiers.
+  - id: transnetv2+scenedetect-threshold
+    worker: b2_transnetv2
+    url: https://github.com/soCzech/TransNetV2
+    env: b2_transnetv2
+    kind: method
+    params: {threshold: 0.5, second_channel: threshold, threshold_kwargs: {threshold: 12},
+             merge_tol_s: 0.5}
+    languages: "*"
+    license: MIT + BSD-3-Clause
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1.5, disk_gb: 1, tools: [ffmpeg]}
+    sources: [research:B2:1, research:B2:4, compute-tiers:B2:spark]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      The compute-tiers Spark pick as a whole: TransNetV2 cuts plus PySceneDetect's
+      ThresholdDetector (fades / black frames) as a second channel, merged within 0.5 s.
+  - id: omnishotcut-v1.5
+    worker: b2_omnishotcut
+    url: https://huggingface.co/uva-cv-lab/OmniShotCut_v1.5
+    params_b: 0.0528
+    env: b2_omnishotcut
+    params: {repo_id: uva-cv-lab/OmniShotCut_v1.5, filename: OmniShotCut_ckpt.pth, mode: default}
+    languages: "*"
+    license: MIT (code and weights per repo LICENSE; the arXiv paper is CC BY-NC-ND)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 4, disk_gb: 1, tools: [ffmpeg]}
+    sources: [research:B2:3, compute-tiers:B2:big]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      UVA-Computer-Vision-Lab/OmniShotCut @40ecf12, v1.5 weights (52.8M params). The research
+      assumed NC-ND and no code; both are resolved. VRAM estimated.
+  - id: omnishotcut-paper
+    worker: b2_omnishotcut
+    url: https://huggingface.co/uva-cv-lab/OmniShotCut_paper
+    params_b: 0.0345
+    env: b2_omnishotcut
+    params: {repo_id: uva-cv-lab/OmniShotCut_paper, filename: OmniShotCut_ckpt.pth, mode: default}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3, disk_gb: 1, tools: [ffmpeg]}
+    sources: [compute-tiers:B2:big]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: The paper checkpoint (34.5M params, reproduces Table 1); compare with v1.5.
+  - id: transvlm-4b
+    worker: b2_transvlm
+    url: https://huggingface.co/HeyGenAI/TransVLM-Qwen3-VL-4B-Instruct
+    params_b: 4.0
+    env: b2_transvlm
+    params: {backend: hf, window_size: 10.0, stride: 9.0}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 14, disk_gb: 12, tools: [ffmpeg]}
+    sources: [compute-tiers:B2:big-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      heygen-com/TransVLM @7880c90, HF HeyGenAI/TransVLM-Qwen3-VL-4B-Instruct (RGB + NeuFlow v2
+      optical flow, 6-channel input; only the repo's infer_video.py is correct). The research
+      said CC BY-NC-SA; the repo and weights are Apache-2.0. VRAM estimated for a 4B VLM in bf16
+      plus flow — tight on 16 GB; rtfx includes a model load per item (subprocess per clip).
+  - id: pyscenedetect-content
+    worker: b2_scenedetect
+    url: https://www.scenedetect.com/
+    env: b2_scenedetect
+    params: {detector: content, kwargs: {threshold: 27.0}}
+    languages: "*"
+    license: BSD-3-Clause
+    ship_ok: true
+    requires: {}
+    sources: [research:B2:4, compute-tiers:B2:spark-alt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: PySceneDetect 0.7.1 ContentDetector at its default threshold; CPU.
+  - id: pyscenedetect-adaptive
+    worker: b2_scenedetect
+    url: https://www.scenedetect.com/
+    env: b2_scenedetect
+    params: {detector: adaptive, kwargs: {adaptive_threshold: 3.0, min_content_val: 15.0}}
+    languages: "*"
+    license: BSD-3-Clause
+    ship_ok: true
+    requires: {}
+    sources: [research:B2:4, compute-tiers:B2:spark-alt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: AdaptiveDetector (rolling-average content score; fewer false cuts on camera motion).
+  - id: pyscenedetect-threshold
+    worker: b2_scenedetect
+    url: https://www.scenedetect.com/
+    env: b2_scenedetect
+    params: {detector: threshold, kwargs: {threshold: 12.0}}
+    languages: "*"
+    license: BSD-3-Clause
+    ship_ok: true
+    requires: {}
+    sources: [research:B2:4, compute-tiers:B2:spark-alt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: ThresholdDetector — fades / black frames only; expected low recall on hard cuts.
+
+  # ---------------------------------------------------------------- registered, not runnable
+  - id: autoshot
+    worker: b2_autoshot
+    url: https://github.com/wentaozhu/AutoShot
+    env: b2_transnetv2
+    params: {ckpt: ~/.opendub/weights/autoshot/ckpt_0_200_0.pth}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2}
+    enabled: false
+    sources: [research:B2:2, compute-tiers:B2:spark-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      wentaozhu/AutoShot: the checkpoint is only on Baidu Pan (passcode sfkq); the repo's inference
+      path is commented out. Download ckpt_0_200_0.pth manually, then a worker around
+      TransNetV2Supernet (supernet_flattransf_3_8_8_8_13_12_0_16_60.py) can be added.
+  - id: persist
+    worker: b2_persist
+    url: https://github.com/linty5/PERSIST
+    env: b2_persist
+    params: {}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    enabled: false
+    sources: [compute-tiers:B2:big-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      linty5/PERSIST (BMVC 2026): checkpoints on GitHub releases, but evaluation only through an
+      mmaction2 config (torch 2.4.1 / mmcv 2.1.0 source build) with no arbitrary-video script.
+  - id: fassold-motion-ncc
+    worker: b2_fassold
+    url: https://arxiv.org/abs/2502.09202
+    env: server
+    kind: method
+    params: {}
+    languages: "*"
+    license: paper CC BY-SA 4.0; no code
+    ship_ok: false
+    enabled: false
+    sources: [research:B2:6]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: Classical sparse motion-field + NCC detector (arXiv 2502.09202); no code released.
+
+  # ---------------------------------------------------------------- APIs
+  - id: google-vi-shot-change
+    worker: b2_google_vi
+    url: https://cloud.google.com/video-intelligence/docs/analyze-shots
+    env: b_api
+    kind: api
+    params: {feature: SHOT_CHANGE_DETECTION, price_per_min: 0.05, timeout_s: 900}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GOOGLE_APPLICATION_CREDENTIALS], tools: [ffmpeg]}
+    sources: [compute-tiers:B2:api]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      Video Intelligence SHOT_CHANGE_DETECTION, $0.05/min (pricing page 2026-09-28). The API was
+      deprecated 2026-09-14 and shuts down 2027-09-14. Inline upload (input_content); large files
+      may exceed the inline limit (unverified).
+  - id: aws-rekognition-segments
+    worker: b2_rekognition
+    url: https://docs.aws.amazon.com/rekognition/latest/dg/segments.html
+    env: b_api
+    kind: api
+    params: {segment_types: [SHOT, TECHNICAL_CUE], min_confidence: 50,
+             price_per_min_per_type: 0.05, prefix: opendub-arena/}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [AWS_ACCESS_KEY_ID], tools: [ffmpeg]}
+    sources: [research:B2:5, compute-tiers:B2:api-alt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      StartSegmentDetection needs the video in S3: set OPENDUB_AWS_BUCKET (objects are deleted
+      after each item). Shots $0.05/min + technical cues $0.05/min (us-east-1, 2026-09-28).
+  - id: gemini-3.1-pro
+    worker: b2_vlm
+    url: https://ai.google.dev/gemini-api/docs/models
+    env: b_api
+    kind: api
+    params: {provider: gemini, model: gemini-3.1-pro-preview, price_in_per_mtok: 2.0,
+             price_out_per_mtok: 12.0, max_clip_s: 600}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY], tools: [ffmpeg]}
+    sources: [compute-tiers:B2:api-alt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      Semantic fallback (act breaks), not a frame-accurate detector; clips over 10 min are
+      skipped. $2/$12 per M tokens (≤200k prompt), ai.google.dev pricing 2026-09-28.

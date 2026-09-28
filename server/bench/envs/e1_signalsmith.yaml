@@ -1,0 +1,15 @@
+name: e1_signalsmith
+python: ~/.opendub/envs/e1_signalsmith/bin/python
+description: Signalsmith Stretch (MIT C++) via the third-party python-stretch 0.3.1 binding (MIT); CPU only
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} numpy==2.2.6 soundfile==0.13.1 python-stretch==0.3.1
+  aarch64:
+    # No linux-aarch64 wheel on PyPI (checked 2026-09-28): builds the sdist (nanobind + CMake);
+    # needs a C++17 compiler and cmake on the box (apt install build-essential cmake).
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} numpy==2.2.6 soundfile==0.13.1
+    - uv pip install --python {python} --no-binary python-stretch python-stretch==0.3.1
+check: "import python_stretch as ps, numpy as np; s = ps.Signalsmith.Stretch(); s.preset(1, 16000); s.timeFactor = 1.1; print(len(s.process(np.zeros((1, 16000), np.float32))[0]))"
+notes: the binding's timeFactor direction is detected at run time by e1_timefit (output length check).

@@ -1,0 +1,25 @@
+name: f2_pgtformer
+python: ~/.opendub/envs/f2_pgtformer/bin/python
+description: 'PGTFormer (kepengxu/PGTFormer @ e78a26cd; non-commercial licence). Upstream: python 3.8,
+  torch 2.3 cu118, basicsr 1.4.1, conda dlib; here torch 2.11 and pip dlib (compiles; needs cmake).'
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+  - test -d {home}/.opendub/src/PGTFormer || git clone https://github.com/kepengxu/PGTFormer {home}/.opendub/src/PGTFormer
+  - git -C {home}/.opendub/src/PGTFormer checkout e78a26cd4631
+  - uv pip install --python {python} basicsr==1.4.2 facexlib opencv-python-headless scipy tqdm lpips einops
+    timm safetensors huggingface-hub cmake dlib
+  - uvx --from huggingface_hub hf download kepeng/pgtformer-base --local-dir {home}/.opendub/src/PGTFormer/weights
+  aarch64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+  - test -d {home}/.opendub/src/PGTFormer || git clone https://github.com/kepengxu/PGTFormer {home}/.opendub/src/PGTFormer
+  - git -C {home}/.opendub/src/PGTFormer checkout e78a26cd4631
+  - uv pip install --python {python} basicsr==1.4.2 facexlib opencv-python-headless scipy tqdm lpips einops
+    timm safetensors huggingface-hub cmake dlib
+  - uvx --from huggingface_hub hf download kepeng/pgtformer-base --local-dir {home}/.opendub/src/PGTFormer/weights
+check: import torch, basicsr; assert torch.cuda.is_available()
+notes: 'basicsr 1.4.2 imports torchvision.transforms.functional_tensor, removed in new torchvision: patch
+  it (sed the import to torchvision.transforms.functional) after install if the check fails. Where inference.py
+  expects the weights is unverified (it may auto-download).'

@@ -74,4 +74,4 @@ def load_cases(names: list[str] | None = None) -> list[BenchCase]:
 
 
 # Re-export so callers can `from bench.cases import BenchCase`.
-__all__ = ["BenchCase", "load_cases", "BENCH_DIR", "REGISTRY"]
+__all__ = ["BENCH_DIR", "REGISTRY", "BenchCase", "load_cases"]

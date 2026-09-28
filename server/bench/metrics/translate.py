@@ -85,7 +85,7 @@ async def _judge(ctx: MetricContext, segs) -> list[Metric]:
         resp.raise_for_status()
         content = resp.json()["choices"][0]["message"]["content"]
         scores = _parse_scores(content)
-    except Exception as e:  # network / parse — report as uncomputed, never crash the bench
+    except Exception as e:  # noqa: BLE001 - network / parse: report as uncomputed, never crash
         return [missing("translate.judge_adequacy", f"judge call failed: {str(e)[:80]}", unit="1-5")]
 
     if not scores:

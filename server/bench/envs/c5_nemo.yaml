@@ -1,0 +1,12 @@
+name: c5_nemo
+python: ~/.opendub/envs/c5_nemo/bin/python
+description: >-
+  nemo-text-processing 1.2.0 (WFST TN/ITN, CPU). It pins pynini==2.1.6.post1, which PyPI ships
+  as x86_64 wheels only, so the recipe is x86_64-only and the candidates declare arch x86_64.
+  On the Spark, pynini 2.1.7 from conda-forge (linux-aarch64) plus
+  `pip install --no-deps nemo-text-processing` works but needs a conda env (not scripted here).
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} "pynini==2.1.6.post1" "nemo-text-processing==1.2.0"
+check: "from nemo_text_processing.text_normalization.normalize import Normalizer"

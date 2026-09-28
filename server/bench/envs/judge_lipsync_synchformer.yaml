@@ -1,0 +1,22 @@
+name: judge_lipsync_synchformer
+python: ~/.opendub/envs/judge_lipsync_synchformer/bin/python
+description: >-
+  Synchformer (v-iashin/Synchformer, MIT) for workers/judge_lipsync.py (model: synchformer). The
+  repo reads video with torchvision.io.read_video (removed in torchvision 0.24), so torch is pinned
+  at 2.8 / torchvision 0.23 (cu128 on x86_64 for sm_120; cu129 aarch64 wheels for GB10). The
+  upstream env is Python 3.8 / torch 2.0 / transformers 4.27; running it on 2.8 is unverified.
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} omegaconf==2.3.0 einops "timm==0.6.12" "transformers==4.46.3" av numpy soundfile requests tqdm
+    - test -d {home}/.opendub/src/Synchformer || git clone https://github.com/v-iashin/Synchformer {home}/.opendub/src/Synchformer
+    - git -C {home}/.opendub/src/Synchformer checkout b66668a1521d7567cc760e5544b2b5b53179b687
+  aarch64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu129
+    - uv pip install --python {python} omegaconf==2.3.0 einops "timm==0.6.12" "transformers==4.46.3" av numpy soundfile requests tqdm
+    - test -d {home}/.opendub/src/Synchformer || git clone https://github.com/v-iashin/Synchformer {home}/.opendub/src/Synchformer
+    - git -C {home}/.opendub/src/Synchformer checkout b66668a1521d7567cc760e5544b2b5b53179b687
+check: "import torch, torchvision, omegaconf, einops, av; assert torch.cuda.is_available()"
+notes: Checkpoints (cfg + .pt per experiment) download into the repo's logs/ on first use.

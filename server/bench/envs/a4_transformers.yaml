@@ -1,0 +1,16 @@
+name: a4_transformers
+python: ~/.opendub/envs/a4_transformers/bin/python
+description: 'Recent transformers (5.17) for HF ASR/audio models: Whisper pipelines, Cohere Transcribe,
+  Granite Speech, Voxtral, VibeVoice-ASR, MMS, audeering/SUPERB emotion heads, Audio Flamingo.'
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} transformers==5.17.0 accelerate 'mistral-common[audio]' soundfile
+    librosa numpy
+  aarch64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} transformers==5.17.0 accelerate 'mistral-common[audio]' soundfile
+    librosa numpy
+check: import transformers, torch; assert torch.cuda.is_available()

@@ -1,0 +1,9 @@
+name: a4_omniasr
+python: ~/.opendub/envs/a4_omniasr/bin/python
+description: Meta Omnilingual ASR (Apache-2.0; fairseq2 native lib, no confirmed aarch64 wheels).
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} omnilingual-asr soundfile librosa numpy
+check: import omnilingual_asr

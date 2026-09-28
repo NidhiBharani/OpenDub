@@ -1,0 +1,13 @@
+name: b4_deepghs
+python: ~/.opendub/envs/b4_deepghs/bin/python
+description: >-
+  deepghs anime classifiers through dghs-imgutils (ONNX on CPU onnxruntime; models fetched from HF
+  deepghs/anime_classification and deepghs/anime_real_cls on first use).
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} dghs-imgutils onnxruntime pillow
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} dghs-imgutils onnxruntime pillow
+check: "from imgutils.validate import anime_classify_score, anime_real_score"

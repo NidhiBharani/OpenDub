@@ -1,0 +1,13 @@
+name: d8_seamless
+python: ~/.opendub/envs/d8_seamless/bin/python
+description: "SeamlessM4T v2 large via transformers (CC-BY-NC-4.0)"
+setup:
+  x86_64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu128 torch==2.11.0 torchaudio==2.11.0"
+    - "uv pip install --python {python} 'transformers>=4.57' sentencepiece protobuf librosa soundfile"
+  aarch64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu130 torch==2.11.0 torchaudio==2.11.0"
+    - "uv pip install --python {python} 'transformers>=4.57' sentencepiece protobuf librosa soundfile"
+check: "import transformers, torch; assert torch.cuda.is_available()"

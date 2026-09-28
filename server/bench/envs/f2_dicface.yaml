@@ -1,0 +1,28 @@
+name: f2_dicface
+python: ~/.opendub/envs/f2_dicface/bin/python
+description: DicFace (fudan-generative-vision/DicFace @ df08bb76). Upstream torch 2.4.1/cu121; here torch
+  2.11. Weights HF fudan-generative-ai/DicFace_model into <repo>/ckpts.
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+  - test -d {home}/.opendub/src/DicFace || git clone https://github.com/fudan-generative-vision/DicFace
+    {home}/.opendub/src/DicFace
+  - git -C {home}/.opendub/src/DicFace checkout df08bb76d051
+  - grep -v -i -E '^(torch|torchvision|torchaudio)' {home}/.opendub/src/DicFace/requirements.txt > {home}/.opendub/src/DicFace/requirements.arena.txt
+  - uv pip install --python {python} -r {home}/.opendub/src/DicFace/requirements.arena.txt huggingface-hub
+    cmake dlib
+  - uvx --from huggingface_hub hf download fudan-generative-ai/DicFace_model --local-dir {home}/.opendub/src/DicFace/ckpts
+  aarch64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+  - test -d {home}/.opendub/src/DicFace || git clone https://github.com/fudan-generative-vision/DicFace
+    {home}/.opendub/src/DicFace
+  - git -C {home}/.opendub/src/DicFace checkout df08bb76d051
+  - grep -v -i -E '^(torch|torchvision|torchaudio)' {home}/.opendub/src/DicFace/requirements.txt > {home}/.opendub/src/DicFace/requirements.arena.txt
+  - uv pip install --python {python} -r {home}/.opendub/src/DicFace/requirements.arena.txt huggingface-hub
+    cmake dlib
+  - uvx --from huggingface_hub hf download fudan-generative-ai/DicFace_model --local-dir {home}/.opendub/src/DicFace/ckpts
+check: import torch; assert torch.cuda.is_available()
+notes: dlib is built from source by pip on both arches (cmake + a C++ compiler). Same basicsr/torchvision
+  functional_tensor caveat as PGTFormer.

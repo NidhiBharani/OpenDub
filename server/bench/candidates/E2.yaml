@@ -1,0 +1,216 @@
+# E2 — bandwidth extension / 48 kHz restoration. Sources: model-research.html #E2 (ranks 1–8) and
+# compute-tiers.html #E2 (Spark / Unconstrained / API picks + alternates). VRAM figures are
+# estimates from parameter counts (fp32 weights + activations for ~10 s clips, +10 %) unless noted.
+capability: E2
+candidates:
+  - id: resample-48k
+    url: https://ffmpeg.org/ffmpeg-resampler.html
+    params_b: 0
+    worker: e2_resample
+    kind: local
+    params: {}
+    languages: "*"
+    license: LGPL-2.1-or-later (ffmpeg)
+    ship_ok: true
+    requires: {tools: [ffmpeg]}
+    baseline: true
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: today's behaviour — no BWE, the take is resampled to 48 kHz (ffmpeg.to_std_wav)
+  - id: ap-bwe-48k
+    url: https://github.com/yxlu-0102/AP-BWE
+    params_b: 0.0298
+    worker: e2_ap_bwe
+    env: e2_ap_bwe
+    params: {repo: ~/.opendub/src/ap-bwe, ckpt_root: ~/.opendub/models/ap-bwe,
+             commit: 751710f22404c27e5bcc983248f8b856a04b8422}
+    languages: "*"
+    license: MIT (code and weights)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1.5, disk_gb: 1}
+    sources: [research:E2:1, compute-tiers:E2:spark]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      29.8M params; one checkpoint per input rate (8/12/16/24 kHz → 48 kHz, discovered from each
+      config.json); unsupported input rates are skipped. Weights via gdown from the authors' Drive.
+  - id: flowhigh
+    url: https://huggingface.co/ResembleAI/FlowHigh
+    params_b: 0.0488
+    worker: e2_flowhigh
+    env: e2_flowhigh
+    params: {model: ResembleAI/FlowHigh, timestep: 1,
+             package_commit: ce73b7a3701b16e86f69050729c41dfc2b24a35b}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3, disk_gb: 1.5}
+    sources: [compute-tiers:E2:spark-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Packaged fork loads FLowHigh_basic_400k (basic CFM) + BigVGAN-48k, not the paper's main
+      indep_adaptive model (Drive-only). Output peak-matched to the input.
+  - id: sidon-v0.1
+    url: https://huggingface.co/sarulab-speech/sidon-v0.1
+    params_b: 0.65
+    worker: e2_sidon
+    env: e2_sidon
+    params: {model: sarulab-speech/sidon-v0.1, revision: b3b02d8bbd55fdbc410e6e46e76ef95ace4fbf52,
+             w2v_revision: da985ba0987f70aaeb84a80f2851cfac8c697a7b}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 4, disk_gb: 3}
+    sources: [compute-tiers:E2:big, compute-tiers:E2:big-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      w2v-BERT 2.0 feature cleanser (143-language pretraining; fine-tuned on LibriTTS-R + FLEURS-R)
+      + 48 kHz vocoder, TorchScript; a restorer that resynthesises the voice (ΔSIM gate).
+  - id: unipase
+    url: https://huggingface.co/Xiaobin-Rong/unipase
+    params_b: 0.5457
+    worker: e2_unipase
+    env: e2_unipase
+    params: {model: Xiaobin-Rong/unipase, revision: f0b4d4c4411fe08fc2dddbf2d9f33260c27ac4a0,
+             repo: ~/.opendub/src/unipase, enable_plc: true}
+    languages: "*"
+    license: MIT (code) / Apache-2.0 (HF weights card)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 5, disk_gb: 3}
+    sources: [research:E2:2, compute-tiers:E2:spark-alt, compute-tiers:E2:big]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      545.7M universal restorer (URGENT 2026 winner backbone); the paper reports CER/SpkSim
+      regressions vs a predictive baseline — research says use it conditionally, the gates decide.
+  - id: clearvoice-mossformer2-sr48k
+    url: https://github.com/modelscope/ClearerVoice-Studio
+    worker: e2_clearvoice
+    env: e2_clearvoice
+    params: {model: MossFormer2_SR_48K, package: clearvoice==0.1.2}
+    languages: "*"
+    license: Apache-2.0 (toolkit; checkpoint terms not stated separately)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3, disk_gb: 1}
+    sources: [research:E2:3]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      The ledger's "HiFi-SR via ClearerVoice-Studio" row: the released toolkit's 48 kHz SR model
+      is MossFormer2_SR_48K (HiFi-SR is not exposed by name). Trained on VCTK-style English.
+  - id: resemble-enhance
+    url: https://github.com/resemble-ai/resemble-enhance
+    worker: e2_resemble_enhance
+    env: e2_resemble_enhance
+    params: {nfe: 64, solver: midpoint, lambd: 0.1, tau: 0.5, version: 0.0.1}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 4, disk_gb: 1.5}
+    sources: [research:E2:6]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: 44.1 kHz output; repo quiet since 2024-12; dropped from the Sep 18 shortlist (kept as a candidate)
+  - id: audiosr-speech
+    url: https://github.com/haoheliu/versatile_audio_super_resolution
+    worker: e2_audiosr
+    env: e2_audiosr
+    params: {model_name: speech, ddim_steps: 50, guidance_scale: 3.5, seed: 42}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 9, disk_gb: 6}
+    sources: [research:E2:7]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: latent diffusion; slow; literature reports excess sibilance / hallucination (demoted Sep 18)
+  - id: voicefixer
+    url: https://github.com/haoheliu/voicefixer
+    worker: e2_voicefixer
+    env: e2_voicefixer
+    params: {mode: 0, version: 0.1.3}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2.5, disk_gb: 1}
+    sources: [research:E2:8]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: 44.1 kHz vocoder restoration (2021); better suited to A2 than to delivered takes
+  - id: elevenlabs-voice-isolator
+    url: https://elevenlabs.io/docs/api-reference/audio-isolation/convert
+    worker: e2_elevenlabs_isolator
+    kind: api
+    params: {endpoint: v1/audio-isolation, usd_per_min: 0.12}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ELEVENLABS_API_KEY], tools: [ffmpeg]}
+    sources: [compute-tiers:E2:api-alt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: a hosted denoiser, not BWE (no hosted BWE API exists); $0.12/min list price (2026-09-28)
+  # ---- registered, not runnable
+  - id: nvidia-re-use
+    params_b: 0.00961
+    worker: e2_re_use
+    enabled: false
+    languages: "*"
+    license: NVIDIA One-Way Noncommercial License (NSCLv1)
+    ship_ok: false
+    sources: [research:E2:4]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      9.6M bi-Mamba universal SE (2026); NC is allowed but release location / inference entry
+      point were not confirmed in this pass, so no worker yet.
+  - id: miipher-2
+    url: https://arxiv.org/abs/2505.04457
+    params_b: 2.0
+    worker: e2_miipher2
+    enabled: false
+    languages: "*"
+    license: closed (Google DeepMind)
+    ship_ok: false
+    sources: [research:E2:5, compute-tiers:E2:big]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: weights not released
+  - id: open-miipher-2
+    url: https://github.com/yukara-ikemiya/Open-Miipher-2
+    params_b: 0.6
+    worker: e2_open_miipher2
+    enabled: false
+    languages: "*"
+    license: MIT
+    sources: [research:E2:5, compute-tiers:E2:big]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: training harness only, no pretrained checkpoints; 24 kHz output (does not solve BWE)
+  - id: flashsr
+    url: https://arxiv.org/abs/2501.10807
+    worker: e2_flashsr
+    enabled: false
+    languages: "*"
+    license: unknown
+    sources: [research:E2:7]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: one-step AudioSR distillation; code availability not confirmed from a primary source
+  - id: cogsr
+    url: https://arxiv.org/abs/2512.16304
+    worker: e2_cogsr
+    enabled: false
+    languages: "*"
+    license: unknown
+    sources: [compute-tiers:E2:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: LALM-guided flow matching for severe degradation (archival); code/weights unverified
+  - id: adobe-podcast-enhance
+    url: https://podcast.adobe.com/enhance
+    worker: e2_adobe_podcast
+    kind: api
+    enabled: false
+    languages: "*"
+    license: proprietary
+    sources: [compute-tiers:E2:api]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: no public Enhance Speech API as of 2026-09 (web app / partner integrations only)
+  - id: dolby-io-media-enhance
+    url: https://optiview.dolby.com/docs/
+    worker: e2_dolby_enhance
+    kind: api
+    enabled: false
+    languages: "*"
+    license: proprietary API
+    sources: [compute-tiers:E2:api-alt]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: docs.dolby.io media-processing now redirects to Dolby OptiView; availability unconfirmed

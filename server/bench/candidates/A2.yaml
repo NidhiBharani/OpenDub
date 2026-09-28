@@ -1,0 +1,271 @@
+# A2 — reference-clip enhancement. Sources: model-research A2 ledger (8 rows) and compute-tiers A2
+# picks + alternates, deduplicated.
+capability: A2
+candidates:
+  - id: identity
+    worker: a2_identity
+    env: server
+    kind: method
+    params: {}
+    url: https://github.com/NidhiBharani/OpenDub
+    languages: "*"
+    license: n/a
+    ship_ok: true
+    requires: {}
+    baseline: true
+    sources: [plan:capability-map:A2]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: OpenDub's A2 default is off (raw reference clip); every enhancer must beat leaving it alone
+  - id: unipase-16k
+    worker: a2_unipase
+    env: a2_unipase
+    kind: local
+    params: {sr_out: 16000}
+    url: https://github.com/xiaobin-rong/unipase
+    params_b: 0.55
+    languages: "*"
+    license: MIT code; Apache-2.0 weights (HF card)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 4, disk_gb: 3}
+    sources: [research:A2:1, compute-tiers:A2:spark]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      Spark pick (URGENT 2026 winner, TASLP 2026). Generative (DeWavLM-Omni + adapter + vocoder):
+      not sample-aligned, so SI-SDR undersells it. ~3.2 GB for 1 s input per the paper.
+  - id: unipase-48k
+    worker: a2_unipase
+    env: a2_unipase
+    kind: local
+    params: {sr_out: 48000}
+    url: https://huggingface.co/Xiaobin-Rong/unipase
+    params_b: 0.55
+    languages: "*"
+    license: MIT code; Apache-2.0 weights (HF card)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 4, disk_gb: 3}
+    sources: [research:A2:1, compute-tiers:A2:spark]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: 16 kHz core + PostNet bandwidth extension to 48 kHz
+  - id: resemble-enhance
+    worker: a2_resemble
+    env: a2_resemble
+    kind: local
+    params: {mode: enhance, nfe: 32, solver: midpoint, lambd: 0.5, tau: 0.5}
+    url: https://github.com/resemble-ai/resemble-enhance
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 4, disk_gb: 2, arch: [x86_64]}
+    sources: [research:A2:3]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: denoiser + CFM enhancer, 44.1 kHz; old torch/deepspeed pins → installed --no-deps, x86_64 only; VRAM estimated
+  - id: resemble-denoise
+    worker: a2_resemble
+    env: a2_resemble
+    kind: local
+    params: {mode: denoise}
+    url: https://github.com/resemble-ai/resemble-enhance
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2, disk_gb: 2, arch: [x86_64]}
+    sources: [research:A2:3]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: denoiser stage only (discriminative, cannot hallucinate timbre)
+  - id: clearvoice-mossformer2-48k
+    worker: a2_clearvoice
+    env: a2_clearvoice
+    kind: local
+    params: {model: MossFormer2_SE_48K}
+    url: https://huggingface.co/alibabasglab/MossFormer2_SE_48K
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2, disk_gb: 1}
+    sources: [research:A2:8, compute-tiers:A2:api-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: 48 kHz discriminative enhancement; VRAM estimated
+  - id: clearvoice-frcrn-16k
+    worker: a2_clearvoice
+    env: a2_clearvoice
+    kind: local
+    params: {model: FRCRN_SE_16K}
+    url: https://github.com/modelscope/ClearerVoice-Studio
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1, disk_gb: 1}
+    sources: [research:A2:8]
+    verified: {license: true, languages: false, vram: false, runs: false}
+  - id: deepfilternet3
+    worker: a2_deepfilter
+    env: a2_deepfilter
+    kind: local
+    params: {}
+    url: https://github.com/Rikorose/DeepFilterNet
+    params_b: 0.002
+    languages: "*"
+    license: MIT OR Apache-2.0
+    ship_ok: true
+    requires: {disk_gb: 1}
+    sources: [research:A2:7]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: 48 kHz, real-time on CPU (aarch64 recipe is CPU torch)
+  - id: melband-roformer-dereverb-anvuew
+    worker: a1_msst
+    env: a1_msst
+    kind: local
+    params:
+      model_type: mel_band_roformer
+      config: https://huggingface.co/anvuew/dereverb_mel_band_roformer/resolve/main/dereverb_mel_band_roformer_anvuew.yaml
+      checkpoint: https://huggingface.co/anvuew/dereverb_mel_band_roformer/resolve/main/dereverb_mel_band_roformer_anvuew_sdr_19.1729.ckpt
+      stems: {audio: noreverb}
+    url: https://huggingface.co/anvuew/dereverb_mel_band_roformer
+    languages: "*"
+    license: GPL-3.0
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 4, disk_gb: 1}
+    sources: [research:A2:5, compute-tiers:A2:spark-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: full-band discriminative dereverb (44.1 kHz); GPL weights → ship_ok false until reviewed
+  - id: melband-roformer-denoise-aufr33
+    worker: a1_msst
+    env: a1_msst
+    kind: local
+    params:
+      model_type: mel_band_roformer
+      config: https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v.1.0.7/model_mel_band_roformer_denoise.yaml
+      checkpoint: https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v.1.0.7/denoise_mel_band_roformer_aufr33_sdr_27.9959.ckpt
+      stems: {audio: dry}
+    url: https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/tag/v.1.0.7
+    languages: "*"
+    license: not stated
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 4, disk_gb: 1}
+    sources: [research:A2:5, compute-tiers:A2:spark-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+  - id: auk-flash-enhance
+    worker: a1_auk
+    env: a1_auk
+    kind: local
+    params: {role: audio}
+    url: https://github.com/Tencent-Hunyuan/AuK
+    params_b: 1.5
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 26, disk_gb: 15}
+    sources: [compute-tiers:A2:spark-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: instruction "remove noise and reverberation"; generative, 24 kHz; Spark only
+  - id: audioshake-speech-denoise
+    worker: a1_audioshake
+    env: server
+    kind: api
+    params: {targets: [speech_denoise], role: audio, usd_per_credit: 0.0}
+    url: https://developer.audioshake.ai/models
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [AUDIOSHAKE_API_KEY]}
+    sources: [compute-tiers:A2:api]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: API pick (voice isolation; 1.5 credits/min; USD per credit not public)
+  - id: audioshake-speech-dereverb
+    worker: a1_audioshake
+    env: server
+    kind: api
+    params: {targets: [speech_dereverb], role: audio, usd_per_credit: 0.0}
+    url: https://developer.audioshake.ai/models
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [AUDIOSHAKE_API_KEY]}
+    sources: [compute-tiers:A2:api]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: 2.0 credits/min
+  - id: resemble-api-enhance
+    worker: a2_resemble_api
+    env: server
+    kind: api
+    params: {remove_noise: true, normalize: false, studio_sound: true, usd_per_min: 0.045}
+    url: https://docs.resemble.ai/audio-tools/audio-enhancement
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [RESEMBLE_API_KEY]}
+    sources: [compute-tiers:A2:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: $0.045 per started minute; the job GET path is inferred from the create docs
+  - id: mvsep-denoise
+    worker: a1_mvsep
+    env: server
+    kind: api
+    params: {sep_type: 47, add_opt1: 0, stems: {audio: dry}}
+    url: https://mvsep.com/full_api
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [MVSEP_API_TOKEN]}
+    sources: [compute-tiers:A1:api-alt]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: hosted aufr33 Mel-RoFormer denoise; output stem name fragment "dry" unverified
+  - id: anyenhance
+    worker: a2_unipase
+    env: a2_unipase
+    kind: local
+    params: {}
+    url: https://arxiv.org/abs/2501.15417
+    params_b: 0.36
+    languages: "*"
+    license: CC-BY-NC-ND-4.0
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 4}
+    enabled: false
+    sources: [research:A2:4, compute-tiers:A2:big]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      Unconstrained pick, but no official weights (no Amphion release). The CCF-AATC 2025
+      AnyEnhance-v1 challenge baseline (MIT, 45.7M) is a different, smaller model.
+  - id: miipher-2
+    worker: a2_unipase
+    env: a2_unipase
+    kind: local
+    params: {}
+    url: https://huggingface.co/Atotti/miipher-2-HuBERT-HiFi-GAN-v0.1
+    languages: "*"
+    license: unreleased (Google); unofficial port CC-BY-NC-4.0
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 4}
+    enabled: false
+    sources: [research:A2:2, compute-tiers:A2:big-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: Google declined to release code/weights; only Atotti's mHuBERT-147 port (NC, hydra CLI) exists — adapter not written
+  - id: usemamba
+    worker: a2_unipase
+    env: a2_unipase
+    kind: local
+    params: {}
+    url: https://arxiv.org/abs/2505.21198
+    languages: "*"
+    license: CC BY 4.0 (paper)
+    ship_ok: null
+    requires: {gpu: true}
+    enabled: false
+    sources: [research:A2:6]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: no public code or checkpoints
+  - id: best-of-n-rerank
+    worker: a2_identity
+    env: server
+    kind: method
+    params: {}
+    url: https://github.com/NidhiBharani/OpenDub
+    languages: "*"
+    license: n/a
+    ship_ok: true
+    requires: {}
+    enabled: false
+    sources: [compute-tiers:A2:big-alt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: best-of-N over enhancers re-ranked by DNSMOS/NISQA/speaker similarity — a composition method, add after single enhancers are ranked

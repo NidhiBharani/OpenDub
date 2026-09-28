@@ -5,6 +5,7 @@ expected named metrics and that the reference-free ones produce numbers (not Non
 """
 from __future__ import annotations
 
+import json
 import math
 import struct
 import tempfile
@@ -72,10 +73,11 @@ async def test_mix_metrics_on_healthy_and_silent_lead_in():
         names = _names(metrics)
         assert "mix.integrated_lufs" in names
         assert "mix.loudness_error" in names
-        assert "mix.lead_in_noise_floor" in names
-        # lead-in is truly silent → very low floor
-        floor = _by_name(metrics, "mix.lead_in_noise_floor").value
+        assert "mix.lead_in_level" in names
+        # lead-in is truly silent here, but the metric makes no general noise assumption.
+        floor = _by_name(metrics, "mix.lead_in_level").value
         assert floor is not None and floor < -40
+        assert _by_name(metrics, "mix.lead_in_noise_floor").value is None
 
 
 @pytest.mark.asyncio
@@ -93,7 +95,7 @@ async def test_tts_flags_degenerate_take():
         tmp = Path(d)
         # good take (1s tone) and a degenerate take (0.04s silence)
         good = Take(path="audio/segments/s1/take_1.wav", rate_factor=1.0)
-        bad = Take(path="audio/segments/s2/take_1.wav", rate_factor=0.6)
+        bad = Take(path="audio/segments/s2/take_1.wav", rate_factor=1.15)
         _write_wav(tmp / good.path, 1.0, 300.0, amp=0.5)
         _write_wav(tmp / bad.path, 0.04, 0.0)
         s1 = Segment(start=0, end=2, translated_text="hello", takes=[good], active_take_id=good.id)
@@ -103,7 +105,7 @@ async def test_tts_flags_degenerate_take():
         dr = _by_name(metrics, "tts.degenerate_take_rate")
         assert dr.value == 0.5  # one of two takes degenerate
         cr = _by_name(metrics, "tts.duration_clamp_rate")
-        assert cr.value == 0.5  # bad take pinned to 0.6 clamp
+        assert cr.value == 0.5  # bad take pinned to 1.15 speedup cap
 
 
 @pytest.mark.asyncio
@@ -151,3 +153,61 @@ def _zero_head(path: Path, seconds: float) -> None:
     with wave.open(str(path), "wb") as w:
         w.setparams(params)
         w.writeframes(bytes(frames))
+
+
+@pytest.mark.asyncio
+async def test_missing_and_unreadable_takes_count_as_degenerate(tmp_path):
+    missing_take = Take(path='audio/missing.wav')
+    broken_take = Take(path='audio/broken.wav')
+    (tmp_path / broken_take.path).parent.mkdir(parents=True)
+    (tmp_path / broken_take.path).write_bytes(b'not a wav')
+    segs = [Segment(start=0, end=1, translated_text='one', takes=[missing_take],
+                    active_take_id=missing_take.id),
+            Segment(start=2, end=3, translated_text='two', takes=[broken_take],
+                    active_take_id=broken_take.id)]
+    metrics = await tts_metric.score(_ctx(tmp_path, _project(segs)))
+    assert _by_name(metrics, 'tts.degenerate_take_rate').value == 1.0
+    assert _by_name(metrics, 'tts.missing_take_count').value == 1
+    assert _by_name(metrics, 'tts.unreadable_take_count').value == 1
+
+
+def test_regression_gate_fails_lost_metric_and_pipeline_error():
+    from bench.report import regression_gate
+
+    old = {'results': [{'case': 'sample', 'error': None, 'metrics': [
+        {'name': 'tts.degenerate_take_rate', 'value': 0.1, 'higher_is_better': False}]}]}
+    new = {'results': [{'case': 'sample', 'error': 'render failed', 'metrics': [
+        {'name': 'tts.degenerate_take_rate', 'value': None, 'higher_is_better': False}]}]}
+    failures = regression_gate(old, new)
+    assert len(failures) == 2
+    assert any('pipeline error' in failure for failure in failures)
+    assert any('became unavailable' in failure for failure in failures)
+
+
+@pytest.mark.asyncio
+async def test_tts_benchmark_ignores_stale_fitted_verification(tmp_path):
+    take = Take(path='audio/take.wav')
+    _write_wav(tmp_path / take.path, 1.0, 300)
+    seg = Segment(start=0, end=1, translated_text='hello', takes=[take], active_take_id=take.id)
+    report = tmp_path / f'quality/segments/{seg.id}.json'
+    report.parent.mkdir(parents=True)
+    report.write_text(json.dumps({
+        'synthesis': {'take_id': take.id, 'attempts': [
+            {'verification': {'status': 'ok', 'wer': 0.5, 'cer': 0.25}}]},
+        'fitted': {'take_id': 'old-take', 'verification': {
+            'status': 'ok', 'wer': 0, 'cer': 0}},
+    }))
+    metrics = await tts_metric.score(_ctx(tmp_path, _project([seg])))
+    assert _by_name(metrics, 'tts.round_trip_wer').value == 0.5
+    assert _by_name(metrics, 'tts.verification_coverage').value == 1.0
+
+
+def test_regression_gate_requires_metrics_in_new_cases():
+    from bench.report import regression_gate
+
+    old = {'results': []}
+    new = {'results': [{'case': 'new', 'error': None, 'metrics': []}]}
+    assert 'no metrics' in regression_gate(old, new)[0]
+    new['results'][0]['metrics'] = [{'name': 'tts.verification_coverage', 'value': 0}]
+    assert any('required metric unavailable' in failure for failure in
+               regression_gate(old, new, required=['tts.round_trip_wer']))

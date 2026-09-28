@@ -1,0 +1,200 @@
+# E1 — timing fit + pause mapping. Sources: data/research/model-research.html (#E1 ledger, ranks
+# 1–8) and data/research/compute-tiers.html (#E1 Spark / Unconstrained / API picks + alternates).
+# All runnable candidates are CPU DSP: they land on Thalassa, the Spark and API-only boxes alike.
+capability: E1
+candidates:
+  - id: atempo-app
+    url: server/app/pipeline/audio.py (fit_to_duration; ffmpeg atempo)
+    params_b: 0
+    worker: e1_atempo
+    kind: local
+    params: {max_rate: 1.15, min_rate: 0.85}
+    languages: "*"
+    license: LGPL-2.1-or-later (ffmpeg)
+    ship_ok: true
+    requires: {tools: [ffmpeg]}
+    baseline: true
+    sources: [research:E1:8]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      timing_fit.atempo as shipped: app.pipeline.audio.fit_to_duration (trim outer silence, speed
+      up ≤1.15×, never slow down, pad). Beyond 1.15× the app regenerates; the arena keeps the
+      clamped take and scores it as an overflow.
+  - id: atempo-uniform
+    url: https://ffmpeg.org/ffmpeg-filters.html#atempo
+    params_b: 0
+    worker: e1_timefit
+    kind: local
+    params: {mode: uniform, backend: atempo, min_rate: 0.7, max_rate: 1.4}
+    languages: "*"
+    license: LGPL-2.1-or-later (ffmpeg)
+    ship_ok: true
+    requires: {tools: [ffmpeg]}
+    sources: [research:E1:8]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: scalar stretch of the speech span onto the source speech span (both directions)
+  - id: rubberband-r3-uniform
+    url: https://breakfastquay.com/rubberband/
+    params_b: 0
+    worker: e1_timefit
+    kind: local
+    params: {mode: uniform, backend: rubberband, engine: finer, min_rate: 0.7, max_rate: 1.4}
+    languages: "*"
+    license: GPL-2.0-or-later (commercial licence available)
+    ship_ok: true
+    requires: {tools: [rubberband]}
+    sources: [research:E1:3, compute-tiers:E1:spark-alt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      Rubber Band CLI R3 (-3 --formant -D), shelled out and never linked, so the GPL stays outside
+      the Apache-2.0 artefact. Install: apt install rubberband-cli (x86_64 and arm64 packages).
+  - id: signalsmith-uniform
+    url: https://github.com/Signalsmith-Audio/signalsmith-stretch
+    params_b: 0
+    worker: e1_timefit
+    env: e1_signalsmith
+    kind: local
+    params: {mode: uniform, backend: signalsmith, min_rate: 0.7, max_rate: 1.4}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {}
+    sources: [research:E1:2]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: Signalsmith Stretch via the third-party python-stretch 0.3.1 binding (sdist build on aarch64)
+  - id: pause-dp+atempo
+    url: https://arxiv.org/abs/2204.02530
+    params_b: 0
+    worker: e1_timefit
+    kind: method
+    params: {mode: pause_dp, backend: atempo, rate_dev: 0.10, min_rate: 0.7, max_rate: 1.4,
+             w_rate: 4.0, pen_take: 0.05, pen_src: 0.3, min_gap: 0.08}
+    languages: "*"
+    license: Apache-2.0 (in-house DP) + LGPL ffmpeg
+    ship_ok: true
+    requires: {tools: [ffmpeg]}
+    sources: [research:E1:1]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: in-house prosodic-alignment DP (no reference implementation exists) with WSOLA residual
+  - id: pause-dp+rubberband-r3
+    url: https://arxiv.org/abs/2204.02530
+    params_b: 0
+    worker: e1_timefit
+    kind: method
+    params: {mode: pause_dp, backend: rubberband, engine: finer, rate_dev: 0.10, min_rate: 0.7,
+             max_rate: 1.4, w_rate: 4.0, pen_take: 0.05, pen_src: 0.3, min_gap: 0.08}
+    languages: "*"
+    license: Apache-2.0 (in-house DP) + GPL-2.0-or-later CLI
+    ship_ok: true
+    requires: {tools: [rubberband]}
+    sources: [research:E1:1, research:E1:3, compute-tiers:E1:spark-alt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+  - id: pause-dp+signalsmith
+    url: https://arxiv.org/abs/2204.02530
+    params_b: 0
+    worker: e1_timefit
+    env: e1_signalsmith
+    kind: method
+    params: {mode: pause_dp, backend: signalsmith, rate_dev: 0.10, min_rate: 0.7, max_rate: 1.4,
+             w_rate: 4.0, pen_take: 0.05, pen_src: 0.3, min_gap: 0.08}
+    languages: "*"
+    license: Apache-2.0 (in-house DP) + MIT
+    ship_ok: true
+    requires: {}
+    sources: [research:E1:1, research:E1:2, compute-tiers:E1:spark]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: the research's Spark pick (pause-structure DP + Signalsmith residual stretch)
+  # ---- registered, not runnable as an E1 post stage
+  - id: duration-controlled-regen
+    url: https://arxiv.org/abs/2505.20899
+    worker: e1_regen
+    kind: method
+    enabled: false
+    languages: "*"
+    license: per paper (Dub-S2ST, duration-based translation)
+    ship_ok: false
+    sources: [research:E1:4, compute-tiers:E1:big]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      Regenerating the take at the slot length (Dub-S2ST, best-of-N) replaces E1 rather than
+      post-processing a take; it is ranked under D3 (duration control) / D8 (S2ST), not here.
+  - id: diffatsm
+    worker: e1_diffatsm
+    enabled: false
+    languages: "*"
+    license: unknown
+    sources: [research:E1:5]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: paywalled paper (CSL 2025), no verified public checkpoint
+  - id: stsm-film
+    worker: e1_stsm_film
+    enabled: false
+    languages: "*"
+    license: unknown
+    sources: [research:E1:6]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: arXiv Oct 2025 neural TSM; code and licence not confirmed
+  - id: zplane-elastique-pro
+    worker: e1_elastique
+    enabled: false
+    languages: "*"
+    license: proprietary SDK
+    ship_ok: false
+    sources: [research:E1:7]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: closed per-product commercial SDK; not obtainable for an open-source build
+  - id: ps-tts-isochronic-paraphrase
+    url: https://arxiv.org/abs/2604.09111
+    worker: e1_paraphrase
+    kind: method
+    enabled: false
+    languages: "*"
+    license: method (ICPR 2026, arXiv 2604.09111)
+    sources: [compute-tiers:E1:spark-alt, compute-tiers:E1:api-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      LLM duration-constrained paraphrase + vowel DTW: a C2 translation-loop strategy (reuses the
+      C2 model); benchmark it there as the escalation for lines needing >10 % stretch.
+  - id: holidubber
+    url: https://holidubber.github.io/
+    worker: e1_holidubber
+    enabled: false
+    languages: "*"
+    license: unstated
+    sources: [compute-tiers:E1:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: arXiv 2606.09098; code "coming soon", no weights
+  - id: dubwise
+    url: https://arxiv.org/abs/2406.08802
+    worker: e1_dubwise
+    enabled: false
+    languages: "*"
+    license: unknown
+    sources: [compute-tiers:E1:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Sony AI Interspeech 2024 video-guided duration control inside TTS; no public weights found
+  - id: elevenlabs-dubbing-v2
+    url: https://elevenlabs.io/docs/capabilities/dubbing
+    worker: e1_elevenlabs_dubbing
+    kind: api
+    enabled: false
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ELEVENLABS_API_KEY]}
+    sources: [compute-tiers:E1:api]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      End-to-end dubbing product; fit is by regeneration (no per-clip duration knob; editing and
+      regeneration via API are Enterprise-only), so it cannot be isolated as an E1 stage — see D8.
+  - id: heygen-video-translate
+    url: https://docs.heygen.com/
+    worker: e1_heygen
+    kind: api
+    enabled: false
+    languages: "*"
+    license: proprietary API
+    requires: {api_keys: [HEYGEN_API_KEY]}
+    sources: [compute-tiers:E1:api-alt]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: closed end-to-end video translation; regeneration-based fit, not an E1 stage

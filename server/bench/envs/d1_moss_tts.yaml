@@ -1,0 +1,16 @@
+name: d1_moss_tts
+python: ~/.opendub/envs/d1_moss_tts/bin/python
+description: "MOSS-TTS family (v1.5 8B, Local-Transformer v1.5 4B, VoiceGenerator) via transformers 5 remote code"
+setup:
+  x86_64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu128 torch==2.11.0 torchaudio==2.11.0"
+    - "test -d {home}/.opendub/src/MOSS-TTS || git clone https://github.com/OpenMOSS/MOSS-TTS {home}/.opendub/src/MOSS-TTS && git -C {home}/.opendub/src/MOSS-TTS checkout 934d6826b084c46a0d033402174d5f8ac4ed2519"
+    - "uv pip install --python {python} -e {home}/.opendub/src/MOSS-TTS"
+  aarch64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu130 torch==2.11.0 torchaudio==2.11.0"
+    - "test -d {home}/.opendub/src/MOSS-TTS || git clone https://github.com/OpenMOSS/MOSS-TTS {home}/.opendub/src/MOSS-TTS && git -C {home}/.opendub/src/MOSS-TTS checkout 934d6826b084c46a0d033402174d5f8ac4ed2519"
+    - "uv pip install --python {python} -e {home}/.opendub/src/MOSS-TTS"
+check: "import transformers, torch; assert torch.cuda.is_available(); print(transformers.__version__)"
+notes: "The repo's `[torch-runtime]` extra pins torch 2.9.1+cu128 (x86 only); here torch comes from the arch-specific step and the package is installed without that extra."

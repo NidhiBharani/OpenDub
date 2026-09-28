@@ -1,0 +1,41 @@
+name: f1_infinitetalk
+python: ~/.opendub/envs/f1_infinitetalk/bin/python
+description: InfiniteTalk (MeiGen-AI/InfiniteTalk @ 50aa0a94, Apache-2.0) on Wan2.1-I2V-14B-480P. Upstream
+  pins torch 2.4.1 + xformers 0.0.28 + flash-attn 2.7.4; here torch 2.11 with SDPA (Wan's attention falls
+  back to SDPA without flash-attn) and xformers from source on aarch64.
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url
+    https://download.pytorch.org/whl/cu128
+  - test -d {home}/.opendub/src/InfiniteTalk || git clone https://github.com/MeiGen-AI/InfiniteTalk {home}/.opendub/src/InfiniteTalk
+  - git -C {home}/.opendub/src/InfiniteTalk checkout 50aa0a94184315407a991ae804d9b58d6d311ba8
+  - grep -v -i -E '^(torch|torchvision|torchaudio|xformers|flash)' {home}/.opendub/src/InfiniteTalk/requirements.txt
+    > {home}/.opendub/src/InfiniteTalk/requirements.arena.txt
+  - uv pip install --python {python} -r {home}/.opendub/src/InfiniteTalk/requirements.arena.txt huggingface-hub
+    misaki[en] librosa
+  - uv pip install --python {python} xformers --index-url https://download.pytorch.org/whl/cu128
+  - uvx --from huggingface_hub hf download Wan-AI/Wan2.1-I2V-14B-480P --local-dir {home}/.opendub/weights/infinitetalk/Wan2.1-I2V-14B-480P
+  - uvx --from huggingface_hub hf download TencentGameMate/chinese-wav2vec2-base --local-dir {home}/.opendub/weights/infinitetalk/chinese-wav2vec2-base
+  - uvx --from huggingface_hub hf download TencentGameMate/chinese-wav2vec2-base model.safetensors --revision
+    refs/pr/1 --local-dir {home}/.opendub/weights/infinitetalk/chinese-wav2vec2-base
+  - uvx --from huggingface_hub hf download MeiGen-AI/InfiniteTalk --local-dir {home}/.opendub/weights/infinitetalk/InfiniteTalk
+  aarch64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url
+    https://download.pytorch.org/whl/cu130
+  - test -d {home}/.opendub/src/InfiniteTalk || git clone https://github.com/MeiGen-AI/InfiniteTalk {home}/.opendub/src/InfiniteTalk
+  - git -C {home}/.opendub/src/InfiniteTalk checkout 50aa0a94184315407a991ae804d9b58d6d311ba8
+  - grep -v -i -E '^(torch|torchvision|torchaudio|xformers|flash)' {home}/.opendub/src/InfiniteTalk/requirements.txt
+    > {home}/.opendub/src/InfiniteTalk/requirements.arena.txt
+  - uv pip install --python {python} -r {home}/.opendub/src/InfiniteTalk/requirements.arena.txt huggingface-hub
+    misaki[en] librosa
+  - uv pip install --python {python} --no-build-isolation git+https://github.com/facebookresearch/xformers.git@v0.0.33
+  - uvx --from huggingface_hub hf download Wan-AI/Wan2.1-I2V-14B-480P --local-dir {home}/.opendub/weights/infinitetalk/Wan2.1-I2V-14B-480P
+  - uvx --from huggingface_hub hf download TencentGameMate/chinese-wav2vec2-base --local-dir {home}/.opendub/weights/infinitetalk/chinese-wav2vec2-base
+  - uvx --from huggingface_hub hf download TencentGameMate/chinese-wav2vec2-base model.safetensors --revision
+    refs/pr/1 --local-dir {home}/.opendub/weights/infinitetalk/chinese-wav2vec2-base
+  - uvx --from huggingface_hub hf download MeiGen-AI/InfiniteTalk --local-dir {home}/.opendub/weights/infinitetalk/InfiniteTalk
+check: import torch, xformers; assert torch.cuda.is_available()
+notes: Spark-only by VRAM. The chinese-wav2vec2 safetensors comes from refs/pr/1 as the README instructs.
+  Building xformers on aarch64 needs nvcc (DGX OS ships CUDA 13) and takes a while.

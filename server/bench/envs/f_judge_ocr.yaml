@@ -1,0 +1,16 @@
+name: f_judge_ocr
+python: ~/.opendub/envs/f_judge_ocr/bin/python
+description: 'Phase-F4 OCR round-trip judge: EasyOCR 1.7.2 (Apache-2.0; en, hi, ja readers download on
+  first use).'
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.11
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} easyocr==1.7.2 numpy==1.26.4 opencv-python-headless
+  aarch64:
+  - uv venv {prefix} --python 3.11
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} easyocr==1.7.2 numpy==1.26.4 opencv-python-headless
+check: import easyocr, torch; assert torch.cuda.is_available()
+notes: easyocr pulls opencv-python-headless and scikit-image; pure torch, so aarch64 works with the cu130
+  torch build.

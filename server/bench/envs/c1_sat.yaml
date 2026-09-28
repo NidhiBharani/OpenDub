@@ -1,0 +1,13 @@
+name: c1_sat
+python: ~/.opendub/envs/c1_sat/bin/python
+description: Segment any Text (wtpsplit 2.2.2, MIT) for the C1 SaT candidates; plain PyTorch.
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} wtpsplit==2.2.2
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} wtpsplit==2.2.2
+check: "import wtpsplit, torch; assert torch.cuda.is_available()"

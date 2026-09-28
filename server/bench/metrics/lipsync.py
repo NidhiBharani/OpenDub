@@ -10,7 +10,6 @@ run against ``render/lipsync.mp4``. Keep the ``score(ctx)`` signature identical.
 """
 from __future__ import annotations
 
-
 from .base import Metric, MetricContext, missing
 
 

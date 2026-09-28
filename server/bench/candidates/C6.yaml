@@ -1,0 +1,236 @@
+# C6 — subtitle condensation (CPS/CPL/lines gates, SubER primary). Pack languages are directions.
+# LLM candidates use params.task: condense (HW-TSC two-pass recipe, c_common.task_condense).
+capability: C6
+candidates:
+- id: wrap-only
+  worker: c6_rules
+  env: server
+  kind: local
+  params: {}
+  languages: '*'
+  license: MIT (OpenDub)
+  ship_ok: true
+  requires: {}
+  baseline: true
+  sources: ['plan:§7:C6']
+  verified: {license: true, languages: true, vram: true, runs: false}
+  notes: Greedy re-wrap to CPL, no condensation (no C6 provider today).
+  url: server/bench/arena/workers/c6_rules.py
+- id: hwtsc-qwen3-32b-fp8
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: Qwen/Qwen3-32B-FP8
+    task: condense
+    server_args: [--max-model-len, '16384', --gpu-memory-utilization, '0.4']
+    extra_body:
+      chat_template_kwargs: {enable_thinking: false}
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 44, disk_gb: 34}
+  sources: ['compute-tiers:C6:spark', 'plan:§7:C6']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: HW-TSC IWSLT 2026 two-pass condenser (T=0 then T=0.3, violating cues only). FP8 instead of the
+    artifact's Q8_0.
+  url: https://huggingface.co/Qwen/Qwen3-32B-FP8
+  params_b: 32.8
+- id: hwtsc-qwen3-14b-awq
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: Qwen/Qwen3-14B-AWQ
+    server_args: [--max-model-len, '8192', --gpu-memory-utilization, '0.85']
+    extra_body:
+      chat_template_kwargs: {enable_thinking: false}
+    task: condense
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 14, disk_gb: 10}
+  sources: ['plan:§7:C6']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'AWQ int4 (~9.5 GB weights) on vLLM with thinking disabled; vLLM reserves 85% of the card. Card:
+    100+ languages incl. hi/ja. Plan seed: Qwen3-14B two-pass condenser.'
+  url: https://huggingface.co/Qwen/Qwen3-14B-AWQ
+  params_b: 14.8
+- id: hwtsc-gpt-oss-120b
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: openai/gpt-oss-120b
+    server_args: [--max-model-len, '16384', --gpu-memory-utilization, '0.6']
+    extra_body: {reasoning_effort: low}
+    task: condense
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 70, disk_gb: 66}
+  sources: ['compute-tiers:C6:alt']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: '117B/5.1B-active MXFP4 (~63 GB); Spark only. English-centric, no published multilingual MT numbers
+    (artifact: better as critic than translator).'
+  url: https://huggingface.co/openai/gpt-oss-120b
+  params_b: 117.0
+- id: hwtsc-qwen3-coder-30b-a3b-fp8
+  worker: c2_openai_compat
+  env: c2_vllm
+  kind: local
+  params:
+    backend: vllm
+    model: Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+    task: condense
+    server_args: [--max-model-len, '16384', --gpu-memory-utilization, '0.35']
+  languages: [ja-en, ja-hi, en-hi, hi-en, en-ja]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 40, disk_gb: 32}
+  sources: ['compute-tiers:C6:spark']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Artifact's headroom option (44 tok/s on a Spark). Repo id unverified.
+  url: https://huggingface.co/Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+  params_b: 30.5
+- id: claude-opus-5-condense
+  worker: c2_anthropic
+  env: c2_api
+  kind: api
+  params: {model: claude-opus-5, effort: high, task: condense}
+  languages: '*'
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [ANTHROPIC_API_KEY]
+  sources: ['compute-tiers:C6:api', 'research:C6:2']
+  verified: {license: true, languages: false, vram: true, runs: false, price: true}
+  notes: List price $5/$25 per 1M tokens (Anthropic list price).
+  url: https://platform.claude.com/docs/en/about-claude/models/overview
+- id: gpt-6-astra-condense
+  worker: c2_openai
+  env: c2_api
+  kind: api
+  params:
+    model: gpt-6-astra
+    price: [10.0, 50.0]
+    task: condense
+  languages: '*'
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [OPENAI_API_KEY]
+  sources: ['compute-tiers:C6:alt', 'research:C6:2']
+  verified: {license: true, languages: false, vram: true, runs: false, price: true}
+  notes: List price $10/$50 per 1M tokens, 2026-09-28.
+  url: https://developers.openai.com/api/docs/models
+- id: gpt-5.6-sol-condense
+  worker: c2_openai
+  env: c2_api
+  kind: api
+  params:
+    model: gpt-5.6-sol
+    price: [4.0, 20.0]
+    task: condense
+  languages: '*'
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [OPENAI_API_KEY]
+  sources: ['compute-tiers:C6:alt']
+  verified: {license: true, languages: false, vram: true, runs: false, price: true}
+  notes: List price $4/$20 per 1M tokens, 2026-09-28.
+  url: https://developers.openai.com/api/docs/models
+- id: gemini-3.8-flash-condense
+  worker: c2_gemini
+  env: c2_api
+  kind: api
+  params:
+    model: gemini-3.8-flash
+    price: [0.75, 3.75]
+    task: condense
+  languages: '*'
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [GEMINI_API_KEY]
+  sources: ['compute-tiers:C6:alt', 'research:C6:2']
+  verified: {license: true, languages: false, vram: true, runs: false, price: true}
+  notes: List price $0.75/$3.75 per 1M tokens until 2026-12-31, then $1.50/$7.50.
+  url: https://ai.google.dev/gemini-api/docs/models
+- id: apptek-subtitling-stack
+  worker: c2_openai_compat
+  env: server
+  kind: api
+  params: {}
+  languages: '*'
+  license: proprietary
+  enabled: false
+  sources: ['research:C6:1', 'research:C6:3', 'compute-tiers:C6:big']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'AppTek full stack (length-class MT + ILS line segmentation + LLM APE): proprietary; IWSLT 2026
+    winner.'
+  url: https://aclanthology.org/2026.iwslt-1.39/
+- id: apptek-lcmt-retranslate
+  worker: c2_openai_compat
+  env: server
+  kind: method
+  params: {}
+  languages: '*'
+  license: proprietary
+  enabled: false
+  sources: ['compute-tiers:C6:alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'AppTek-style length-class-conditioned MT with iterative re-translation: needs training.'
+  url: https://aclanthology.org/2025.iwslt-1.21/
+- id: sbaam
+  worker: c2_openai_compat
+  env: server
+  kind: local
+  params: {}
+  languages: '*'
+  license: unknown
+  enabled: false
+  sources: ['research:C6:6']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'SBAAM direct speech-to-subtitle (FBK): audio input, different task; FBK-fairseq licence unverified.'
+  url: https://github.com/hlt-mt/FBK-fairseq
+- id: suber-metric
+  worker: c2_openai_compat
+  env: server
+  kind: method
+  params: {}
+  languages: '*'
+  license: Apache-2.0
+  enabled: false
+  sources: ['research:C6:4']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: SubER is the C6 primary metric (c6_suber_judge), not a candidate.
+  url: https://github.com/apptek/SubER
+- id: delivery-spec-profiles
+  worker: c2_openai_compat
+  env: server
+  kind: method
+  params: {}
+  languages: '*'
+  license: n/a
+  enabled: false
+  sources: ['research:C6:5']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Netflix/IWSLT constraint profiles: configuration, implemented as specs/c6.py LIMITS.'
+  url: https://iwslt.org/2026/subtitling
+- id: c6-glm-kimi
+  worker: c2_openai_compat
+  env: server
+  kind: local
+  params: {}
+  languages: '*'
+  license: various
+  enabled: false
+  sources: ['compute-tiers:C6:alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'GLM-5.3 / Kimi K3 as condenser: cluster-scale.'
+  url: https://kingy.ai/blog/glm-5-3-specs-benchmarks-api-how-to-use/

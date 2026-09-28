@@ -23,12 +23,13 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 import httpx
 
-from ..base import ProgressFn
 from ...models import TranslationRequest
+from ..base import ProgressFn
 
 # ---- batching / prompt constants ---------------------------------------------------------------
 
@@ -67,6 +68,10 @@ def build_system_prompt(source_lang: str, target_lang: str) -> str:
         "audience; never invent, drop, or mistranslate a name.\n"
         "5. Use `context_before` / `context_after` only to resolve ambiguity (pronouns, references, "
         "continuing thoughts) - never translate those context lines themselves.\n"
+        "When terminology is supplied, preserve its target spellings consistently. If a "
+        "previous_translation and measured_duration are supplied, rewrite that line more concisely "
+        "to fit seconds while preserving meaning, names, negation and emotional intent. Do not "
+        "drop facts merely to fit. Character budgets are only estimates, not semantic rules.\n"
         "6. Output ONLY the translated line content, inside the required JSON - never add "
         "translator notes, bracketed explanations, parentheticals about tone, or any other "
         "meta-commentary.\n"
@@ -84,6 +89,9 @@ def build_user_content(batch: list[tuple[int, TranslationRequest]], target_lang:
             "text": req.text,
             "context_before": list(req.context_before),
             "context_after": list(req.context_after),
+            "terminology": req.terminology,
+            "previous_translation": req.previous_translation,
+            "measured_duration": req.measured_duration,
         }
         for n, req in batch
     ]
@@ -150,7 +158,8 @@ def parse_translations(raw: str, expected_ns: set[int]) -> dict[int, str]:
     except json.JSONDecodeError as e:
         raise ValueError(f"invalid JSON ({e}): {raw[:200]!r}") from e
     if not isinstance(data, list):
-        raise ValueError(f"expected a JSON array, got {type(data).__name__}: {raw[:200]!r}")
+        raise ValueError(  # noqa: TRY004 - callers retry on ValueError (see docstring)
+            f"expected a JSON array, got {type(data).__name__}: {raw[:200]!r}")
 
     out: dict[int, str] = {}
     for item in data:

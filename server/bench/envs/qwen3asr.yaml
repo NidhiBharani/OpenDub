@@ -1,0 +1,13 @@
+name: qwen3asr
+python: ~/.opendub/envs/qwen3asr/bin/python
+description: Qwen3-ASR + Qwen3-ForcedAligner via qwen-asr 0.0.6 (pins transformers 4.57.6)
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} qwen-asr==0.0.6
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} qwen-asr==0.0.6
+check: "import qwen_asr, torch; assert torch.cuda.is_available()"

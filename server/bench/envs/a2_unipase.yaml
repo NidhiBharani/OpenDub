@@ -1,0 +1,19 @@
+name: a2_unipase
+python: ~/.opendub/envs/a2_unipase/bin/python
+description: UniPASE (code MIT, weights Apache-2.0 on HF Xiaobin-Rong/unipase). The repo pins torch 2.6.0+cu118
+  (no aarch64 build); this recipe keeps its espnet pin on torch 2.11.
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - git clone https://github.com/xiaobin-rong/unipase {home}/.opendub/src/unipase || true
+  - git -C {home}/.opendub/src/unipase checkout 857b60ad05d37a2cf6d7a89883ec9fc4fc164b45
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} espnet==202511 huggingface_hub einops soundfile librosa numpy
+  aarch64:
+  - uv venv {prefix} --python 3.12
+  - git clone https://github.com/xiaobin-rong/unipase {home}/.opendub/src/unipase || true
+  - git -C {home}/.opendub/src/unipase checkout 857b60ad05d37a2cf6d7a89883ec9fc4fc164b45
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} espnet==202511 huggingface_hub einops soundfile librosa numpy
+check: import espnet, torch; assert torch.cuda.is_available()
+notes: 'requirements relaxed from the repo pins: verify on first run.'

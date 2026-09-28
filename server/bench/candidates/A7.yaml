@@ -1,0 +1,258 @@
+# A7 — speaker embeddings / voice-bank matching. Sources: model-research A7 ledger (8 rows) and
+# compute-tiers A7 picks + alternates, deduplicated. All candidates embed 16 kHz audio and are
+# scored by cosine (a7_common).
+capability: A7
+candidates:
+  - id: ecapa-speechbrain
+    worker: a7_speechbrain
+    env: a7_speechbrain
+    kind: local
+    params: {model: speechbrain/spkrec-ecapa-voxceleb}
+    url: https://huggingface.co/speechbrain/spkrec-ecapa-voxceleb
+    params_b: 0.021
+    languages: "*"
+    license: Apache-2.0 code; VoxCeleb-derived weights (CC BY 4.0)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    baseline: true
+    sources: [research:A7:7, plan:model-ranking:7]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: the encoder OpenDub's quality stage loads today (Vox1-O-clean EER 0.80 on the card)
+  - id: redimnet2-b6-lm
+    worker: a7_redimnet
+    env: a7_redimnet
+    kind: local
+    params: {repo: PalabraAI/redimnet2, ref: c5bbe0b76e37df698c403f8844e41304ceab6307, entry: redimnet2, model_name: b6, train_type: lm}
+    url: https://github.com/PalabraAI/redimnet2
+    params_b: 0.0123
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    sources: [research:A7:1, compute-tiers:A7:spark]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Spark pick (Vox1-O 0.26 % EER). Also a G2 similarity judge (redimnet2), so A2/D rankings
+      and this candidate share a lineage. Same weights as sarvam/redimnet2-b6-vb2vox2-lm-mit and
+      Wespeaker/wespeaker-voxceleb-redimnet2-B6-LM (not registered twice).
+  - id: redimnet2-b3-lm
+    worker: a7_redimnet
+    env: a7_redimnet
+    kind: local
+    params: {repo: PalabraAI/redimnet2, ref: c5bbe0b76e37df698c403f8844e41304ceab6307, entry: redimnet2, model_name: b3, train_type: lm}
+    url: https://github.com/PalabraAI/redimnet2
+    params_b: 0.003
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    sources: [research:A7:1]
+    verified: {license: true, languages: true, vram: false, runs: false}
+  - id: redimnet-b6-v1
+    worker: a7_redimnet
+    env: a7_redimnet
+    kind: local
+    params: {repo: IDRnD/ReDimNet, ref: ce039a624cb99fe127702ceb94c6080090e5032f, entry: ReDimNet, model_name: b6, train_type: ptn, dataset: vox2}
+    url: https://github.com/IDRnD/ReDimNet
+    params_b: 0.015
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    sources: [research:A7:1]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: prior-generation ReDimNet (the 3 September primary)
+  - id: eres2netv2-zh-common
+    worker: a7_3dspeaker
+    env: a7_3dspeaker
+    kind: local
+    params: {model: iic/speech_eres2netv2_sv_zh-cn_16k-common}
+    url: https://modelscope.cn/models/iic/speech_eres2netv2_sv_zh-cn_16k-common
+    params_b: 0.0178
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    sources: [research:A7:2, compute-tiers:A7:spark-alt]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: short-clip / multi-device specialist (200k Mandarin speakers); pipeline output_emb field unverified
+  - id: campplus-voxceleb
+    worker: a7_3dspeaker
+    env: a7_3dspeaker
+    kind: local
+    params: {model: iic/speech_campplus_sv_en_voxceleb_16k}
+    url: https://modelscope.cn/models/iic/speech_campplus_sv_en_voxceleb_16k
+    params_b: 0.0072
+    languages: "*"
+    license: CC BY 4.0 (VoxCeleb-derived)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    sources: [research:A7:4]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: model id from the 3D-Speaker model list (not re-verified); WeSpeaker's CAM++ below is the fallback
+  - id: wespeaker-resnet293-lm
+    worker: a7_wespeaker
+    env: a7_wespeaker
+    kind: local
+    params: {model: Wespeaker/wespeaker-voxceleb-resnet293-LM}
+    url: https://huggingface.co/Wespeaker/wespeaker-voxceleb-resnet293-LM
+    params_b: 0.0286
+    languages: "*"
+    license: Apache-2.0 code; CC BY 4.0 weights
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1.5}
+    sources: [research:A7:3, compute-tiers:A7:spark-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: Vox1-O-clean EER 0.447 with AS-norm (raw cosine here)
+  - id: wespeaker-simam-resnet34-vb2
+    worker: a7_wespeaker
+    env: a7_wespeaker
+    kind: local
+    params: {model: Wespeaker/wespeaker-voxlink2-samresnet34_ft}
+    url: https://huggingface.co/Wespeaker/wespeaker-voxlink2-samresnet34_ft
+    languages: "*"
+    license: Apache-2.0 code; CC BY 4.0 weights
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1.5}
+    sources: [research:A7:3, compute-tiers:A7:spark-alt]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: the research named SimAM-ResNet100 (VoxBlink2), but only the ResNet34 SimAM fine-tune is on HF (checked 2026-09-28)
+  - id: wespeaker-campplus-lm
+    worker: a7_wespeaker
+    env: a7_wespeaker
+    kind: local
+    params: {model: Wespeaker/wespeaker-voxceleb-campplus-LM}
+    url: https://huggingface.co/Wespeaker/wespeaker-voxceleb-campplus-LM
+    params_b: 0.0072
+    languages: "*"
+    license: Apache-2.0 code; CC BY 4.0 weights
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    sources: [research:A7:4]
+    verified: {license: true, languages: true, vram: false, runs: false}
+  - id: wespeaker-ecapa-tdnn512-lm
+    worker: a7_wespeaker
+    env: a7_wespeaker
+    kind: local
+    params: {model: Wespeaker/wespeaker-ecapa-tdnn512-LM}
+    url: https://huggingface.co/Wespeaker/wespeaker-ecapa-tdnn512-LM
+    params_b: 0.0064
+    languages: "*"
+    license: Apache-2.0 code; CC BY 4.0 weights
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    sources: [research:A7:3]
+    verified: {license: true, languages: true, vram: false, runs: false}
+  - id: titanet-large
+    worker: a6_sortformer
+    env: a4_nemo
+    kind: local
+    params: {model: nvidia/speakerverification_en_titanet_large, task: embed}
+    url: https://huggingface.co/nvidia/speakerverification_en_titanet_large
+    params_b: 0.023
+    languages: "*"
+    license: CC-BY-4.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    sources: [research:A7:5, compute-tiers:A7:api-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: also what Riva / NIM speaker models serve (the API alternate)
+  - id: pyannote-wespeaker-resnet34-lm
+    worker: a6_pyannote
+    env: a6_pyannote3
+    kind: local
+    params: {model: pyannote/wespeaker-voxceleb-resnet34-LM, task: embed}
+    url: https://huggingface.co/pyannote/wespeaker-voxceleb-resnet34-LM
+    params_b: 0.0063
+    languages: "*"
+    license: CC-BY-4.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    sources: [research:A7:6]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: the embedding inside pyannote 3.1 / community-1
+  - id: wavlm-base-plus-sv
+    worker: a7_wavlm_sv
+    env: server
+    kind: local
+    params: {model: microsoft/wavlm-base-plus-sv}
+    url: https://huggingface.co/microsoft/wavlm-base-plus-sv
+    params_b: 0.095
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1.5}
+    sources: [compute-tiers:A7:big-alt]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: WavLM SV front-end family; also the default G2 judge (wavlm-sv) — lineage shared with A2/D judging
+  - id: mhubert-147-probe
+    worker: a7_wavlm_sv
+    env: server
+    kind: local
+    params: {}
+    url: https://huggingface.co/utter-project/mHuBERT-147
+    params_b: 0.094
+    languages: "*"
+    license: CC-BY-NC-SA-4.0
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 1}
+    enabled: false
+    sources: [research:A7:8]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: self-supervised features, not a speaker model — needs a trained speaker probe first
+  - id: redimnet-mrl
+    worker: a7_redimnet
+    env: a7_redimnet
+    kind: local
+    params: {}
+    url: https://huggingface.co/sappho192/redimnet-mrl
+    languages: "*"
+    license: unknown
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 1}
+    enabled: false
+    sources: [compute-tiers:A7:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Matryoshka multi-resolution ReDimNet (community) — loading code and licence unverified
+  - id: score-fusion-qmf
+    worker: a7_redimnet
+    env: a7_redimnet
+    kind: method
+    params: {}
+    url: https://github.com/NidhiBharani/OpenDub
+    languages: "*"
+    license: mixed
+    ship_ok: true
+    requires: {gpu: true}
+    enabled: false
+    sources: [compute-tiers:A7:big]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: unconstrained pick (ReDimNet2 + ERes2NetV2 + ResNet293 fusion with QMF calibration) — composition across envs, add after the parts are ranked
+  - id: pyannoteai-voiceprint
+    worker: a6_pyannoteai
+    env: server
+    kind: api
+    params: {}
+    url: https://docs.pyannote.ai/api-reference/voiceprint
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [PYANNOTEAI_API_KEY]}
+    enabled: false
+    sources: [compute-tiers:A7:api]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: API pick; voiceprints are opaque (no cosine) and identify runs inside diarization jobs — needs its own trial adapter (€0.015 per voiceprint)
+  - id: azure-speaker-recognition
+    worker: a6_pyannoteai
+    env: server
+    kind: api
+    params: {}
+    url: https://learn.microsoft.com/azure/ai-services/speech-service/speaker-recognition-overview
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [AZURE_SPEECH_KEY]}
+    enabled: false
+    sources: [compute-tiers:A7:api-alt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: retired 2025-09-30 — kept for the ledger only

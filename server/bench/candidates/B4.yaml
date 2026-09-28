@@ -1,0 +1,299 @@
+# B4 — content type (live action / 2D / 3D / mixed), per title. Sources: model-research.html
+# article B4 (ledger 1–8) and compute-tiers.html B4 (Spark / Unconstrained / API picks +
+# alternates). Today the operator picks lipsync.none by hand: the baseline is "everything is live
+# action".
+capability: B4
+candidates:
+  - id: constant-live-action
+    worker: b4_constant
+    url: builtin
+    env: server
+    kind: method
+    params: {label: live_action}
+    languages: "*"
+    license: n/a
+    ship_ok: true
+    requires: {}
+    baseline: true
+    sources: [opendub:today]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: No gate today — a human-face lip-sync model may run on anything.
+
+  # ---------------------------------------------------------------- frozen encoder + head
+  - id: siglip2-so400m-probe
+    worker: b4_siglip2
+    url: https://huggingface.co/google/siglip2-so400m-patch14-384
+    params_b: 0.4
+    env: b_hf
+    params: {backbone: siglip2, model: google/siglip2-so400m-patch14-384, dtype: bfloat16,
+             head: probe, n_frames: 32, l2: 0.01, epochs: 300}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3, disk_gb: 2, tools: [ffmpeg]}
+    sources: [research:B4:1, compute-tiers:B4:spark]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Spark pick: frozen SigLIP 2 so400m + multinomial logistic head fitted on the pack's dev
+      titles (never test). Needs a dev split with ≥ 2 pure classes (b4_titles builder writes one).
+  - id: siglip2-so400m-probe-conformal
+    worker: b4_siglip2
+    url: https://huggingface.co/google/siglip2-so400m-patch14-384
+    params_b: 0.4
+    env: b_hf
+    kind: method
+    params: {backbone: siglip2, model: google/siglip2-so400m-patch14-384, dtype: bfloat16,
+             head: probe, n_frames: 32, l2: 0.01, epochs: 300, conformal_alpha: 0.1}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3, disk_gb: 2, tools: [ffmpeg]}
+    sources: [research:B4:8, compute-tiers:B4:spark]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      The research's abstention mechanism (split conformal prediction, α = 0.1): half the dev
+      titles fit the head, half calibrate; a title abstains unless its prediction set is a
+      singleton. Scored on misroute_cost / sel_acc95 as well as macro-F1.
+  - id: siglip2-so400m-zeroshot
+    worker: b4_siglip2
+    url: https://huggingface.co/google/siglip2-so400m-patch14-384
+    params_b: 0.4
+    env: b_hf
+    params: {backbone: siglip2, model: google/siglip2-so400m-patch14-384, dtype: bfloat16,
+             head: zeroshot, n_frames: 32}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3, disk_gb: 2, tools: [ffmpeg]}
+    sources: [research:B4:1]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Zero-shot text prompts per class (no labelled frames) — the control that shows what the
+      linear probe buys.
+  - id: siglip2-base-probe
+    worker: b4_siglip2
+    url: https://huggingface.co/google/siglip2-base-patch16-224
+    params_b: 0.086
+    env: b_hf
+    params: {backbone: siglip2, model: google/siglip2-base-patch16-224, dtype: bfloat16,
+             head: probe, n_frames: 32}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1.5, disk_gb: 1, tools: [ffmpeg]}
+    sources: [research:B4:1]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: The 86M base encoder (research lists all four SigLIP 2 scales); cost floor of the probe.
+  - id: pe-core-l14-336-probe
+    worker: b4_siglip2
+    url: https://huggingface.co/facebook/PE-Core-L14-336
+    env: b_hf
+    params: {backbone: open_clip, model: "hf-hub:timm/PE-Core-L-14-336", dtype: bfloat16,
+             head: probe, n_frames: 32}
+    languages: "*"
+    license: Apache-2.0 (verify the variant)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3, disk_gb: 2, tools: [ffmpeg]}
+    sources: [research:B4:6]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: >-
+      Perception Encoder as the alternative frozen backbone. The open_clip hub id and licence are
+      unverified (the research says "Meta research licence — verify").
+
+  # ---------------------------------------------------------------- off-the-shelf classifiers
+  - id: deepghs-caformer
+    worker: b4_deepghs
+    url: https://huggingface.co/deepghs/anime_classification
+    env: b4_deepghs
+    params: {model: caformer_s36_v1.3_focal, real_model: mobilenetv3_v1.4_dist, n_frames: 32}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {tools: [ffmpeg]}
+    sources: [research:B4:2, compute-tiers:B4:spark-alt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      dghs-imgutils anime_classify (3d / bangumi / comic / illustration / not_painting) +
+      anime_real (anime / real) for the live-action share. CPU. The 97.23% figure the research
+      quoted is not reproducible per compute-tiers.
+  - id: deepghs-mobilenet
+    worker: b4_deepghs
+    url: https://huggingface.co/deepghs/anime_classification
+    env: b4_deepghs
+    params: {model: mobilenetv3_v1.5_dist, real_model: mobilenetv3_v1.4_dist, n_frames: 32}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {tools: [ffmpeg]}
+    sources: [research:B4:2]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: The lightweight defaults of both imgutils classifiers (the "day-one gate").
+  - id: prithiv-anime-classification-v1
+    worker: b4_hf_classifier
+    url: https://huggingface.co/prithivMLmods/Anime-Classification-v1.0
+    params_b: 0.0929
+    env: b_hf
+    params: {model: prithivMLmods/Anime-Classification-v1.0, dtype: float32, n_frames: 32,
+             label_map: {3D: 3d, Bangumi: 2d, Comic: 2d, Illustration: 2d}}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1, disk_gb: 1, tools: [ffmpeg]}
+    sources: [research:B4:5]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      SigLIP 2 base fine-tune, 4 classes, no live-action class — it can never say live_action
+      (research: "cannot make the gate decision alone"). Label names assumed to match the card.
+
+  # ---------------------------------------------------------------- local VLMs
+  - id: qwen3-vl-8b-fp8
+    worker: b4_vlm
+    url: https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct-FP8
+    params_b: 8.0
+    env: b_hf
+    params: {provider: local, model: Qwen/Qwen3-VL-8B-Instruct-FP8, dtype: auto, n_frames: 8,
+             frame_side: 768, max_new_tokens: 256}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 12, disk_gb: 11, min_compute_capability: "8.9"}
+    sources: [research:B4:4]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Plan §7's Thalassa entry (Qwen3-VL-8B FP8). FP8 checkpoint id and transformers FP8 loading on
+      sm_120 unverified; VRAM estimated.
+  - id: qwen3-vl-8b
+    worker: b4_vlm
+    url: https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct
+    params_b: 8.0
+    env: b_hf
+    params: {provider: local, model: Qwen/Qwen3-VL-8B-Instruct, dtype: bfloat16, n_frames: 8,
+             frame_side: 768, max_new_tokens: 256}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 22, disk_gb: 18}
+    sources: [research:B4:4, compute-tiers:B4:spark-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: bf16 on the Spark (~16 GB weights per compute-tiers; 22 GB budgeted).
+  - id: qwen3-vl-235b-a22b
+    worker: b4_vlm
+    url: https://huggingface.co/Qwen/Qwen3-VL-235B-A22B-Instruct
+    params_b: 235.0
+    env: b_hf
+    params: {provider: local, model: Qwen/Qwen3-VL-235B-A22B-Instruct}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 480}
+    enabled: false
+    sources: [compute-tiers:B4:big-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: Does not fit one Spark even at 4-bit; registered for the ledger.
+  - id: glm-5.3-flash
+    worker: b4_vlm
+    url: https://huggingface.co/zai-org/GLM-5.3-Flash
+    params_b: 320.0
+    env: b_hf
+    params: {provider: local, model: zai-org/GLM-5.3-Flash}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 170}
+    enabled: false
+    sources: [compute-tiers:B4:big]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: Unconstrained pick (320B-A18B); ~160–170 GB at 4-bit, a hard wall on one Spark.
+
+  # ---------------------------------------------------------------- registered, not runnable
+  - id: forensic-cgi-vs-photo
+    worker: b4_forensic
+    url: https://arxiv.org/abs/2308.07279
+    env: b_hf
+    params: {}
+    languages: "*"
+    license: unknown
+    ship_ok: false
+    enabled: false
+    sources: [research:B4:7]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: >-
+      Multi-colourspace ViT / Swin CGI-vs-photo classifiers (arXiv 2308.07279, 2409.04742): code
+      and licences unconfirmed, cross-dataset collapse documented, and the axis does not change
+      routing. Registered only.
+  - id: ensemble-probe-deepghs-vlm
+    worker: b4_ensemble
+    url: builtin
+    env: b_hf
+    kind: method
+    params: {members: [siglip2-so400m-probe-conformal, deepghs-caformer, gemini-3.1-pro]}
+    languages: "*"
+    license: mixed
+    ship_ok: true
+    enabled: false
+    sources: [research:B4:2, compute-tiers:B4:big-alt]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: >-
+      SigLIP probe + deepghs + VLM, abstain on disagreement. Compose from the members' cached
+      outputs once they are ranked; composition worker not written.
+
+  # ---------------------------------------------------------------- APIs
+  - id: gemini-3.1-pro
+    worker: b4_vlm
+    url: https://ai.google.dev/gemini-api/docs/models
+    env: b_api
+    kind: api
+    params: {provider: gemini, model: gemini-3.1-pro-preview, price_in_per_mtok: 2.0,
+             price_out_per_mtok: 12.0, n_frames: 8, frame_side: 768}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY], tools: [ffmpeg]}
+    sources: [research:B4:3, compute-tiers:B4:api]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      API pick; 8 evenly spaced frames with an explicit abstain option (a whole title as video
+      would exceed any sane token budget). $2/$12 per M tokens, 2026-09-28.
+  - id: gemini-3.8-flash
+    worker: b4_vlm
+    url: https://ai.google.dev/gemini-api/docs/models
+    env: b_api
+    kind: api
+    params: {provider: gemini, model: gemini-3.8-flash, price_in_per_mtok: 0.75,
+             price_out_per_mtok: 3.75, n_frames: 8, frame_side: 768}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY], tools: [ffmpeg]}
+    sources: [research:B4:3, compute-tiers:B4:api-alt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: $0.75/$3.75 per M tokens to 2026-12-31, then $1.50/$7.50 (ai.google.dev, 2026-09-28).
+  - id: claude-opus-5
+    worker: b4_vlm
+    url: https://docs.claude.com/en/docs/about-claude/models/overview
+    env: b_api
+    kind: api
+    params: {provider: anthropic, model: claude-opus-5, price_in_per_mtok: 5.0,
+             price_out_per_mtok: 25.0, effort: low, n_frames: 8, frame_side: 768,
+             max_tokens: 4096}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ANTHROPIC_API_KEY], tools: [ffmpeg]}
+    sources: [compute-tiers:B4:api-alt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: Second opinion on the ambiguous tail; $5/$25 per M tokens (2026-09-28).
+  - id: gpt-6-sol
+    worker: b4_vlm
+    url: https://developers.openai.com/api/docs/models
+    env: b_api
+    kind: api
+    params: {provider: openai, model: gpt-6-sol, price_in_per_mtok: 2.0, price_out_per_mtok: 10.0,
+             n_frames: 8, frame_side: 768, image_detail: low}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [OPENAI_API_KEY], tools: [ffmpeg]}
+    sources: [orchestrator:gpt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: GPT counterpart (not in the artifacts); $2/$10 per M tokens (2026-09-28).

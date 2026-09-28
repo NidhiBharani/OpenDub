@@ -1,0 +1,11 @@
+name: c5_epitran
+python: ~/.opendub/envs/c5_epitran/bin/python
+description: Epitran 1.35.2 rule-based G2P (MIT); pure Python on both architectures.
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} epitran==1.35.2
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} epitran==1.35.2
+check: "import epitran; epitran.Epitran('hin-Deva')"

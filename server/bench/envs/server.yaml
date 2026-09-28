@@ -1,0 +1,7 @@
+name: server
+python: auto
+description: The OpenDub server venv (server/.venv). Only for models whose deps it already has
+  (faster-whisper/CTranslate2, f5-tts, demucs). Never install candidate deps into it.
+setup:
+  any:
+    - cd {repo}/server && uv sync --frozen --extra asr --extra tts --extra separation --extra bench

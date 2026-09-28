@@ -1,0 +1,14 @@
+name: b3_classic_ocr
+python: ~/.opendub/envs/b3_classic_ocr/bin/python
+description: >-
+  EasyOCR (PyTorch) and RapidOCR (PP-OCR ONNX on CPU onnxruntime): the classical floor for B3.
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} easyocr rapidocr onnxruntime
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} easyocr rapidocr onnxruntime
+check: "import easyocr, rapidocr"

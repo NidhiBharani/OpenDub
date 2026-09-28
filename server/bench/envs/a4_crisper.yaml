@@ -1,0 +1,15 @@
+name: a4_crisper
+python: ~/.opendub/envs/a4_crisper/bin/python
+description: CrisperWhisper needs nyrahealth's transformers fork (branch crisper_whisper, pinned).
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} git+https://github.com/nyrahealth/transformers.git@8eb900e81d43576d2ddf69cceb1c2bb8b0330bc1
+    accelerate soundfile librosa numpy
+  aarch64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} git+https://github.com/nyrahealth/transformers.git@8eb900e81d43576d2ddf69cceb1c2bb8b0330bc1
+    accelerate soundfile librosa numpy
+check: import transformers

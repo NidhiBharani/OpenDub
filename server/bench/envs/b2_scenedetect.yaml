@@ -1,0 +1,13 @@
+name: b2_scenedetect
+python: ~/.opendub/envs/b2_scenedetect/bin/python
+description: >-
+  PySceneDetect 0.7.1 (BSD-3) with the OpenCV backend; CPU only, same recipe on both
+  architectures.
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} 'scenedetect[opencv-headless]==0.7.1'
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} 'scenedetect[opencv-headless]==0.7.1'
+check: "import scenedetect; assert scenedetect.__version__.startswith('0.7')"

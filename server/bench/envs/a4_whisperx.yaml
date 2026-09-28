@@ -1,0 +1,10 @@
+name: a4_whisperx
+python: ~/.opendub/envs/a4_whisperx/bin/python
+description: 'WhisperX 3.8.6 (BSD-2): faster-whisper + wav2vec2 alignment. x86_64 only on GPU (CTranslate2''s
+  aarch64 wheels are CPU-only).'
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} whisperx==3.8.6 soundfile librosa numpy
+check: import whisperx

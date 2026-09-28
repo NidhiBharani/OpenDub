@@ -1,0 +1,42 @@
+name: f4_diffueraser
+python: ~/.opendub/envs/f4_diffueraser/bin/python
+description: DiffuEraser (lixiaowen-xw/DiffuEraser @ 8e6f279a) + its ProPainter prior. Upstream torch
+  2.3.1 / diffusers 0.29.2; torch 2.11 here (diffusers pin kept from requirements.txt).
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+  - test -d {home}/.opendub/src/DiffuEraser || git clone https://github.com/lixiaowen-xw/DiffuEraser {home}/.opendub/src/DiffuEraser
+  - git -C {home}/.opendub/src/DiffuEraser checkout 8e6f279ac753
+  - grep -v -i -E '^(torch|torchvision|torchaudio)' {home}/.opendub/src/DiffuEraser/requirements.txt >
+    {home}/.opendub/src/DiffuEraser/requirements.arena.txt
+  - uv pip install --python {python} -r {home}/.opendub/src/DiffuEraser/requirements.arena.txt pillow
+    huggingface-hub
+  - uvx --from huggingface_hub hf download lixiaowen/diffuEraser --local-dir {home}/.opendub/src/DiffuEraser/weights/diffuEraser
+  - uvx --from huggingface_hub hf download stable-diffusion-v1-5/stable-diffusion-v1-5 --local-dir {home}/.opendub/src/DiffuEraser/weights/stable-diffusion-v1-5
+    --include '*.json' '*.txt' 'unet/*' 'vae/*' 'text_encoder/*' 'tokenizer/*' 'scheduler/*'
+  - uvx --from huggingface_hub hf download wangfuyun/PCM_Weights --local-dir {home}/.opendub/src/DiffuEraser/weights/PCM_Weights
+  - uvx --from huggingface_hub hf download stabilityai/sd-vae-ft-mse --local-dir {home}/.opendub/src/DiffuEraser/weights/sd-vae-ft-mse
+  - mkdir -p {home}/.opendub/src/DiffuEraser/weights/propainter && cd {home}/.opendub/src/DiffuEraser/weights/propainter
+    && for f in ProPainter.pth raft-things.pth recurrent_flow_completion.pth; do test -f $f || curl -LO
+    https://github.com/sczhou/ProPainter/releases/download/v0.1.0/$f; done
+  aarch64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+  - test -d {home}/.opendub/src/DiffuEraser || git clone https://github.com/lixiaowen-xw/DiffuEraser {home}/.opendub/src/DiffuEraser
+  - git -C {home}/.opendub/src/DiffuEraser checkout 8e6f279ac753
+  - grep -v -i -E '^(torch|torchvision|torchaudio)' {home}/.opendub/src/DiffuEraser/requirements.txt >
+    {home}/.opendub/src/DiffuEraser/requirements.arena.txt
+  - uv pip install --python {python} -r {home}/.opendub/src/DiffuEraser/requirements.arena.txt pillow
+    huggingface-hub
+  - uvx --from huggingface_hub hf download lixiaowen/diffuEraser --local-dir {home}/.opendub/src/DiffuEraser/weights/diffuEraser
+  - uvx --from huggingface_hub hf download stable-diffusion-v1-5/stable-diffusion-v1-5 --local-dir {home}/.opendub/src/DiffuEraser/weights/stable-diffusion-v1-5
+    --include '*.json' '*.txt' 'unet/*' 'vae/*' 'text_encoder/*' 'tokenizer/*' 'scheduler/*'
+  - uvx --from huggingface_hub hf download wangfuyun/PCM_Weights --local-dir {home}/.opendub/src/DiffuEraser/weights/PCM_Weights
+  - uvx --from huggingface_hub hf download stabilityai/sd-vae-ft-mse --local-dir {home}/.opendub/src/DiffuEraser/weights/sd-vae-ft-mse
+  - mkdir -p {home}/.opendub/src/DiffuEraser/weights/propainter && cd {home}/.opendub/src/DiffuEraser/weights/propainter
+    && for f in ProPainter.pth raft-things.pth recurrent_flow_completion.pth; do test -f $f || curl -LO
+    https://github.com/sczhou/ProPainter/releases/download/v0.1.0/$f; done
+check: import torch, diffusers; assert torch.cuda.is_available()
+notes: Weight folder names follow the README's layout (weights/…) as reported by the research pass; verify
+  against run_diffueraser.py defaults.

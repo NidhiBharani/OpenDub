@@ -1,0 +1,14 @@
+name: a6_pyannote3
+python: ~/.opendub/envs/a6_pyannote3/bin/python
+description: 'pyannote.audio 3.4.0: speaker-diarization-3.1 and wespeaker-voxceleb-resnet34-LM (gated
+  HF repos: HF_TOKEN). torch 2.8 keeps the torchaudio I/O pyannote 3 uses.'
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} pyannote.audio==3.4.0 soundfile librosa numpy
+  aarch64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} pyannote.audio==3.4.0 soundfile librosa numpy
+check: import pyannote.audio, torch; assert torch.cuda.is_available()

@@ -1,0 +1,13 @@
+name: c2_api
+python: ~/.opendub/envs/c2_api/bin/python
+description: >-
+  Vendor SDKs for the C-phase API workers (c2_anthropic, c2_openai, c2_gemini). No GPU, no
+  weights; pure-Python wheels, identical on both architectures.
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} anthropic==1.8.0 openai==3.19.2 google-genai==2.25.0
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} anthropic==1.8.0 openai==3.19.2 google-genai==2.25.0
+check: "import anthropic, openai; from google import genai; print(anthropic.__version__, openai.__version__)"

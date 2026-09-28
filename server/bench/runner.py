@@ -12,7 +12,7 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
@@ -47,10 +47,10 @@ class _VramSampler:
         try:
             out = subprocess.run(
                 ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, timeout=5, check=False,
             )
             return float(out.stdout.strip().splitlines()[0])
-        except Exception:
+        except (OSError, subprocess.SubprocessError, ValueError, IndexError):
             return 0.0
 
     def _loop(self):
@@ -76,7 +76,7 @@ def _as_epoch(dt: datetime | None) -> float | None:
     if dt is None:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt.timestamp()
 
 
@@ -161,6 +161,6 @@ async def _score_all(ctx: MetricContext) -> list[Metric]:
     for label, module in MODULES:
         try:
             metrics.extend(await module.score(ctx))
-        except Exception as e:  # a metric module must never abort the whole run
+        except Exception as e:  # noqa: BLE001 - a metric module must never abort the whole run
             metrics.append(Metric(f"{label}.error", None, note=f"metric module crashed: {e!r}"))
     return metrics

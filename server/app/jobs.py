@@ -17,6 +17,7 @@ This module is one of the two allowed global-mutable-state singletons (see ARCHI
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 import uuid
 from collections import deque
@@ -318,8 +319,8 @@ class JobEngine:
             return
         try:
             cleanup(job)
-        except Exception:  # pragma: no cover - cleanup must never break engine state
-            pass
+        except Exception:  # pragma: no cover - cleanup must never break the engine
+            logging.getLogger(__name__).exception("cleanup for job %s failed", job.id)
 
     def _finalize(self, job: Job) -> None:
         self._cleanups.pop(job.id, None)

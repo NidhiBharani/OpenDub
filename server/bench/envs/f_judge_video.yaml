@@ -1,0 +1,19 @@
+name: f_judge_video
+python: ~/.opendub/envs/f_judge_video/bin/python
+description: 'Phase-F video judge: LPIPS (AlexNet) + I3D TorchScript (StyleGAN-V FVD port) for a per-clip
+  Fréchet distance.'
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.11
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} lpips==0.1.4 scipy numpy==1.26.4
+  - mkdir -p {home}/.opendub/weights && test -f {home}/.opendub/weights/i3d_torchscript.pt || curl -L
+    'https://www.dropbox.com/s/ge9e5ujwgetktms/i3d_torchscript.pt?dl=1' -o {home}/.opendub/weights/i3d_torchscript.pt
+  aarch64:
+  - uv venv {prefix} --python 3.11
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} lpips==0.1.4 scipy numpy==1.26.4
+  - mkdir -p {home}/.opendub/weights && test -f {home}/.opendub/weights/i3d_torchscript.pt || curl -L
+    'https://www.dropbox.com/s/ge9e5ujwgetktms/i3d_torchscript.pt?dl=1' -o {home}/.opendub/weights/i3d_torchscript.pt
+check: import lpips, scipy, torch; assert torch.cuda.is_available()
+notes: Without the I3D file the judge still reports lpips and skips fvd_clip.

@@ -8,7 +8,12 @@ import asyncio
 from pathlib import Path
 
 from ...models import ASRSegment, Word
+from .._runtime import manager
 from ..base import ASRProvider, ConfigField, ProgressFn, ProviderMeta, register
+
+# Rough fp16 VRAM per checkpoint (GB), for the model manager's GPU budget. int8 is about half.
+_VRAM_GB = {"large-v3": 3.5, "large-v2": 3.5, "large-v3-turbo": 1.8, "medium": 1.6,
+            "small": 0.7, "base": 0.3, "tiny": 0.2}
 
 
 def _preload_cuda_libs() -> None:
@@ -33,6 +38,33 @@ def _preload_cuda_libs() -> None:
                 ctypes.CDLL(str(lib), mode=ctypes.RTLD_GLOBAL)
             except OSError:
                 pass
+
+
+def whisper_vram_gb(model_name: str, device: str, compute_type: str) -> float | None:
+    """Estimated VRAM for a faster-whisper model; 0 on CPU, None when unknown."""
+    if device == "cpu":
+        return 0.0
+    base = _VRAM_GB.get(model_name.rsplit("/", 1)[-1].removeprefix("faster-whisper-"))
+    if base is None:
+        return None
+    return base / 2 if "int8" in compute_type else base
+
+
+def acquire_whisper(model_name: str, device: str = "auto", compute_type: str = "auto",
+                    **kwargs: object):
+    """Shared, managed faster-whisper model (context manager). Blocking: call from a thread."""
+
+    def load():
+        from faster_whisper import WhisperModel
+
+        _preload_cuda_libs()
+        return WhisperModel(model_name, device=device, compute_type=compute_type, **kwargs)
+
+    return manager.acquire(
+        ("asr.faster_whisper", model_name, device, compute_type),
+        load,
+        est_vram_gb=whisper_vram_gb(model_name, device, compute_type),
+    )
 
 
 @register
@@ -87,19 +119,20 @@ class FasterWhisperASR(ASRProvider):
     ) -> list[ASRSegment]:
         from ...media.ffmpeg import wav_duration
 
-        model_name = self.opt("model", "large-v3-turbo")
-        device = self.opt("device", "auto")
-        compute_type = self.opt("compute_type", "auto")
+        model_name = str(self.opt("model", "large-v3-turbo"))
+        device = str(self.opt("device", "auto"))
+        compute_type = str(self.opt("compute_type", "auto"))
         vad = self.opt_bool("vad", True)
         lang = None if language in ("", "auto") else language
 
         duration = await wav_duration(audio)
 
         def _run() -> list[ASRSegment]:
-            from faster_whisper import WhisperModel
+            with acquire_whisper(model_name, device, compute_type) as model:
+                return _decode(model)
 
-            _preload_cuda_libs()
-            model = WhisperModel(model_name, device=device, compute_type=compute_type)
+        def _decode(model) -> list[ASRSegment]:
+            # The segment iterator is lazy: it must be drained while the model is acquired.
             seg_iter, _info = model.transcribe(
                 str(audio),
                 language=lang,

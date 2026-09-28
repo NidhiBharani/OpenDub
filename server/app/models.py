@@ -5,7 +5,7 @@ Mirrored field-for-field (snake_case) in web/src/types.ts. Change both together.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, model_validator
@@ -29,7 +29,7 @@ JobStatus = Literal["queued", "running", "done", "error", "cancelled"]
 
 
 def now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def new_id(prefix: str) -> str:
@@ -315,6 +315,9 @@ class TranslationRequest(BaseModel):
     duration: float = 0.0  # seconds available in the slot
     context_before: list[str] = Field(default_factory=list)
     context_after: list[str] = Field(default_factory=list)
+    terminology: dict[str, str] = Field(default_factory=dict)
+    previous_translation: str = ""
+    measured_duration: float | None = None
 
 
 class TTSRequest(BaseModel):

@@ -37,3 +37,19 @@ def test_long_run_is_capped_at_its_widest_gap():
 def test_segments_without_words_pass_through():
     seg = ASRSegment(start=1, end=2, text="[line 1]")
     assert resegment([seg]) == [seg]
+
+
+def test_overlapping_words_are_not_merged_into_one_speaker_run():
+    a = ASRSegment(start=0, end=2, text='A', words=_words([(0, 2, ' A')]))
+    b = ASRSegment(start=1, end=3, text='B', words=_words([(1, 3, ' B')]))
+    lines = resegment([a, b])
+    assert [line.text for line in lines] == ['A', 'B']
+    assert lines[0].end == 2 and lines[1].start == 1
+
+
+def test_resegmentation_keeps_adjacent_speaker_turns_separate():
+    from app.pipeline.segmentation import resegment_speakers
+    a = ASRSegment(start=0, end=1, text='A', words=_words([(0, 1, ' A')]))
+    b = ASRSegment(start=1.05, end=2, text='B', words=_words([(1.05, 2, ' B')]))
+    lines, labels = resegment_speakers([a, b], ['A', 'B'])
+    assert len(lines) == 2 and labels == ['A', 'B']

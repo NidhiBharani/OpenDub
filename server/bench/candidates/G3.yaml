@@ -1,0 +1,235 @@
+# G3 — naturalness (MOS) predictor, ranked by SRCC with human MOS (spec: specs/g3.py).
+# Local predictors run in workers/judge_mos.py (env judge_mos); LLM raters via g6_* workers.
+capability: G3
+candidates:
+  - id: utmosv2
+    worker: judge_mos
+    env: judge_mos
+    kind: local
+    params: {model: utmosv2}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2.5}
+    url: https://github.com/sarulab-speech/UTMOSv2
+    sources: [research:G3:2, compute-tiers:G3:spark]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      VMC2024 track-1 winner (high-quality synthetic speech); per-take ranker pick. Param count
+      differs between the artifacts (~120M vs ~400M class): left unset. Within-language only.
+  - id: distill-mos
+    worker: judge_mos
+    env: judge_mos
+    kind: local
+    params: {model: distillmos}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 0.5}
+    url: https://github.com/microsoft/Distill-MOS
+    params_b: 0.0043
+    sources: [research:G3:3, compute-tiers:G3:spark]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: XLS-R-SQA student (different lineage from UTMOSv2); cheap second opinion.
+  - id: audiobox-aesthetics-pq
+    worker: judge_mos
+    env: judge_mos
+    kind: local
+    params: {model: audiobox, score: aes_pq}
+    languages: "*"
+    license: CC-BY-4.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1.5}
+    url: https://huggingface.co/facebook/audiobox-aesthetics
+    sources: [research:G3:4, compute-tiers:G3:spark-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      Production Quality axis (the artefact gate). Weights are CC-BY-4.0 per the repo (the
+      research guessed NC). All four axes are in the payload metrics.
+  - id: audiobox-aesthetics-ce
+    worker: judge_mos
+    env: judge_mos
+    kind: local
+    params: {model: audiobox, score: aes_ce}
+    languages: "*"
+    license: CC-BY-4.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1.5}
+    url: https://huggingface.co/facebook/audiobox-aesthetics
+    sources: [research:G3:4]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: Content Enjoyment axis, to check which Audiobox axis tracks naturalness MOS.
+  - id: nisqa-v2
+    worker: judge_mos
+    env: judge_mos
+    kind: local
+    params: {model: nisqa}
+    languages: "*"
+    license: MIT code; weights CC BY-NC-SA 4.0
+    ship_ok: false
+    requires: {gpu: false}
+    url: https://github.com/gabrielmittag/NISQA
+    sources: [research:G3:5, compute-tiers:G3:spark-alt]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: NISQA v2.0 via torchmetrics (48 kHz input); noisiness/coloration/discontinuity/loudness sub-scores kept.
+  - id: nisqa-tts
+    worker: judge_mos
+    env: judge_mos
+    kind: local
+    params: {model: nisqa-tts}
+    languages: "*"
+    license: MIT code; weights CC BY-NC-SA 4.0
+    ship_ok: false
+    requires: {gpu: false}
+    url: https://github.com/gabrielmittag/NISQA
+    sources: [research:G3:5]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: The dedicated TTS-naturalness head (weights/nisqa_tts.tar in the repo; API args unverified).
+  - id: dnsmos-p808
+    worker: judge_mos
+    env: judge_mos
+    kind: local
+    params: {model: dnsmos}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: false}
+    url: https://github.com/microsoft/DNS-Challenge/tree/master/DNSMOS
+    sources: [research:G3:6]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: Listed to rule out (noise-suppression metric); ONNX on CPU via torchmetrics.
+  - id: xls-r-sqa-2b
+    worker: judge_mos
+    env: judge_mos
+    kind: local
+    params: {model: xls-r-sqa, size: 2b, layers: 10, variant: full}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 6}
+    url: https://github.com/lcn-kul/xls-r-analysis-sqa
+    params_b: 2.0
+    sources: [compute-tiers:G3:big-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      The Distill-MOS teacher family (XLS-R truncated at layer 10 + transformer head; params_b is
+      the untruncated backbone). VRAM is an estimate.
+  - id: xls-r-sqa-300m
+    worker: judge_mos
+    env: judge_mos
+    kind: local
+    params: {model: xls-r-sqa, size: 300m, layers: 21, variant: full}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2}
+    url: https://github.com/lcn-kul/xls-r-analysis-sqa
+    params_b: 0.3
+    sources: [compute-tiers:G3:big-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: Smaller teacher variant for the size/quality curve.
+  - id: gemini-3.7-flash-mos
+    worker: g6_gemini
+    env: g6_api
+    kind: api
+    params: {model: gemini-3.7-flash, task: mos, prices: {in: 0.75, out: 3.75}}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    url: https://ai.google.dev/gemini-api/docs/models
+    sources: [compute-tiers:G3:api]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: LALM MOS judge (VMC2026 organisers' baseline class); prices checked 2026-09-28.
+  - id: gemini-3.1-pro-mos
+    worker: g6_gemini
+    env: g6_api
+    kind: api
+    params: {model: gemini-3.1-pro-preview, task: mos, prices: {in: 2.0, out: 12.0}}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    url: https://ai.google.dev/gemini-api/docs/models
+    sources: [compute-tiers:G3:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+  - id: gpt-audio-1.5-mos
+    worker: g6_openai
+    env: g6_api
+    kind: api
+    params: {model: gpt-audio-1.5, task: mos, prices: {text_in: 2.5, audio_in: 32.0, out: 10.0}}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [OPENAI_API_KEY]}
+    url: https://developers.openai.com/api/docs/models/gpt-audio-1.5
+    sources: [compute-tiers:G3:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+  - id: ttsds2
+    worker: judge_mos
+    env: judge_mos
+    kind: method
+    params: {model: ttsds2}
+    languages: [en, de, fr, es, it, pt, nl, pl, ru, zh, ja, ko, hi, ar]
+    license: open source (verify)
+    ship_ok: null
+    enabled: false
+    url: https://github.com/ttsds/ttsds
+    sources: [research:G3:1, compute-tiers:G3:spark, compute-tiers:G3:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      Research #1, but distributional and system-level (needs a system's whole output set vs
+      references): it cannot give a per-utterance prediction, so utterance SRCC does not apply.
+      Use it inside D-phase system comparisons instead.
+  - id: mambarate
+    worker: judge_mos
+    env: judge_mos
+    kind: local
+    params: {model: mambarate}
+    languages: "*"
+    license: unknown
+    ship_ok: null
+    enabled: false
+    url: https://arxiv.org/search/?query=MambaRate&searchtype=all
+    sources: [research:G3:7]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: AudioMOS 2025 T3 system (sampling-rate robust); code/weights release not verified.
+  - id: vmc2026-t09-ensemble
+    worker: judge_mos
+    env: judge_mos
+    kind: method
+    params: {model: ensemble}
+    languages: "*"
+    license: mixed
+    ship_ok: null
+    enabled: false
+    url: https://arxiv.org/abs/2609.13792
+    sources: [compute-tiers:G3:big]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: VoiceMOS 2026 winners (29-model ensemble T09 / 64-listener WavLM T02); not released.
+  - id: sq-llm
+    worker: judge_mos
+    env: judge_mos
+    kind: local
+    params: {model: sq-llm}
+    languages: "*"
+    license: unknown
+    ship_ok: null
+    enabled: false
+    url: https://arxiv.org/abs/2510.14664
+    sources: [research:G6:5]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: SpeechLLM-as-Judge fine-tuned quality rater; weight release not verified.
+  - id: indicmos
+    worker: judge_mos
+    env: judge_mos
+    kind: local
+    params: {model: indicmos}
+    languages: [hi]
+    license: unknown
+    ship_ok: null
+    enabled: false
+    url: https://github.com/AI4Bharat
+    sources: [plan:G3-indic]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: The plan names IndicMOS for Indic naturalness; checkpoint not located/verified.

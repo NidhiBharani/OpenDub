@@ -1,0 +1,174 @@
+# E4 — dialogue levelling + delivery loudness. Sources: model-research.html #E4 (ranks 1–6) and
+# compute-tiers.html #E4. Everything runnable is CPU DSP or an API.
+capability: E4
+candidates:
+  - id: static-chain
+    url: server/app/pipeline/audio.py (mix_tracks)
+    params_b: 0
+    worker: e4_static_chain
+    kind: local
+    params: {ducking_mix: 0.0, background_gain_db: 0.0}
+    languages: "*"
+    license: Apache-2.0 + LGPL ffmpeg
+    ship_ok: true
+    requires: {tools: [ffmpeg]}
+    baseline: true
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      loudness.static as shipped (app.pipeline.audio.mix_tracks): programme-gated static gains,
+      −1.5 dBFS sample-peak alimiter, the delivery preset only sets the integrated target.
+  - id: static-chain+duck
+    url: https://ffmpeg.org/ffmpeg-filters.html#sidechaincompress
+    params_b: 0
+    worker: e4_static_chain
+    kind: local
+    params: {ducking_mix: 0.5, background_gain_db: 0.0}
+    languages: "*"
+    license: Apache-2.0 + LGPL ffmpeg
+    ship_ok: true
+    requires: {tools: [ffmpeg]}
+    sources: [research:E4:3]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: the app's optional sidechain duck of the bed (sidechaincompress, ratio 3, 25/250 ms)
+  - id: bs1770-levelled
+    url: https://github.com/csteinmetz1/pyloudnorm
+    params_b: 0
+    worker: e4_bs1770
+    env: e4_pyloudnorm
+    kind: local
+    params: {levelling: true, max_line_gain: 9.0, tp_margin: 0.3, passes: 3, lookahead_ms: 5.0}
+    languages: "*"
+    license: MIT (pyloudnorm) + Apache-2.0
+    ship_ok: true
+    requires: {}
+    sources: [research:E4:1, research:E4:2, compute-tiers:E4:spark]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      Two-pass BS.1770 static chain with per-deliverable targets, dialogue gating on the known
+      line windows (replacing the relative gate), per-line levelling to the original, 4× TP limiter.
+  - id: bs1770-static
+    url: https://github.com/csteinmetz1/pyloudnorm
+    params_b: 0
+    worker: e4_bs1770
+    env: e4_pyloudnorm
+    kind: local
+    params: {levelling: false, tp_margin: 0.3, passes: 3, lookahead_ms: 5.0}
+    languages: "*"
+    license: MIT (pyloudnorm) + Apache-2.0
+    ship_ok: true
+    requires: {}
+    sources: [research:E4:1, compute-tiers:E4:spark]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: same chain without per-line levelling (isolates the levelling contribution)
+  - id: ffmpeg-loudnorm-2pass
+    url: https://ffmpeg.org/ffmpeg-filters.html#loudnorm
+    params_b: 0
+    worker: e4_ffmpeg_loudnorm
+    kind: local
+    params: {lra: 20, tp_margin: 0.0}
+    languages: "*"
+    license: LGPL-2.1-or-later (ffmpeg)
+    ship_ok: true
+    requires: {tools: [ffmpeg]}
+    sources: [research:E4:1]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: two-pass linear loudnorm on the premix; programme gating; falls back to dynamic mode on TP
+  - id: auphonic
+    url: https://auphonic.com/help/api/simple_api.html
+    worker: e4_auphonic
+    kind: api
+    params: {api: simple/productions, usd_per_hour: 1.5}
+    languages: "*"
+    license: proprietary SaaS
+    ship_ok: true
+    requires: {api_keys: [AUPHONIC_API_KEY]}
+    sources: [research:E4:4, compute-tiers:E4:api-alt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      Adaptive Leveler + loudness target via the Simple API. Set params.preset to a preset with
+      48 kHz WAV output; per-hour price is plan-dependent (usd_per_hour unverified).
+  # ---- registered, not runnable
+  - id: dolby-io-media-enhance
+    url: https://optiview.dolby.com/docs/
+    worker: e4_dolby_enhance
+    kind: api
+    enabled: false
+    languages: "*"
+    license: proprietary API
+    sources: [compute-tiers:E4:api]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: speech levelling + loudness API; docs.dolby.io now redirects to Dolby OptiView, availability unconfirmed
+  - id: dolby-dialogue-gating-reference
+    worker: e4_dolby_dialogue_gate
+    enabled: false
+    languages: "*"
+    license: Dolby reference-code terms (not redistributable in Apache-2.0)
+    ship_ok: false
+    sources: [research:E4:2]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: the in-house timing-gated variant (bs1770-levelled) is preferred, as the research advises
+  - id: st-ito
+    url: https://github.com/csteinmetz1/st-ito
+    worker: e4_st_ito
+    enabled: false
+    languages: "*"
+    license: Apache-2.0
+    sources: [research:E4:5, compute-tiers:E4:spark-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: learned parameter search over a VST chain (plugins not bundled); cannot hit a loudness number
+  - id: deepafx-st
+    url: https://github.com/adobe-research/DeepAFx-ST
+    worker: e4_deepafx_st
+    enabled: false
+    languages: "*"
+    license: NOASSERTION (treat as non-commercial)
+    ship_ok: false
+    sources: [compute-tiers:E4:spark-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: production-style transfer; licence to clear; no loudness target
+  - id: neural-automix
+    worker: e4_neural_automix
+    enabled: false
+    languages: "*"
+    license: varies
+    sources: [research:E4:6]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: no public model trained on delivery levelling; "the wrong tool" per the ledger
+  - id: dialog-plus-remix
+    url: https://arxiv.org/abs/2112.09494
+    worker: e4_dialog_plus
+    enabled: false
+    languages: "*"
+    license: proprietary (Fraunhofer IIS)
+    ship_ok: false
+    sources: [compute-tiers:E4:spark-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: dialogue separation + remix; only its 1–4 kHz dialogue-boost finding is reusable
+  - id: harmony-search-automix
+    url: https://joshreiss.github.io/documents/2025/Liu2025JAESAutomaticMixingSpeech.pdf
+    params_b: 0
+    worker: e4_harmony_search
+    enabled: false
+    languages: "*"
+    license: paper only (Liu & Reiss, JAES 2025)
+    sources: [compute-tiers:E4:big]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: classical optimisation over level/EQ/DRC; no released code
+  - id: audio-llm-mix-critic
+    worker: e4_llm_critic
+    kind: method
+    enabled: false
+    languages: "*"
+    license: n/a
+    sources: [compute-tiers:E4:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: research idea, untested
+  - id: nugen-lm-correct
+    worker: e4_nugen
+    enabled: false
+    languages: "*"
+    license: proprietary plugin
+    ship_ok: false
+    sources: [compute-tiers:E4:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: plugin/standalone, no REST API

@@ -1,0 +1,18 @@
+name: d8_step_audio2
+python: ~/.opendub/envs/d8_step_audio2/bin/python
+description: "Step-Audio 2 mini (StepFun, Apache-2.0) from the Step-Audio2 repo"
+setup:
+  x86_64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu128 torch==2.11.0 torchaudio==2.11.0"
+    - "test -d {home}/.opendub/src/Step-Audio2 || git clone https://github.com/stepfun-ai/Step-Audio2 {home}/.opendub/src/Step-Audio2 && git -C {home}/.opendub/src/Step-Audio2 checkout 76e272b56c3917a8d7188f18bbb5a65dfc8a0845"
+    - "uv pip install --python {python} transformers==4.49.0 librosa onnxruntime s3tokenizer diffusers hyperpyyaml"
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('stepfun-ai/Step-Audio-2-mini', local_dir='{home}/.opendub/src/Step-Audio2/Step-Audio-2-mini', revision='e36fdd5d71e0ea22f09dd94bbab9bfc544ca1e36')\""
+  aarch64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu130 torch==2.11.0 torchaudio==2.11.0"
+    - "test -d {home}/.opendub/src/Step-Audio2 || git clone https://github.com/stepfun-ai/Step-Audio2 {home}/.opendub/src/Step-Audio2 && git -C {home}/.opendub/src/Step-Audio2 checkout 76e272b56c3917a8d7188f18bbb5a65dfc8a0845"
+    - "uv pip install --python {python} transformers==4.49.0 librosa onnxruntime s3tokenizer diffusers hyperpyyaml"
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('stepfun-ai/Step-Audio-2-mini', local_dir='{home}/.opendub/src/Step-Audio2/Step-Audio-2-mini', revision='e36fdd5d71e0ea22f09dd94bbab9bfc544ca1e36')\""
+check: "import torch; assert torch.cuda.is_available()"
+notes: "Dependencies copied from the repo README (pip install transformers==4.49.0 torchaudio librosa onnxruntime s3tokenizer diffusers hyperpyyaml; README targets python 3.10)."

@@ -1,0 +1,16 @@
+name: a8_qwen_omni
+python: ~/.opendub/envs/a8_qwen_omni/bin/python
+description: 'Qwen3-Omni-30B-A3B via transformers (Qwen3OmniMoe*) + qwen-omni-utils. ~79 GB bf16: DGX
+  Spark.'
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} transformers==5.17.0 accelerate qwen-omni-utils soundfile librosa
+    numpy
+  aarch64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} transformers==5.17.0 accelerate qwen-omni-utils soundfile librosa
+    numpy
+check: import transformers, qwen_omni_utils, torch; assert torch.cuda.is_available()

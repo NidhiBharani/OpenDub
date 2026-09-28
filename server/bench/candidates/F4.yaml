@@ -1,0 +1,376 @@
+# F4 — on-screen text replacement. Sources: model-research.html (#F4, 10 rows), compute-tiers.html
+# (#F4 picks/alternates), docs/model-candidates-by-compute.md. Spec: bench/arena/specs/f4.py.
+# Pack: f4_overlay_synth (known boxes, clean plates, hand translations; lang = target).
+# Image editors edit the mid-span keyframe and the box region is pasted into the span
+# (static overlays; planar tracking for moving text is out of scope for this pack).
+capability: F4
+candidates:
+  - id: passthrough
+    url: server/bench/arena/workers/f_passthrough.py  # own method (in this repo)
+    params_b: 0
+    worker: f_passthrough
+    env: server
+    kind: method
+    params: {}
+    languages: "*"
+    license: n/a
+    ship_ok: true
+    requires: {}
+    baseline: true
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: Today's behaviour — nothing is replaced (the floor for ocr_cer / src_leak).
+
+  - id: overlay-plate-template
+    url: server/bench/arena/workers/f4_overlay.py  # own method (in this repo)
+    params_b: 0
+    worker: f4_overlay
+    env: server
+    kind: method
+    params: {plate: true}
+    languages: "*"
+    license: n/a (own implementation; Noto fonts SIL OFL 1.1)
+    ship_ok: true
+    requires: {}
+    sources: ["research:F4:1"]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      Research verdict: ship this first. Colour-matched opaque plate + rendered translation, and a
+      JSON cue template for a finisher. Deterministic; looks like a localisation plate.
+
+  - id: clear-render
+    url: https://huggingface.co/charlesw09/CLEAR-mask-free-video-subtitle-removal
+    params_b: 1.3
+    worker: f4_clear
+    env: f4_clear
+    kind: local
+    params: {lora_rank: 64, lora_scale: 1.0, num_steps: 5, cfg_scale: 1.0, sliding_window: true,
+             render: true}
+    languages: "*"
+    license: Apache-2.0 (CLEAR code + LoRA; base Wan2.1-Fun-V1.1-1.3B-Control Apache-2.0)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 14, disk_gb: 25}
+    sources: ["research:F4:2", "compute-tiers:F4:spark-alt", "compute-tiers:F4:big-alt"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Mask-free subtitle eraser (zero-shot en/ko/fr/ja/ru/de) + the overlay renderer without a
+      plate. 4.86 s/frame in the paper. VRAM is an estimate for a 1.3B Wan2.1 control model at
+      the pack's 1280x720 (not stated upstream). Repo 3cd19a2c; the README's base-model line is
+      wrong (the code loads Wan2.1-Fun-V1.1-1.3B-Control).
+
+  - id: flux2-klein-4b
+    url: https://huggingface.co/black-forest-labs/FLUX.2-klein-4B
+    params_b: 4
+    worker: f4_diffusers_edit
+    env: f4_diffusers
+    kind: local
+    params: {pipeline: flux2-klein, model: black-forest-labs/FLUX.2-klein-4B, dtype: bfloat16,
+             steps: 4, guidance: 1.0, seed: 0, max_side: 1024}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 14.5, disk_gb: 16}
+    sources: ["compute-tiers:F4:spark-alt"]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: Model card ~13 GB (+10%). Sub-second edits. diffusers ≥ 0.37 (Flux2KleinPipeline).
+
+  - id: flux2-klein-9b
+    url: https://huggingface.co/black-forest-labs/FLUX.2-klein-9B
+    params_b: 9
+    worker: f4_diffusers_edit
+    env: f4_diffusers
+    kind: local
+    params: {pipeline: flux2-klein, model: black-forest-labs/FLUX.2-klein-9B, dtype: bfloat16,
+             steps: 4, guidance: 1.0, seed: 0, max_side: 1024}
+    languages: "*"
+    license: FLUX Non-Commercial License (gated)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 32, disk_gb: 30, api_keys: [HF_TOKEN]}
+    profiles: [spark]
+    sources: ["compute-tiers:F4:spark-alt"]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: Model card ~29 GB (+10%) → Spark (or a 32 GB+ card).
+
+  - id: flux2-dev-32b
+    url: https://huggingface.co/black-forest-labs/FLUX.2-dev
+    params_b: 32
+    worker: f4_diffusers_edit
+    env: f4_diffusers
+    kind: local
+    params: {pipeline: flux2, model: black-forest-labs/FLUX.2-dev, dtype: bfloat16, steps: 28,
+             guidance: 4.0, seed: 0, max_side: 1024}
+    languages: "*"
+    license: FLUX.2-dev Non-Commercial License (gated)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 100, disk_gb: 110, api_keys: [HF_TOKEN]}
+    profiles: [spark]
+    sources: ["compute-tiers:F4:big"]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      Unconstrained pick (with best-of-N OCR re-ranking, not implemented). BF16 estimate: 32B
+      transformer (~64 GB) + Mistral-3 24B text encoder (~48 GB) exceeds ~112 GB; the worker
+      would need the FP8/bnb-4bit variants — unverified that it fits the Spark as configured.
+
+  - id: qwen-image-edit-2511-bf16
+    url: https://huggingface.co/Qwen/Qwen-Image-Edit-2511
+    params_b: 20
+    worker: f4_diffusers_edit
+    env: f4_diffusers
+    kind: local
+    params: {pipeline: qwen-edit-plus, model: Qwen/Qwen-Image-Edit-2511, dtype: bfloat16,
+             steps: 40, true_cfg_scale: 4.0, seed: 0, max_side: 1024}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 64, disk_gb: 60}
+    profiles: [spark]
+    sources: ["research:F4:3", "compute-tiers:F4:spark", "compute-tiers:F4:big-alt"]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      Spark pick for re-render. Weights: 40.9 GB transformer + 16.6 GB text encoder (~58 GB);
+      peak not stated, +10%. The research ledger's "Qwen-Image-Edit" (2508) is pinned to 2511 per
+      the compute-tiers correction.
+
+  - id: qwen-image-edit-2511-q4-gguf
+    url: https://huggingface.co/unsloth/Qwen-Image-Edit-2511-GGUF
+    params_b: 20
+    worker: f4_diffusers_edit
+    env: f4_diffusers
+    kind: local
+    params: {pipeline: qwen-edit-plus, model: Qwen/Qwen-Image-Edit-2511, dtype: bfloat16,
+             transformer_gguf: "unsloth/Qwen-Image-Edit-2511-GGUF:qwen-image-edit-2511-Q4_K_M.gguf",
+             cpu_offload: true, steps: 40, true_cfg_scale: 4.0, seed: 0, max_side: 1024}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 14.5, ram_gb: 22, disk_gb: 32}
+    sources: ["research:F4:3", "compute-tiers:F4:spark"]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      Q4_K_M transformer (13.24 GB file). The 16.6 GB Qwen2.5-VL text encoder cannot share a
+      16 GB card, so cpu_offload moves whole models (model-level offload, not block swap) —
+      tight on Thalassa's 24 GB RAM; unverified. This is an image model, not a 14B+ video DiT.
+
+  - id: qwen-image-edit-2511-nunchaku-fp4
+    url: https://huggingface.co/stuqiu/nunchaku-qwen-image-edit-2511
+    params_b: 20
+    worker: f4_diffusers_edit
+    env: f4_nunchaku
+    kind: local
+    params: {pipeline: qwen-edit-plus, model: Qwen/Qwen-Image-Edit-2511, dtype: bfloat16,
+             nunchaku: "stuqiu/nunchaku-qwen-image-edit-2511:svdq-fp4_r128-qwen-image-edit-2511.safetensors",
+             cpu_offload: true, steps: 40, true_cfg_scale: 4.0, seed: 0, max_side: 1024}
+    languages: "*"
+    license: Apache-2.0 (base); third-party SVDQuant conversion
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 14.5, ram_gb: 22, disk_gb: 30, arch: [x86_64],
+               min_compute_capability: "12.0"}
+    sources: ["compute-tiers:F4:spark"]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      No official nunchaku-ai 2511 checkpoint; this third-party FP4 (r128) quant's exact file name
+      is unverified. Nunchaku v1.2.1 wheels are x86_64 only (cu13 torch 2.9–2.11). FP4 needs
+      Blackwell.
+
+  - id: diffueraser-render
+    url: https://huggingface.co/lixiaowen/diffuEraser
+    params_b: null
+    worker: f4_diffueraser
+    env: f4_diffueraser
+    kind: local
+    params: {use: diffueraser, max_img_size: 640, mask_dilation_iter: 8, pad: 6, render: true}
+    languages: "*"
+    license: Apache-2.0 except third-party parts; the ProPainter prior is NTU S-Lab (NC)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 13, disk_gb: 15}
+    sources: ["research:F4:9"]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: Generic mask-based video inpainting baseline (README 12 GB at 640x360); box masks come from the pack.
+
+  - id: propainter-render
+    url: https://github.com/sczhou/ProPainter
+    params_b: null
+    worker: f4_diffueraser
+    env: f4_diffueraser
+    kind: local
+    params: {use: propainter, max_img_size: 640, mask_dilation_iter: 8, pad: 6, render: true}
+    languages: "*"
+    license: NTU S-Lab License 1.0 (non-commercial)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 13, disk_gb: 15}
+    sources: ["research:F4:9"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: The ProPainter prior DiffuEraser writes along the way; flow-propagation inpainting.
+
+  - id: nano-banana-pro
+    url: https://ai.google.dev/gemini-api/docs/image-generation
+    params_b: null
+    worker: f4_gemini_image
+    env: server
+    kind: api
+    params: {model: gemini-3-pro-image, image_size: 2K}
+    languages: "*"
+    license: proprietary API (Google)
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    sources: ["compute-tiers:F4:api"]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: $0.134/image at 1K–2K + $0.0011/input image (2026-09-28). Id without "-preview" per current docs.
+
+  - id: nano-banana-2
+    url: https://ai.google.dev/gemini-api/docs/image-generation
+    params_b: null
+    worker: f4_gemini_image
+    env: server
+    kind: api
+    params: {model: gemini-3.1-flash-image, image_size: 2K}
+    languages: "*"
+    license: proprietary API (Google)
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    sources: ["compute-tiers:F4:api-alt"]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: $0.067/image at 2K (2026-09-28).
+
+  - id: flux-kontext-pro
+    url: https://docs.bfl.ai/kontext/kontext_image_editing
+    params_b: null
+    worker: f4_bfl_api
+    env: server
+    kind: api
+    params: {endpoint: flux-kontext-pro, seed: 0}
+    languages: "*"
+    license: proprietary API (Black Forest Labs)
+    ship_ok: true
+    requires: {api_keys: [BFL_API_KEY]}
+    sources: ["research:F4:10"]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: $0.04/image (2026-09-28). Compute-tiers says it is superseded by FLUX.2; kept as the ledger's comparison point.
+
+  - id: flux-2-pro-api
+    url: https://docs.bfl.ai/
+    params_b: null
+    worker: f4_bfl_api
+    env: server
+    kind: api
+    params: {endpoint: flux-2-pro, seed: 0}
+    languages: "*"
+    license: proprietary API (Black Forest Labs)
+    ship_ok: true
+    requires: {api_keys: [BFL_API_KEY]}
+    sources: ["research:F4:10"]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: FLUX.2 [pro] editing from $0.045/image (per megapixel; 2026-09-28).
+
+  - id: qwen-image-edit-plus-api
+    url: https://www.alibabacloud.com/help/en/model-studio/qwen-image-edit
+    params_b: null
+    worker: f4_dashscope_image
+    env: server
+    kind: api
+    params: {model: qwen-image-edit-plus}
+    languages: "*"
+    license: proprietary API (Alibaba Model Studio)
+    ship_ok: true
+    requires: {api_keys: [DASHSCOPE_API_KEY]}
+    sources: ["research:F4:3"]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: $0.03/image, Singapore (2026-09-28).
+
+  - id: qwen-image-2.0-api
+    url: https://www.alibabacloud.com/help/en/model-studio/qwen-image-edit
+    params_b: 7
+    worker: f4_dashscope_image
+    env: server
+    kind: api
+    params: {model: qwen-image-2.0}
+    languages: "*"
+    license: proprietary API (Alibaba Model Studio; no open weights)
+    ship_ok: true
+    requires: {api_keys: [DASHSCOPE_API_KEY]}
+    sources: ["compute-tiers:F4:text"]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: API-only 7B (compute-tiers correction); $0.035/image (2026-09-28).
+
+  - id: vozo-visual-translate
+    url: https://www.vozo.ai/docs/api_reference/get_started
+    params_b: null
+    worker: f4_vozo_api
+    env: server
+    kind: api
+    params: {url_prefix: null, pack_root: null, price_per_item: 0.0}
+    languages: [en, hi, ja]
+    license: proprietary SaaS API (Vozo)
+    ship_ok: true
+    requires: {api_keys: [VOZO_API_KEY]}
+    enabled: false
+    sources: ["research:F4:6", "compute-tiers:F4:api-alt"]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      Public API (frame_translate) but URL-only input: set params.url_prefix/pack_root to a public
+      mirror of data/eval/F4 and enable. It translates by itself (our translation is passed as
+      guidance); billed in plan points (dollar rate unverified).
+
+  # ---------------------------------------------------------------- registered, not runnable
+  - id: sedit
+    url: https://zheng222.github.io/SEDiT_project
+    params_b: 2.4
+    worker: f4_clear
+    kind: local
+    languages: "*"
+    license: unknown
+    enabled: false
+    requires: {gpu: true, vram_gb: 10}
+    sources: ["research:F4:4", "compute-tiers:F4:spark", "compute-tiers:F4:big"]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: One-step mask-free eraser (ICML 2026) — compute-tiers' Spark erase pick — but only a project page and paper; no code or weights.
+
+  - id: textctrl
+    url: https://github.com/weichaozeng/TextCtrl
+    params_b: null
+    worker: f4_diffusers_edit
+    kind: local
+    languages: [en, zh]
+    license: no licence file
+    enabled: false
+    sources: ["research:F4:5"]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      Best specialist on ScenePair, but crop-level scene-text editing (i_s/i_t folder protocol),
+      Latin/Chinese only (no hi/ja), torch 1.13 + cu116 (no sm_120 build), no licence. Worker not
+      written; would need the crop → edit → paste wrapper.
+
+  - id: strive
+    url: https://github.com/striveiccv2021/STRIVE-ICCV2021
+    params_b: null
+    worker: f4_diffusers_edit
+    kind: local
+    languages: "*"
+    license: unknown
+    enabled: false
+    sources: ["research:F4:7"]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: ICCV 2021 architecture reference; the repo has dataset scripts only (no model code or weights).
+
+  - id: textwand
+    url: https://arxiv.org/abs/2606.05730
+    params_b: null
+    worker: f4_diffusers_edit
+    kind: local
+    languages: "*"
+    license: paper CC BY 4.0; code unknown
+    enabled: false
+    sources: ["research:F4:8"]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Unified image-level erase/generate/replace (June 2026); no code found.
+
+  - id: flux-kontext-dev
+    url: https://huggingface.co/black-forest-labs/FLUX.1-Kontext-dev
+    params_b: 12
+    worker: f4_diffusers_edit
+    kind: local
+    languages: "*"
+    license: FLUX.1 [dev] Non-Commercial
+    enabled: false
+    sources: ["research:F4:10"]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Open Kontext weights superseded by FLUX.2 [klein]/[dev] (compute-tiers correction); not registered as a separate runnable row.

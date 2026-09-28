@@ -1,0 +1,18 @@
+name: e2_unipase
+python: ~/.opendub/envs/e2_unipase/bin/python
+description: UniPASE (MIT code, pinned commit; weights Xiaobin-Rong/unipase on the HF Hub)
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} einops==0.8.2 espnet==202511 huggingface_hub==0.36.0 librosa==0.11.0 omegaconf==2.3.0 scipy==1.14.1 soundfile==0.13.1 tqdm
+    - test -d {home}/.opendub/src/unipase || git clone https://github.com/Xiaobin-Rong/unipase {home}/.opendub/src/unipase
+    - git -C {home}/.opendub/src/unipase checkout 857b60ad05d37a2cf6d7a89883ec9fc4fc164b45
+  aarch64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} einops==0.8.2 espnet==202511 huggingface_hub==0.36.0 librosa==0.11.0 omegaconf==2.3.0 scipy==1.14.1 soundfile==0.13.1 tqdm
+    - test -d {home}/.opendub/src/unipase || git clone https://github.com/Xiaobin-Rong/unipase {home}/.opendub/src/unipase
+    - git -C {home}/.opendub/src/unipase checkout 857b60ad05d37a2cf6d7a89883ec9fc4fc164b45
+check: "import sys, os, torch; sys.path.insert(0, os.path.expanduser('~/.opendub/src/unipase')); from models.unipase import UniPASE; assert torch.cuda.is_available()"
+notes: upstream requirements pin torch 2.6.0+cu118 (no sm_120/121 kernels); newer torch is used here, unverified.

@@ -1,0 +1,23 @@
+name: judge_lipsync_syncnet
+python: ~/.opendub/envs/judge_lipsync_syncnet/bin/python
+description: >-
+  SyncNet / LSE-C, LSE-D (joonson/syncnet_python, MIT code; VGG research weights) for
+  workers/judge_lipsync.py (model: syncnet). run_pipeline.py needs scenedetect 0.5.x, OpenCV and
+  python_speech_features; the S3FD face detector and SyncNet weights come from download_model.sh.
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} "scenedetect==0.5.1" opencv-python-headless python_speech_features scipy numpy
+    - test -d {home}/.opendub/src/syncnet_python || git clone https://github.com/joonson/syncnet_python {home}/.opendub/src/syncnet_python
+    - git -C {home}/.opendub/src/syncnet_python checkout 907c0b579c2e2d83f0eae1b2ac9e720cde4e5623
+    - cd {home}/.opendub/src/syncnet_python && sh download_model.sh
+  aarch64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} "scenedetect==0.5.1" opencv-python-headless python_speech_features scipy numpy
+    - test -d {home}/.opendub/src/syncnet_python || git clone https://github.com/joonson/syncnet_python {home}/.opendub/src/syncnet_python
+    - git -C {home}/.opendub/src/syncnet_python checkout 907c0b579c2e2d83f0eae1b2ac9e720cde4e5623
+    - cd {home}/.opendub/src/syncnet_python && sh download_model.sh
+check: "import torch, cv2, scenedetect, python_speech_features; assert torch.cuda.is_available()"
+notes: torchvision 0.26 pairing with torch 2.11 is assumed; verify at setup. Needs ffmpeg on PATH.

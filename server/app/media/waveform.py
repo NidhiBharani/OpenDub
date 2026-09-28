@@ -70,10 +70,8 @@ async def generate_peaks(audio: Path, out_json: Path, pairs_per_second: int = 50
                 continue
             n = len(data) // _BYTES_PER_SAMPLE
             for s in struct.unpack(f"<{n}h", data):
-                if s < bucket_min:
-                    bucket_min = s
-                if s > bucket_max:
-                    bucket_max = s
+                bucket_min = min(bucket_min, s)
+                bucket_max = max(bucket_max, s)
                 count_in_bucket += 1
                 if count_in_bucket >= samples_per_bucket:
                     peaks.append(round(bucket_min / 32768.0, 3))

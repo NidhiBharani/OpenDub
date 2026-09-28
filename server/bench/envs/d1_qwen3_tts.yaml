@@ -1,0 +1,14 @@
+name: d1_qwen3_tts
+python: ~/.opendub/envs/d1_qwen3_tts/bin/python
+description: "Qwen3-TTS (Base / VoiceDesign / CustomVoice) via qwen-tts 0.1.1 (pins transformers 4.57.3)"
+setup:
+  x86_64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu128 torch==2.11.0 torchaudio==2.11.0"
+    - "uv pip install --python {python} qwen-tts==0.1.1"
+  aarch64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu130 torch==2.11.0 torchaudio==2.11.0"
+    - "uv pip install --python {python} qwen-tts==0.1.1"
+check: "import qwen_tts, torch; assert torch.cuda.is_available()"
+notes: "flash-attn is optional (the worker uses sdpa); no FA build on aarch64. qwen-tts pulls the python `sox` wrapper: install the sox binary (apt install sox) if a code path needs it."

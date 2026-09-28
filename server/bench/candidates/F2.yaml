@@ -1,0 +1,273 @@
+# F2 — mouth-region restoration of lip-synced video. Sources: model-research.html (#F2, 9 rows),
+# compute-tiers.html (#F2 picks/alternates), docs/model-candidates-by-compute.md.
+# Spec: bench/arena/specs/f2.py. Pack: f2_from_f1 (cached LatentSync 1.6 self-reenactment
+# outputs + originals as ground truth). Model restorers are composited back only inside the F1
+# edit mask (mask_only: true), per the research methodology ("restore inside the F1 mask only").
+capability: F2
+candidates:
+  - id: passthrough
+    url: server/bench/arena/workers/f_passthrough.py  # own method (in this repo)
+    params_b: 0
+    worker: f_passthrough
+    env: server
+    kind: method
+    params: {}
+    languages: "*"
+    license: n/a
+    ship_ok: true
+    requires: {}
+    baseline: true
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: Today's behaviour — the raw F1 output is muxed as final.
+
+  - id: annulus-classical
+    url: server/bench/arena/workers/f2_annulus.py  # own method (in this repo)
+    params_b: 0
+    worker: f2_annulus
+    env: server
+    kind: method
+    params: {ring: 25, grain: true, seed: 0}
+    languages: "*"
+    license: n/a (own implementation)
+    ship_ok: true
+    requires: {}
+    sources: ["research:F2:3", "compute-tiers:F2:spark"]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      Colour/luma transfer + grain re-synthesis from the untouched ring + feathered seam; CPU.
+      Compute-tiers records it as a mandatory layer before any model; here it competes alone
+      (a stacked annulus+model method can be added once a model wins).
+
+  - id: pgtformer
+    url: https://huggingface.co/kepeng/pgtformer-base
+    params_b: null
+    worker: f2_pgtformer
+    env: f2_pgtformer
+    kind: local
+    params: {mask_only: true, pad: 0.6}
+    languages: "*"
+    license: PGTFormer licence (BSD-style, non-commercial clause; code and weights)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 6, disk_gb: 2}
+    sources: ["research:F2:5", "compute-tiers:F2:spark-alt"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      512x512 face video in/out; the worker crops a square around the F1 edit region. Best NIQE
+      (4.97) in DVFace's table. VRAM estimate. conda dlib dependency (aarch64: conda-forge build).
+
+  - id: dicface
+    url: https://huggingface.co/fudan-generative-ai/DicFace_model
+    params_b: null
+    worker: f2_dicface
+    env: f2_dicface
+    kind: local
+    params: {max_length: 10, mask_only: true}
+    languages: "*"
+    license: NTU S-Lab License 1.0 per README (HF card says MIT; no LICENSE file) — treated as NC
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 10, disk_gb: 3}
+    sources: ["research:F2:6", "compute-tiers:F2:spark-alt", "compute-tiers:F2:big-alt"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: ICCV 2025 Highlight; weights HF fudan-generative-ai/DicFace_model. VRAM estimate (A800 in the paper).
+
+  - id: svfr
+    url: https://github.com/wangzhiyaoo/SVFR
+    params_b: 1.5
+    worker: f2_svfr
+    env: f2_svfr
+    kind: local
+    params: {task_ids: "0", crop_face_region: true, mask_only: true}
+    languages: "*"
+    license: code MIT; weights non-commercial research only
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 16, disk_gb: 12, arch: [x86_64]}
+    sources: ["research:F2:4", "compute-tiers:F2:big-alt"]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      SVD-based; README asks for ≥16 GB, so on a 15.9 GB Thalassa card it is borderline (the
+      arena reports "needs 16 GB"); runs on larger x86 cards. x86_64 only: decord has no aarch64
+      wheel (eva-decord might work — untested).
+
+  - id: keep
+    url: https://github.com/jnjaby/KEEP
+    params_b: null
+    worker: f2_keep
+    env: f2_keep
+    kind: local
+    params: {face_upsample: false, mask_only: true}
+    languages: "*"
+    license: NTU S-Lab License 1.0 (non-commercial)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 6, disk_gb: 2}
+    sources: ["research:F2:7"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: Kalman-inspired video face SR (ECCV 2024); worst FVD/VIDD in DVFace's table. VRAM estimate.
+
+  - id: codeformer-w0.7
+    url: https://github.com/sczhou/CodeFormer
+    params_b: 0.09
+    worker: f2_codeformer
+    env: f2_codeformer
+    kind: local
+    params: {w: 0.7, face_upsample: false, detection_model: retinaface_resnet50, mask_only: true}
+    languages: "*"
+    license: NTU S-Lab License 1.0 (non-commercial)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 4, disk_gb: 1}
+    sources: ["research:F2:8"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: Single-frame codebook prior (flickers); the brief keeps it as a floor at high fidelity weight.
+
+  - id: codeformer-w1.0
+    url: https://github.com/sczhou/CodeFormer
+    params_b: 0.09
+    worker: f2_codeformer
+    env: f2_codeformer
+    kind: local
+    params: {w: 1.0, face_upsample: false, detection_model: retinaface_resnet50, mask_only: true}
+    languages: "*"
+    license: NTU S-Lab License 1.0 (non-commercial)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 4, disk_gb: 1}
+    sources: ["research:F2:8"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: Maximum fidelity weight ("far toward fidelity" per the research).
+
+  - id: gfpgan-1.4
+    url: https://github.com/TencentARC/GFPGAN
+    params_b: 0.08
+    worker: f2_gfpgan
+    env: f2_gfpgan
+    kind: local
+    params: {version: "1.4", weight: 0.5, mask_only: true}
+    languages: "*"
+    license: Apache-2.0 except third-party components (commercial status unclear)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 3, disk_gb: 1}
+    sources: ["research:F2:9"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: Legacy single-image GAN prior, per frame (images only; the worker extracts frames).
+
+  - id: restoreformer
+    url: https://github.com/TencentARC/GFPGAN
+    params_b: null
+    worker: f2_gfpgan
+    env: f2_gfpgan
+    kind: local
+    params: {version: RestoreFormer, weight: 0.5, mask_only: true}
+    languages: "*"
+    license: unconfirmed (RestoreFormer weights served from the GFPGAN release)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 3, disk_gb: 1}
+    sources: ["research:F2:9"]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: >-
+      RestoreFormer (v1, via GFPGAN's -v RestoreFormer) stands in for the research's
+      RestoreFormer++, which has no inference path in this repo.
+
+  - id: gpen-bfr-512
+    url: https://github.com/yangxy/GPEN
+    params_b: null
+    worker: f2_gpen
+    env: f2_gpen
+    kind: local
+    params: {model: GPEN-BFR-512, in_size: 512, mask_only: true}
+    languages: "*"
+    license: no licence file; Alibaba academic / non-commercial per the research brief
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 3, disk_gb: 1}
+    sources: ["research:F2:9"]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: Images only; output file naming undocumented (matched by frame stem). Compiles CUDA ops at first run (needs ninja + nvcc).
+
+  # ---------------------------------------------------------------- registered, not runnable
+  - id: dvface
+    url: https://github.com/zhengchen1999/DVFace
+    params_b: 1.3
+    worker: f2_pgtformer
+    kind: local
+    languages: "*"
+    license: MIT (repo), weights not released
+    enabled: false
+    requires: {gpu: true, vram_gb: 12}
+    sources: ["research:F2:1", "compute-tiers:F2:spark", "compute-tiers:F2:big"]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      Research/compute-tiers primary (one-step Wan2.1-1.3B restorer, VFHQ PSNR 31.81), but the
+      repo (zhengchen1999/DVFace, 290ad72b) still lists "release code and pretrained models" as
+      TODO. Add a worker when weights land.
+
+  - id: dvface-large-ensemble
+    url: https://github.com/zhengchen1999/DVFace
+    params_b: null
+    worker: f2_pgtformer
+    kind: method
+    languages: "*"
+    license: n/a
+    enabled: false
+    sources: ["compute-tiers:F2:big"]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: DVFace on a larger Wan backbone ensembled with DicFace, re-ranked by ArcFace CSIM — blocked on DVFace weights.
+
+  - id: rgfvr
+    url: https://github.com/batuhanntosun/RG-FVR
+    params_b: 1.3
+    worker: f2_pgtformer
+    kind: local
+    languages: "*"
+    license: no licence file
+    enabled: false
+    sources: ["research:F2:2"]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      Reference-guided restoration (github.com/batuhanntosun/RG-FVR, Wan2.1-T2V-1.3B based); code
+      public but weights "will be uploaded to MediaTUM" (page not reachable 2026-09-28) and no
+      licence. The formulation fits F2 best (untouched frames as the identity reference).
+
+  - id: ip-fvr
+    url: https://arxiv.org/abs/2507.10293
+    params_b: null
+    worker: f2_pgtformer
+    kind: local
+    languages: "*"
+    license: unknown
+    enabled: false
+    sources: ["research:F2:text"]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: '"Show and Polish" (ACM MM 2025) reference-guided restoration; no public weights found.'
+
+  - id: sync-3-builtin-sr
+    url: https://docs.sync.so/models/lipsync
+    params_b: null
+    worker: f1_sync_api
+    kind: api
+    languages: "*"
+    license: proprietary API
+    enabled: false
+    sources: ["compute-tiers:F2:api"]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: Compute-tiers API "pick" is sync-3's built-in 4K generation, which makes F2 unnecessary — it is an F1 candidate (sync-3), not a restorer.
+
+  - id: lipsync-2-pro-plus-dvface
+    url: https://docs.sync.so/models/lipsync
+    params_b: null
+    worker: f1_sync_api
+    kind: method
+    languages: "*"
+    license: proprietary API + research weights
+    enabled: false
+    sources: ["compute-tiers:F2:api-alt"]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Hosted 512 px generation + self-hosted DVFace; blocked on DVFace weights.
+
+  - id: heygen-internal-restoration
+    url: https://developers.heygen.com/
+    params_b: null
+    worker: f1_heygen_api
+    kind: api
+    languages: "*"
+    license: proprietary API
+    enabled: false
+    sources: ["compute-tiers:F2:api-alt"]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: HeyGen's restoration is internal to its lipsync output and not exposed separately.

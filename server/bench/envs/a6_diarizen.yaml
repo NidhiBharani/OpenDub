@@ -1,0 +1,16 @@
+name: a6_diarizen
+python: ~/.opendub/envs/a6_diarizen/bin/python
+description: DiariZen (code MIT, weights CC BY-NC 4.0) with its bundled pyannote-audio fork; the repo
+  pins torch 2.1.1+cu121 (x86_64 only; sm_120 needs PTX JIT from cu121 — verify, or relax to a newer torch).
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.10
+  - git clone --recursive https://github.com/BUTSpeechFIT/DiariZen {home}/.opendub/src/DiariZen || true
+  - git -C {home}/.opendub/src/DiariZen checkout 844f5555b0a98acd0931511fc641a8c5b8ba92c7
+  - git -C {home}/.opendub/src/DiariZen submodule update --init --recursive
+  - uv pip install --python {python} torch==2.1.1 torchaudio==2.1.1 --index-url https://download.pytorch.org/whl/cu121
+  - uv pip install --python {python} -r {home}/.opendub/src/DiariZen/requirements.txt
+  - uv pip install --python {python} -e {home}/.opendub/src/DiariZen
+  - uv pip install --python {python} -e {home}/.opendub/src/DiariZen/pyannote-audio
+  - uv pip install --python {python} soundfile librosa numpy
+check: import diarizen

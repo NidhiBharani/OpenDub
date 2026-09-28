@@ -1,0 +1,18 @@
+name: d6_freevc
+python: ~/.opendub/envs/d6_freevc/bin/python
+description: "FreeVC (OlaWod/FreeVC, MIT) from its repo"
+setup:
+  x86_64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu128 torch==2.11.0 torchaudio==2.11.0"
+    - "test -d {home}/.opendub/src/FreeVC || git clone https://github.com/OlaWod/FreeVC {home}/.opendub/src/FreeVC && git -C {home}/.opendub/src/FreeVC checkout 60032a7b1b030831ae17a4b6959656d88df6cc9c"
+    - "uv pip install --python {python} librosa soundfile scipy webrtcvad-wheels numpy"
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('OlaWod/FreeVC', repo_type='space', local_dir='{home}/.opendub/src/FreeVC', allow_patterns=['checkpoints/*', 'wavlm/*', 'speaker_encoder/ckpt/*'])\""
+  aarch64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu130 torch==2.11.0 torchaudio==2.11.0"
+    - "test -d {home}/.opendub/src/FreeVC || git clone https://github.com/OlaWod/FreeVC {home}/.opendub/src/FreeVC && git -C {home}/.opendub/src/FreeVC checkout 60032a7b1b030831ae17a4b6959656d88df6cc9c"
+    - "uv pip install --python {python} librosa soundfile scipy webrtcvad-wheels numpy"
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('OlaWod/FreeVC', repo_type='space', local_dir='{home}/.opendub/src/FreeVC', allow_patterns=['checkpoints/*', 'wavlm/*', 'speaker_encoder/ckpt/*'])\""
+check: "import torch, librosa; assert torch.cuda.is_available()"
+notes: "Checkpoints are fetched from the OlaWod/FreeVC HF Space (checkpoints/, wavlm/WavLM-Large.pt, speaker_encoder/ckpt/) — not verified that the Space holds all three; the README's Google Drive links are the fallback."

@@ -1,0 +1,15 @@
+name: b2_omnishotcut
+python: ~/.opendub/envs/b2_omnishotcut/bin/python
+description: >-
+  OmniShotCut (MIT code and weights) installed from GitHub at a pinned commit; the checkpoint is
+  fetched from HF uva-cv-lab/OmniShotCut_v1.5 on first load; decoding uses the ffmpeg binary.
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.10
+    - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} 'git+https://github.com/UVA-Computer-Vision-Lab/OmniShotCut@40ecf12a0f6ace617680cf22b74da0bef4af3c21'
+  aarch64:
+    - uv venv {prefix} --python 3.10
+    - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} 'git+https://github.com/UVA-Computer-Vision-Lab/OmniShotCut@40ecf12a0f6ace617680cf22b74da0bef4af3c21'
+check: "import omnishotcut, torch; assert torch.cuda.is_available()"

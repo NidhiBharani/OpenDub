@@ -1,0 +1,18 @@
+name: b2_transnetv2
+python: ~/.opendub/envs/b2_transnetv2/bin/python
+description: >-
+  TransNetV2 via the transnetv2-pytorch 1.0.5 wheel (MIT fork that bundles converted PyTorch
+  weights) plus PySceneDetect 0.7.1 for the threshold/fade second channel.
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} transnetv2-pytorch==1.0.5 'scenedetect[opencv-headless]==0.7.1'
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} transnetv2-pytorch==1.0.5 'scenedetect[opencv-headless]==0.7.1'
+check: "import torch, transnetv2_pytorch, scenedetect; assert torch.cuda.is_available()"
+notes: >-
+  To use upstream-converted weights instead, clone soCzech/TransNetV2, run inference-
+  pytorch/convert_weights.py (needs TensorFlow 2.1) and pass params.weights.

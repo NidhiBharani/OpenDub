@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 from typing import Any
 
@@ -81,3 +82,61 @@ def render_compare(old: dict[str, Any], new: dict[str, Any]) -> str:
             f"| {key[0]} | {key[1]} | {ov} | {nv} | {delta:+.3g} | {flag} |"
         )
     return "\n".join(lines)
+
+
+def regression_gate(old: dict[str, Any], new: dict[str, Any],
+                    max_regression: float = 0.0,
+                    required: list[str] | None = None) -> list[str]:
+    """Return gate failures for case errors, lost measurements, and directional regressions.
+
+    ``max_regression`` is an absolute allowance in each metric's unit. Use ``required``
+    for metrics that must exist even when the baseline had no value (e.g. optional ASR).
+    """
+    if max_regression < 0:
+        raise ValueError('max_regression must be nonnegative')
+    required = required or []
+    baseline = {r['case']: r for r in old.get('results', [])}
+    current = {r['case']: r for r in new.get('results', [])}
+    failures: list[str] = []
+    for case, before in baseline.items():
+        after = current.get(case)
+        if after is None:
+            failures.append(f'{case}: case missing from new run')
+            continue
+        if after.get('error'):
+            failures.append(f"{case}: pipeline error: {after['error']}")
+        old_metrics = {m['name']: m for m in before.get('metrics', [])}
+        new_metrics = {m['name']: m for m in after.get('metrics', [])}
+        for name, metric in new_metrics.items():
+            if name.endswith('.error'):
+                failures.append(f"{case}/{name}: {metric.get('note', 'metric module failed')}")
+        for name, previous in old_metrics.items():
+            old_value = previous.get('value')
+            if not isinstance(old_value, (int, float)) or not math.isfinite(old_value):
+                continue
+            latest = new_metrics.get(name)
+            value = latest.get('value') if latest else None
+            if not isinstance(value, (int, float)) or not math.isfinite(value):
+                failures.append(f'{case}/{name}: measurable baseline became unavailable')
+                continue
+            direction = latest.get('higher_is_better')
+            if direction is None:
+                direction = previous.get('higher_is_better')
+            if ((direction is True and value < old_value - max_regression) or
+                    (direction is False and value > old_value + max_regression)):
+                failures.append(f'{case}/{name}: {old_value} -> {value} regressed')
+    for case, after in current.items():
+        if case not in baseline and after.get('error'):
+            failures.append(f"{case}: pipeline error: {after['error']}")
+        metrics = {m['name']: m for m in after.get('metrics', [])}
+        if not metrics:
+            failures.append(f'{case}: no metrics in new run')
+        if case not in baseline:
+            for name, metric in metrics.items():
+                if name.endswith('.error'):
+                    failures.append(f"{case}/{name}: {metric.get('note', 'metric module failed')}")
+        for name in required:
+            value = (metrics.get(name) or {}).get('value')
+            if not isinstance(value, (int, float)) or not math.isfinite(value):
+                failures.append(f'{case}/{name}: required metric unavailable')
+    return failures

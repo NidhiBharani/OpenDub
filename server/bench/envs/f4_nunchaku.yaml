@@ -1,0 +1,15 @@
+name: f4_nunchaku
+python: ~/.opendub/envs/f4_nunchaku/bin/python
+description: 'Nunchaku (SVDQuant FP4/INT4) Qwen-Image-Edit-2511 on diffusers; x86_64 only (v1.2.1 wheels:
+  linux_x86_64, cu13.0 torch 2.9–2.11).'
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} diffusers==0.37.0 transformers accelerate sentencepiece protobuf
+    gguf pillow numpy huggingface-hub safetensors
+  - uv pip install --python {python} https://github.com/nunchaku-ai/nunchaku/releases/download/v1.2.1/nunchaku-1.2.1+cu13.0torch2.11-cp312-cp312-linux_x86_64.whl
+check: import torch, nunchaku; assert torch.cuda.is_available()
+notes: 'arch: x86_64 only (no aarch64 wheels; building from source on GB10/sm_121 is unverified). The
+  wheel URL follows the release''s naming scheme as reported by the research pass — verify the exact file
+  name. Driver must support CUDA 13 (Thalassa: 13.2).'

@@ -1,0 +1,14 @@
+name: d8_hibiki
+python: ~/.opendub/envs/d8_hibiki/bin/python
+description: "Kyutai Hibiki via moshi 0.2.13 (torch<2.10)"
+setup:
+  x86_64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu128 torch==2.9.1 torchaudio==2.9.1"
+    - "uv pip install --python {python} moshi==0.2.13"
+  aarch64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu130 torch==2.9.1 torchaudio==2.9.1"
+    - "uv pip install --python {python} moshi==0.2.13"
+check: "import moshi, torch; assert torch.cuda.is_available()"
+notes: "moshi pins torch<2.10, so this env uses torch 2.9.1 (cu128 / cu130 wheels exist)."

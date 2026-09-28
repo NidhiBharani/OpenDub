@@ -1,0 +1,14 @@
+name: d1_voxcpm
+python: ~/.opendub/envs/d1_voxcpm/bin/python
+description: "VoxCPM2 via voxcpm 2.0.3 (Apache-2.0)"
+setup:
+  x86_64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu128 torch==2.11.0 torchaudio==2.11.0"
+    - "uv pip install --python {python} voxcpm==2.0.3"
+  aarch64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu130 torch==2.11.0 torchaudio==2.11.0"
+    - "uv pip install --python {python} voxcpm==2.0.3"
+check: "import voxcpm, torch; assert torch.cuda.is_available()"
+notes: "voxcpm pulls funasr/modelscope; all pure-python or with aarch64 wheels as far as checked (not installed on a Spark yet)."

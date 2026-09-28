@@ -1,0 +1,20 @@
+name: d2_cosyvoice3
+python: ~/.opendub/envs/d2_cosyvoice3/bin/python
+description: "Fun-CosyVoice3-0.5B from the CosyVoice repo (Apache-2.0)"
+setup:
+  x86_64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu128 torch==2.11.0 torchaudio==2.11.0"
+    - "test -d {home}/.opendub/src/CosyVoice || git clone https://github.com/FunAudioLLM/CosyVoice {home}/.opendub/src/CosyVoice && git -C {home}/.opendub/src/CosyVoice checkout 074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc"
+    - "git -C {home}/.opendub/src/CosyVoice submodule update --init --recursive"
+    - "uv pip install --python {python} -r {home}/.opendub/src/CosyVoice/requirements.txt pyopenjtalk"
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('FunAudioLLM/Fun-CosyVoice3-0.5B-2512', local_dir='{home}/.opendub/src/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B', revision='29e01c4e8d000f4bcd70751be16fa94bf3d85a18')\""
+  aarch64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu130 torch==2.11.0 torchaudio==2.11.0"
+    - "test -d {home}/.opendub/src/CosyVoice || git clone https://github.com/FunAudioLLM/CosyVoice {home}/.opendub/src/CosyVoice && git -C {home}/.opendub/src/CosyVoice checkout 074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc"
+    - "git -C {home}/.opendub/src/CosyVoice submodule update --init --recursive"
+    - "uv pip install --python {python} -r {home}/.opendub/src/CosyVoice/requirements.txt pyopenjtalk"
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('FunAudioLLM/Fun-CosyVoice3-0.5B-2512', local_dir='{home}/.opendub/src/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B', revision='29e01c4e8d000f4bcd70751be16fa94bf3d85a18')\""
+check: "import torch; assert torch.cuda.is_available()"
+notes: "requirements.txt targets python 3.10 and pins torch/onnxruntime-gpu versions; on 3.12 or aarch64 some pins may need relaxing (onnxruntime-gpu has no aarch64 PyPI wheel: use onnxruntime). pyopenjtalk builds from source on aarch64 (needs cmake)."

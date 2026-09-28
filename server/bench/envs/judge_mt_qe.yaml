@@ -1,0 +1,24 @@
+name: judge_mt_qe
+python: ~/.opendub/envs/judge_mt_qe/bin/python
+description: >-
+  MT quality estimation judges (judgelib.mt_qe) and C4 candidates: MetricX-24 (google-research
+  /metricx cloned at a pinned commit) and the COMET family (unbabel-comet 2.2.7: CometKiwi,
+  xCOMET). unbabel-comet pins transformers<5, numpy<2, protobuf<5, huggingface-hub<1.
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} "transformers==4.57.6" "unbabel-comet==2.2.7" "sentencepiece==0.2.1" "protobuf<5" accelerate
+    - test -d {home}/.opendub/src/metricx || git clone https://github.com/google-research/metricx {home}/.opendub/src/metricx
+    - git -C {home}/.opendub/src/metricx checkout fc4978eb064670f7cc33e93ea4f52d38396b8ae6
+  aarch64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} torch==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} "transformers==4.57.6" "unbabel-comet==2.2.7" "sentencepiece==0.2.1" "protobuf<5" accelerate
+    - test -d {home}/.opendub/src/metricx || git clone https://github.com/google-research/metricx {home}/.opendub/src/metricx
+    - git -C {home}/.opendub/src/metricx checkout fc4978eb064670f7cc33e93ea4f52d38396b8ae6
+check: "import sys, os; sys.path.insert(0, os.path.expanduser('~/.opendub/src/metricx')); import torch, comet; from metricx24 import models; assert torch.cuda.is_available()"
+notes: >-
+  MetricX's own requirements pin transformers 4.30.2; its MT5ForRegression is expected to work
+  on 4.57 (unverified — if loading fails, pin transformers==4.30.2 in a separate env). The
+  wmt23 CometKiwi and XCOMET repos are gated on Hugging Face: accept the terms and set HF_TOKEN.

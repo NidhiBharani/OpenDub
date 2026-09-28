@@ -1,0 +1,14 @@
+name: d4_indicf5
+python: ~/.opendub/envs/d4_indicf5/bin/python
+description: "IndicF5 (AI4Bharat) — its own f5_tts fork, so not the server venv"
+setup:
+  x86_64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu128 torch==2.11.0 torchaudio==2.11.0"
+    - "uv pip install --python {python} 'f5-tts @ git+https://github.com/ai4bharat/IndicF5.git' transformers soundfile"
+  aarch64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu130 torch==2.11.0 torchaudio==2.11.0"
+    - "uv pip install --python {python} 'f5-tts @ git+https://github.com/ai4bharat/IndicF5.git' transformers soundfile"
+check: "import f5_tts, transformers, torch; assert torch.cuda.is_available()"
+notes: "Gated HF repo: accept the terms and export HF_TOKEN before the first run."

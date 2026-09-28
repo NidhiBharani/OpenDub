@@ -2,27 +2,25 @@
 
 Reference selection: prefers the segment's own source audio (≥1.5s) as the style/emotion
 conditioning clip, falling back to the speaker identity reference. The
-reference transcript passed to F5-TTS is left empty on purpose — F5-TTS then runs its own internal
-ASR pass over the reference clip to align the cloning conditioning, so no ground-truth transcript
-of the reference audio is required (at the cost of a little extra latency per call).
+known source or speaker-reference transcript is passed to F5-TTS when available. When no
+transcript exists, F5-TTS runs its internal ASR over the reference clip.
 """
 from __future__ import annotations
 
 import asyncio
 import os
-import threading
 import uuid
 from pathlib import Path
 from typing import Any
 
 from ...media import ffmpeg
 from ...models import TTSRequest
+from .._runtime import llm_endpoint, manager
 from ..base import ConfigField, ProgressFn, ProviderMeta, TTSProvider, register
 
 DEFAULT_MODEL = "F5TTS_v1_Base"
-
-_MODEL_CACHE: dict[tuple[str, str, str, str], Any] = {}
-_MODEL_LOCK = threading.Lock()
+# Rough VRAM (GB) of the DiT + Vocos vocoder, for the model manager's GPU budget.
+_VRAM_GB = {"F5TTS_v1_Base": 1.6, "F5TTS_Base": 1.6, "E2TTS_Base": 1.6, "F5TTS_Small": 0.9}
 
 
 def _ensure_audio_loader() -> None:
@@ -67,24 +65,33 @@ def _resolve_file(path: str) -> str:
     return path
 
 
-def _load_model(model_name: str, device: str, ckpt_file: str = "", vocab_file: str = "") -> Any:
-    """Load (or fetch cached) F5-TTS model. Runs inside a worker thread."""
-    key = (model_name, device, ckpt_file, vocab_file)
-    with _MODEL_LOCK:
-        cached = _MODEL_CACHE.get(key)
-        if cached is not None:
-            return cached
-        from f5_tts.api import F5TTS  # heavy, lazy import
+def _speaker_text(reference: str) -> str:
+    try:
+        return Path(reference).with_suffix(".txt").read_text().strip()
+    except OSError:
+        return ""
 
-        _ensure_audio_loader()
-        model = F5TTS(
-            model=model_name,
-            ckpt_file=_resolve_file(ckpt_file) if ckpt_file else "",
-            vocab_file=_resolve_file(vocab_file) if vocab_file else "",
-            device=device,
-        )
-        _MODEL_CACHE[key] = model
-        return model
+
+def _load_model(model_name: str, device: str, ckpt_file: str = "", vocab_file: str = "") -> Any:
+    """Build an F5-TTS model. Runs inside a worker thread, as the model manager's loader."""
+    from f5_tts.api import F5TTS  # heavy, lazy import
+
+    _ensure_audio_loader()
+    return F5TTS(
+        model=model_name,
+        ckpt_file=_resolve_file(ckpt_file) if ckpt_file else "",
+        vocab_file=_resolve_file(vocab_file) if vocab_file else "",
+        device=device,
+    )
+
+
+def _acquire_model(model_name: str, device: str, ckpt_file: str = "", vocab_file: str = ""):
+    """Managed F5-TTS model (async context manager), shared across calls while warm."""
+    return manager.acquire_async(
+        ("tts.f5_tts", model_name, ckpt_file, vocab_file, device),
+        lambda: _load_model(model_name, device, ckpt_file, vocab_file),
+        est_vram_gb=0.0 if device == "cpu" else _VRAM_GB.get(model_name),
+    )
 
 
 def _run_infer(
@@ -110,7 +117,7 @@ def _run_infer(
             os.environ["PYTHONHASHSEED"] = hash_seed
 
 
-_VERIFY_MODEL: list[Any] = []
+MIN_ACCEPT_SCORE = 0.72
 
 
 def _norm_words(text: str) -> list[str]:
@@ -129,21 +136,27 @@ def _verify_take(wav: Path, target_text: str, language: str) -> tuple[float, flo
     reference clip before the actual line, or garbles it. The score is the character similarity
     between what Whisper hears (after skipping up to 3 leaked leading words) and the script.
     """
+    from contextlib import ExitStack
     from difflib import SequenceMatcher
 
-    from faster_whisper import WhisperModel
+    from ..asr.faster_whisper import acquire_whisper
 
-    from ..asr.faster_whisper import _preload_cuda_libs
-
-    with _MODEL_LOCK:
-        if not _VERIFY_MODEL:
-            _preload_cuda_libs()
-            _VERIFY_MODEL.append(WhisperModel("large-v3-turbo", device="auto", compute_type="auto"))
-    segs, _info = _VERIFY_MODEL[0].transcribe(
-        str(wav), language=language, word_timestamps=True, vad_filter=False,
-        condition_on_previous_text=False,
-    )
-    words = [w for seg in segs for w in (seg.words or [])]
+    with ExitStack() as stack:
+        try:
+            # Same key as asr.faster_whisper's default, so a warm ASR model is shared.
+            model = stack.enter_context(
+                acquire_whisper("large-v3-turbo", "auto", "auto", local_files_only=True)
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "F5 take verification needs a locally cached faster-whisper "
+                "large-v3-turbo model; download it before synthesis or disable verify"
+            ) from exc
+        segs, _info = model.transcribe(
+            str(wav), language=language, word_timestamps=True, vad_filter=False,
+            condition_on_previous_text=False,
+        )
+        words = [w for seg in segs for w in (seg.words or [])]
     target = " ".join(_norm_words(target_text))
     if not words or not target:
         return 0.0, 0.0
@@ -175,7 +188,9 @@ _SCRIPT_NAMES = {
 }
 
 
-async def _transliterate(text: str, language: str, base_url: str, model: str) -> str:
+async def _transliterate(
+    text: str, language: str, base_url: str, model: str, unload_after_use: bool = True
+) -> str:
     """Spell `text` phonetically in `language`'s script via an OpenAI-compatible LLM.
 
     A single-language checkpoint (e.g. Hindi) has no Latin letters in its vocab, so an English
@@ -194,7 +209,8 @@ async def _transliterate(text: str, language: str, base_url: str, model: str) ->
         f"Reply with the transliteration only.\n\n{text}"
     )
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with llm_endpoint(base_url, model, unload_after_use=unload_after_use), \
+                httpx.AsyncClient(timeout=120.0) as client:
             resp = await client.post(
                 f"{base_url.rstrip('/')}/chat/completions",
                 json={
@@ -223,9 +239,8 @@ class F5TTSProvider(TTSProvider):
             "Local zero-shot voice cloning (F5-TTS). Conditions on the segment's own source audio "
             "when available (≥1.5s) to carry that line's emotion into the dub, falling back to "
             "the speaker identity reference otherwise. The reference transcript is left blank, so "
-            "F5-TTS runs its own ASR over the reference clip to align cloning (adds a little "
-            "latency, needs no ground-truth transcript). First call per model/device loads the "
-            "model; subsequent calls reuse the cached instance."
+            "F5-TTS uses known reference transcripts when available. The model loads on first "
+            "use and stays warm while in use; it is unloaded after models.idle_ttl_s idle."
         ),
         runtime="local",
         fields=[
@@ -262,10 +277,12 @@ class F5TTSProvider(TTSProvider):
                      "drops words.",
             ),
             ConfigField(
-                key="verify", label="Verify takes with Whisper", type="boolean", default=False,
-                help="Custom checkpoints only: read each take back with Faster-Whisper in the "
+                key="verify", label="Verify takes with Whisper", type="boolean", default=True,
+                help="Read every checkpoint's takes back with a locally cached Faster-Whisper "
+                     "large-v3-turbo model in the "
                      "target language, trim leaked reference words from its start, and retry at "
-                     "other speeds when it doesn't match the script. Slower, far more reliable.",
+                     "other speeds when it doesn't match the script. Requires faster-whisper; "
+                     "takes below the acceptance score are rejected.",
             ),
             ConfigField(
                 key="translit_base_url", label="Reference transliteration LLM", type="string",
@@ -278,11 +295,22 @@ class F5TTSProvider(TTSProvider):
                 key="translit_model", label="Transliteration model", type="string",
                 default="", placeholder="gemma3:12b",
             ),
+            ConfigField(
+                key="unload_after_use", label="Unload transliteration LLM after use",
+                type="boolean", default=True,
+                help="When the transliteration server is Ollama, ask it to free the model once "
+                     "synthesis is done with it (keep_alive 0). No effect on other servers.",
+            ),
         ],
     )
 
     def available(self, deep: bool = False) -> tuple[bool, str]:
-        return self._can_import("f5_tts")
+        available, reason = self._can_import("f5_tts")
+        if not available:
+            return available, reason
+        if self.opt_bool("verify", True):
+            return self._can_import("faster_whisper")
+        return True, "ready"
 
     async def synthesize(self, req: TTSRequest, out_wav: Path, progress: ProgressFn) -> None:
         progress(0.0, "selecting conditioning audio")
@@ -290,29 +318,52 @@ class F5TTSProvider(TTSProvider):
         device = self._resolve_device()
         model_name = str(self.opt("model", DEFAULT_MODEL) or DEFAULT_MODEL)
 
-        progress(0.05, f"loading {model_name} ({device})")
         ckpt_file = str(self.opt("ckpt_file", "") or "").strip()
         vocab_file = str(self.opt("vocab_file", "") or "").strip()
-        model = await asyncio.to_thread(_load_model, model_name, device, ckpt_file, vocab_file)
-        speed = self.opt_float("speed", 1.0) or 1.0
+        # Transliterate before loading F5 so the LLM and the voice model aren't both needed at once.
         translit_url = str(self.opt("translit_base_url", "") or "").strip()
         translit_model = str(self.opt("translit_model", "") or "").strip()
+        unload_llm = self.opt_bool("unload_after_use", True)
         if ckpt_file and ref_text and translit_url and translit_model:
-            ref_text = await _transliterate(ref_text, req.language, translit_url, translit_model)
+            ref_text = await _transliterate(
+                ref_text, req.language, translit_url, translit_model, unload_llm
+            )
+        speaker_ref_text = _speaker_text(req.speaker_reference) if req.speaker_reference else ""
+        if ckpt_file and speaker_ref_text and translit_url and translit_model:
+            speaker_ref_text = await _transliterate(
+                speaker_ref_text, req.language, translit_url, translit_model, unload_llm
+            )
 
+        progress(0.05, f"loading {model_name} ({device})")
+        async with _acquire_model(model_name, device, ckpt_file, vocab_file) as model:
+            await self._render(model, req, out_wav, reference, ref_text, speaker_ref_text, progress)
+
+    async def _render(
+        self, model: Any, req: TTSRequest, out_wav: Path, reference: str, ref_text: str,
+        speaker_ref_text: str, progress: ProgressFn,
+    ) -> None:
+        speed = self.opt_float("speed", 1.0) or 1.0
         progress(0.4, "synthesizing")
         text = req.text.strip() or " "
         # Unique per call: an abandoned (uncancellable) synthesis thread from a cancelled job
         # must never share a tmp path with a later job's write.
         tmp_out = out_wav.with_name(f"{out_wav.stem}.f5_raw.{uuid.uuid4().hex[:8]}.wav")
-        if ckpt_file and self.opt_bool("verify", False):
-            await self._synthesize_verified(
-                model, reference, ref_text, text, tmp_out, speed, req.language, progress
-            )
+        verify = self.opt_bool("verify", True)
+        if verify:
+            try:
+                await self._synthesize_verified(
+                    model, reference, ref_text, text, tmp_out, speed, req.language, progress
+                )
+            except ValueError:
+                if not req.speaker_reference or reference == req.speaker_reference:
+                    raise
+                progress(0.65, "take mismatch; trying speaker reference")
+                await self._synthesize_verified(
+                    model, req.speaker_reference, speaker_ref_text,
+                    text, tmp_out, speed, req.language, progress
+                )
         else:
-            await asyncio.to_thread(
-                _run_infer, model, reference, ref_text, text, tmp_out, speed
-            )
+            await asyncio.to_thread(_run_infer, model, reference, ref_text, text, tmp_out, speed)
 
         # Degenerate-output guard: when conditioning goes wrong (e.g. F5's internal ASR returns
         # nothing for a sung reference), it emits a near-empty clip. Retry once on the speaker
@@ -323,9 +374,20 @@ class F5TTSProvider(TTSProvider):
         ):
             progress(0.6, "output degenerate; retrying with speaker reference")
             tmp_out.unlink(missing_ok=True)
-            await asyncio.to_thread(
-                _run_infer, model, req.speaker_reference, "", text, tmp_out, speed
-            )
+            if verify:
+                await self._synthesize_verified(
+                    model, req.speaker_reference, speaker_ref_text,
+                    text, tmp_out, speed, req.language, progress
+                )
+            else:
+                await asyncio.to_thread(
+                    _run_infer, model, req.speaker_reference, speaker_ref_text,
+                    text, tmp_out, speed
+                )
+            duration = await ffmpeg.wav_duration(tmp_out)
+        if duration < 0.25 and len(text) > 2:
+            tmp_out.unlink(missing_ok=True)
+            raise RuntimeError("tts.f5_tts produced a near-empty take")
 
         progress(0.9, "standardizing audio")
         await ffmpeg.to_std_wav(tmp_out, out_wav)
@@ -344,7 +406,11 @@ class F5TTSProvider(TTSProvider):
             await asyncio.to_thread(
                 _run_infer, model, reference, ref_text, text, cand, attempt_speed
             )
-            score, trim = await asyncio.to_thread(_verify_take, cand, text, language)
+            try:
+                score, trim = await asyncio.to_thread(_verify_take, cand, text, language)
+            except BaseException:
+                cand.unlink(missing_ok=True)
+                raise
             progress(0.4 + 0.1 * (n + 1), f"take check {n + 1}: {score:.0%} match")
             if best is None or score > best[0]:
                 if best is not None:
@@ -356,29 +422,40 @@ class F5TTSProvider(TTSProvider):
                 break
         if best is None:  # unreachable: attempts is never empty
             raise RuntimeError("tts.f5_tts produced no candidate take")
-        _score, trim, cand = best
+        score, trim, cand = best
+        if score < MIN_ACCEPT_SCORE:
+            cand.unlink(missing_ok=True)
+            raise ValueError(
+                f"tts.f5_tts take failed transcript verification ({score:.0%} < "
+                f"{MIN_ACCEPT_SCORE:.0%})"
+            )
         if trim > 0:
             await ffmpeg.trim_start(cand, tmp_out, trim)
             cand.unlink(missing_ok=True)
+            checked_score, _ = await asyncio.to_thread(_verify_take, tmp_out, text, language)
+            if checked_score < MIN_ACCEPT_SCORE:
+                tmp_out.unlink(missing_ok=True)
+                raise ValueError(
+                    f"tts.f5_tts trimmed take failed transcript verification ({checked_score:.0%})"
+                )
         else:
             cand.replace(tmp_out)
 
     async def _pick_reference(self, req: TTSRequest) -> tuple[str, str]:
         """Choose the conditioning clip and (if known) its transcript.
 
-        Returns (reference_path, ref_text). ref_text is only non-empty for the segment
-        reference, whose transcript is the segment's own source_text; passing it spares
-        F5-TTS an internal ASR pass that fails on hard (e.g. sung) audio."""
+        Returns (reference_path, ref_text). Known transcripts spare F5-TTS an internal
+        ASR pass that fails on hard (e.g. sung) audio."""
         use_segment = self.opt_bool("segment_style", True)
         if use_segment and req.segment_reference:
             try:
                 duration = await ffmpeg.wav_duration(Path(req.segment_reference))
-            except Exception:
+            except Exception:  # noqa: BLE001 - an unreadable clip falls back to the speaker reference
                 duration = 0.0
             if duration >= 1.5:
                 return req.segment_reference, req.segment_reference_text.strip()
         if req.speaker_reference:
-            return req.speaker_reference, ""
+            return req.speaker_reference, _speaker_text(req.speaker_reference)
         if req.segment_reference:
             return req.segment_reference, req.segment_reference_text.strip()
         raise RuntimeError(
@@ -393,5 +470,5 @@ class F5TTSProvider(TTSProvider):
             import torch
 
             return "cuda" if torch.cuda.is_available() else "cpu"
-        except Exception:
+        except (ImportError, RuntimeError):
             return "cpu"

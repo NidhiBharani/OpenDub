@@ -1,0 +1,17 @@
+name: b_api
+python: ~/.opendub/envs/b_api/bin/python
+description: >-
+  Vendor SDKs for the phase-B API workers (Gemini, Claude, GPT vision; Google Video Intelligence;
+  Amazon Rekognition). Pure-Python wheels, identical on both architectures; frames come from the
+  ffmpeg binary (tools: [ffmpeg]).
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} anthropic==1.8.0 openai==3.19.2 google-genai==2.25.0 google-cloud-videointelligence==2.16.2 boto3==1.40.40
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} anthropic==1.8.0 openai==3.19.2 google-genai==2.25.0 google-cloud-videointelligence==2.16.2 boto3==1.40.40
+check: "import anthropic, openai, boto3; from google import genai; from google.cloud import videointelligence"
+notes: >-
+  SDK pins follow bench/envs/c2_api.yaml; google-cloud-videointelligence and boto3 pins are
+  unverified against today's PyPI — relax them if the resolver complains.

@@ -103,7 +103,8 @@ class ReplicateLipSyncProvider(LipSyncProvider):
             output = done.get("output")
             url = output[-1] if isinstance(output, list) else output
             if not isinstance(url, str):
-                raise RuntimeError(f"Replicate returned no output video URL: {str(output)[:200]}")
+                raise RuntimeError(  # noqa: TRY004 - a bad upstream response, not a caller type error
+                    f"Replicate returned no output video URL: {str(output)[:200]}")
             progress(0.9, "downloading result")
             await download_file(client, url, out_video)
         progress(1.0, "done")

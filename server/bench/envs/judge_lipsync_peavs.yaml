@@ -1,0 +1,22 @@
+name: judge_lipsync_peavs
+python: ~/.opendub/envs/judge_lipsync_peavs/bin/python
+description: >-
+  PEAVS (amazon-science/avgen-eval-toolkit, Apache-2.0) for workers/judge_lipsync.py (model:
+  peavs). Upstream pins torch 1.13 + cupy-cuda11x (no Blackwell support); this recipe moves to a
+  CUDA 12.8/13 torch and cupy-cuda12x/13x, which is unverified. I3D/PWC/VGGish checkpoints and
+  the metric weights ship in the repo (git LFS not required per the tree listing).
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.10
+    - uv pip install --python {python} torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} cupy-cuda12x "omegaconf==2.0.6" opencv-python-headless pandas numpy scipy tqdm librosa resampy soundfile ffmpeg-python
+    - test -d {home}/.opendub/src/avgen-eval-toolkit || git clone https://github.com/amazon-science/avgen-eval-toolkit {home}/.opendub/src/avgen-eval-toolkit
+    - git -C {home}/.opendub/src/avgen-eval-toolkit checkout 9cf014ba2c02551f4494cae685607ca3b5328f43
+  aarch64:
+    - uv venv {prefix} --python 3.10
+    - uv pip install --python {python} torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu129
+    - uv pip install --python {python} cupy-cuda12x "omegaconf==2.0.6" opencv-python-headless pandas numpy scipy tqdm librosa resampy soundfile ffmpeg-python
+    - test -d {home}/.opendub/src/avgen-eval-toolkit || git clone https://github.com/amazon-science/avgen-eval-toolkit {home}/.opendub/src/avgen-eval-toolkit
+    - git -C {home}/.opendub/src/avgen-eval-toolkit checkout 9cf014ba2c02551f4494cae685607ca3b5328f43
+check: "import torch, cupy, omegaconf, cv2, pandas; assert torch.cuda.is_available()"
+notes: omegaconf 2.0.6 may not install on Python ≥ 3.11 (hence 3.10). Needs ffmpeg ≥ 6 on PATH.

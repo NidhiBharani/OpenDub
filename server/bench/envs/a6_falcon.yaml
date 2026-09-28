@@ -1,0 +1,8 @@
+name: a6_falcon
+python: ~/.opendub/envs/a6_falcon/bin/python
+description: Picovoice Falcon (pvfalcon; proprietary engine, AccessKey). x86_64 only.
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} pvfalcon soundfile librosa numpy
+check: import pvfalcon

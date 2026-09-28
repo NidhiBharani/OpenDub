@@ -1,0 +1,16 @@
+name: g6_audio_flamingo
+python: ~/.opendub/envs/g6_audio_flamingo/bin/python
+description: >-
+  NVIDIA Audio Flamingo 3 (transformers-native nvidia/audio-flamingo-3-hf, NVIDIA OneWay
+  Noncommercial) for workers/g6_audio_flamingo.py. 8B BF16.
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} "transformers>=4.58" accelerate librosa soundfile numpy
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} "transformers>=4.58" accelerate librosa soundfile numpy
+check: "import torch; from transformers import AudioFlamingo3ForConditionalGeneration; assert torch.cuda.is_available()"
+notes: The minimum transformers release with AudioFlamingo3 is not verified (card says upgrade).

@@ -164,7 +164,7 @@ def list_summaries() -> list[ProjectSummary]:
         if (d / "manifest.json").exists():
             try:
                 p = Project.model_validate(json.loads((d / "manifest.json").read_text()))
-            except Exception:
+            except (OSError, ValueError):  # unreadable or invalid manifest: not listed
                 continue
             langs: list[str] = []
             vcount = 0
@@ -174,7 +174,7 @@ def list_summaries() -> list[ProjectSummary]:
                     vcount += 1
                     try:
                         lang = json.loads(meta.read_text()).get("target_lang")
-                    except Exception:
+                    except (OSError, ValueError):
                         continue
                     if isinstance(lang, str) and lang and lang not in langs:
                         langs.append(lang)

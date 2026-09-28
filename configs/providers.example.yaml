@@ -13,6 +13,12 @@ defaults:
   tts: tts.f5_tts                        # or tts.elevenlabs / tts.mock
   lipsync: lipsync.none                  # or lipsync.wav2lip / lipsync.latentsync
 
+# In-process model lifecycle (faster-whisper, F5-TTS, pyannote, quality models) and Ollama LLMs.
+# Env overrides: OPENDUB_MODELS_IDLE_TTL_S, OPENDUB_MODELS_GPU_BUDGET_GB.
+models:
+  idle_ttl_s: 60                         # unload a model this long after its last use; 0 = right away
+  gpu_budget_gb: 0                       # evict idle models (LRU) past this; 0 = total VRAM - 1 GB
+
 providers:
   # ---- self-hosted OSS ----
   asr.faster_whisper:
@@ -31,11 +37,13 @@ providers:
     base_url: http://localhost:11434/v1
     model: qwen2.5:14b
     temperature: 0.3
+    unload_after_use: true               # Ollama only: free the model after the stage (keep_alive 0)
 
   tts.f5_tts:
     device: auto
     segment_style: true                  # use each line's own source audio as the emotion reference
     model: F5TTS_v1_Base
+    unload_after_use: true               # Ollama only: free the transliteration LLM after use
 
   lipsync.wav2lip:
     repo_dir: ""                         # path to a cloned https://github.com/Rudrabha/Wav2Lip

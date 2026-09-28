@@ -110,6 +110,10 @@ data/     per-project media + manifest.json
 
 ## Benchmarking & quality assessment
 
+The pipeline now records backend quality reports, retries failed speech and duration mismatches,
+analyzes source emotion/delivery, preserves overlapping voices, and validates encoded output.
+See [backend quality](docs/backend-quality.md) for configuration, limits, and regression gates.
+
 `server/bench/` measures how each pipeline stage actually performs. `make bench` runs the real
 pipeline over every case in `data/benchmarks/cases.yaml` and writes a scored report.
 
@@ -121,7 +125,7 @@ reference files:
 | separation | vocal-vs-background loudness gap | SI-SDR (`ref_vocals.wav`) |
 | transcribe | speech coverage, segments/min | WER / CER (`ref_transcript.jsonl`) |
 | translate | time-budget compliance, LLM judge (adequacy + fluency, via your Ollama) | chrF (`ref_translation.jsonl`) |
-| tts | degenerate-take rate, duration-clamp rate | *(round-trip WER / speaker-sim slots)* |
+| tts | degenerate-take rate, duration-clamp rate | round-trip WER/CER and speaker similarity with configured local models |
 | mix | integrated LUFS vs target, lead-in noise floor, dialogue-vs-bed margin | — |
 | lipsync | *(SyncNet slot — implemented once a live-action clip exists)* | — |
 

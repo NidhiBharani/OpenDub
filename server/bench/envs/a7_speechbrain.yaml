@@ -1,0 +1,13 @@
+name: a7_speechbrain
+python: ~/.opendub/envs/a7_speechbrain/bin/python
+description: SpeechBrain 1.0.3 ECAPA (torchaudio I/O → torch 2.8).
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} speechbrain==1.0.3 soundfile librosa numpy
+  aarch64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} speechbrain==1.0.3 soundfile librosa numpy
+check: import speechbrain, torch; assert torch.cuda.is_available()

@@ -1,0 +1,18 @@
+name: d1_fish_speech
+python: ~/.opendub/envs/d1_fish_speech/bin/python
+description: "Fish Audio S2 Pro via the fish-speech repo api_server (research/NC weights)"
+setup:
+  x86_64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu128 torch==2.11.0 torchaudio==2.11.0"
+    - "test -d {home}/.opendub/src/fish-speech || git clone https://github.com/fishaudio/fish-speech {home}/.opendub/src/fish-speech && git -C {home}/.opendub/src/fish-speech checkout 214da3cd841bda85da2496b96cd3c4d7edb1337e"
+    - "uv pip install --python {python} -e {home}/.opendub/src/fish-speech"
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('fishaudio/s2-pro', local_dir='{home}/.opendub/src/fish-speech/checkpoints/s2-pro', revision='1de9996b6be38b745688de084d87a5633f714e4e')\""
+  aarch64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu130 torch==2.11.0 torchaudio==2.11.0"
+    - "test -d {home}/.opendub/src/fish-speech || git clone https://github.com/fishaudio/fish-speech {home}/.opendub/src/fish-speech && git -C {home}/.opendub/src/fish-speech checkout 214da3cd841bda85da2496b96cd3c4d7edb1337e"
+    - "uv pip install --python {python} -e {home}/.opendub/src/fish-speech"
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('fishaudio/s2-pro', local_dir='{home}/.opendub/src/fish-speech/checkpoints/s2-pro', revision='1de9996b6be38b745688de084d87a5633f714e4e')\""
+check: "import fish_speech, torch; assert torch.cuda.is_available()"
+notes: "Docs recommend ≥24 GB VRAM (Spark). SGLang is the reference fast path and was not verified on aarch64/sm_121; this env uses the plain PyTorch api_server. The package pins numpy<=1.26.4."

@@ -1,0 +1,159 @@
+# D8 — direct S2ST (evaluate-only comparator).
+# Rows from both research artifacts: data/research/model-research.html ledger (research:D8:<rank>)
+# and data/research/compute-tiers.html picks (compute-tiers:D8:spark|big|api, alternates *-alt),
+# docs/model-candidates-by-compute.md and plan §7 (plan:§7:D8).
+# requires places each row: vram ≤ 15 → Thalassa (x86_64 16 GB) and Spark; vram > 16 → Spark only;
+# arch [x86_64] where deps have no aarch64 wheels; kind api → API keys. d_unwired = registered only.
+capability: D8
+candidates:
+- id: seamless-m4t-v2-large
+  worker: d8_seamless
+  env: d8_seamless
+  kind: local
+  params: {model: facebook/seamless-m4t-v2-large, revision: 5f8cc790b19fc3f67a61c105133b20b34e3dcb76,
+    speaker_id: 0}
+  languages: [en, hi, ja]
+  license: CC-BY-NC-4.0
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 8, disk_gb: 10}
+  sources: ['research:D8:5']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: Speech output covers eng/hin/jpn (36 targets); no voice preservation (vocoder speakers). The
+    only open direct S2ST here that covers ja→en/hi and en→hi.
+  url: https://huggingface.co/facebook/seamless-m4t-v2-large
+  params_b: 2.3
+- id: seamless-expressive
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'SeamlessExpressive: gated research weights, eng↔fra/deu/ita/spa/cmn only — no ja/hi pair.'}
+  languages: '*'
+  license: Seamless research licence (NC)
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['research:D8:5', 'compute-tiers:D8:big-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'SeamlessExpressive: gated research weights, eng↔fra/deu/ita/spa/cmn only — no ja/hi pair.'
+  url: https://huggingface.co/facebook/seamless-expressive
+- id: uniss
+  worker: d8_uniss
+  env: d8_uniss
+  kind: local
+  params: {mode: Quality}
+  languages: [en, zh]
+  license: CC-BY-4.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 10, disk_gb: 8}
+  sources: ['research:D8:1', 'compute-tiers:D8:spark']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'en↔zh only: no ja/hi source or target → disabled for the en/hi/ja scope.'
+  url: https://huggingface.co/cmots/UniSS
+  params_b: 1.86
+  enabled: false
+- id: hibiki-zero-3b
+  worker: d8_hibiki
+  env: d8_hibiki
+  kind: local
+  params:
+    hf_repo: kyutai/hibiki-zero-3b-pytorch-bf16
+    sources: [fr, es, pt, de]
+  languages: [en]
+  license: CC-BY-4.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 12, disk_gb: 8}
+  sources: ['research:D8:2']
+  verified: {license: false, languages: true, vram: false, runs: false}
+  notes: fr/es/pt/de→en only (no ja/hi source) → disabled; uses its own hibiki-zero package (set params.module).
+  url: https://huggingface.co/kyutai/hibiki-zero-3b-pytorch-bf16
+  params_b: 3.0
+  enabled: false
+- id: cascade-opendub
+  worker: d_unwired
+  env: server
+  kind: method
+  params: {why: 'Control condition = the OpenDub cascade itself (A4→C2→D1), measured through the ladder/cascade
+      view on the same clips, not as a D8 worker.'}
+  languages: '*'
+  license: n/a
+  ship_ok: true
+  requires: {}
+  enabled: false
+  sources: ['research:D8:3', 'compute-tiers:D8:big-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Control condition = the OpenDub cascade itself (A4→C2→D1), measured through the ladder/cascade
+    view on the same clips, not as a D8 worker.
+  url: https://github.com/NidhiBharani/OpenDub/blob/main/docs/plans/model-ranking.md
+- id: hibiki-2b
+  worker: d8_hibiki
+  env: d8_hibiki
+  kind: local
+  params: {hf_repo: kyutai/hibiki-2b-pytorch-bf16}
+  languages: [en]
+  license: CC-BY-4.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 10, disk_gb: 6}
+  sources: ['research:D8:4', 'compute-tiers:D8:spark-alt']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: fr→en only → disabled for en/hi/ja.
+  url: https://huggingface.co/kyutai/hibiki-2b-pytorch-bf16
+  params_b: 2.7
+  enabled: false
+- id: seed-liveinterpret-2
+  worker: d_unwired
+  env: server
+  kind: api
+  params: {why: 'Seed LiveInterpret 2.0 / Seed-Live 2.0: private beta, no public API.'}
+  languages: '*'
+  license: proprietary
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['research:D8:6', 'compute-tiers:D8:big', 'compute-tiers:D8:api-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Seed LiveInterpret 2.0 / Seed-Live 2.0: private beta, no public API.'
+  url: https://seed.bytedance.com
+- id: step-audio-2-mini
+  worker: d8_step_audio2
+  env: d8_step_audio2
+  kind: local
+  params: {voice_prompt: source}
+  languages: [en, zh]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 20, disk_gb: 20}
+  sources: ['research:D8:7', 'compute-tiers:D8:spark-alt', 'compute-tiers:D8:big']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: S2ST output en/zh per the repo examples (source ja allowed via S2TT support); ~8B speech LLM
+    bf16 → Spark. Source clip used as the token2wav voice prompt.
+  url: https://huggingface.co/stepfun-ai/Step-Audio-2-mini
+  params_b: 8.3
+- id: transvip
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'TransVIP (Microsoft research, 2024): weights not released/verified.'}
+  languages: '*'
+  license: unknown
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['research:D8:8']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'TransVIP (Microsoft research, 2024): weights not released/verified.'
+  url: https://arxiv.org/abs/2405.17809
+- id: elevenlabs-dubbing
+  worker: d8_elevenlabs_dubbing
+  env: server
+  kind: api
+  params: {num_speakers: 1}
+  languages: [en, ja, zh, de, hi, fr, ko, pt, it, es, id, nl, tr, fil, pl, sv, bg, ro, ar, cs, el, fi,
+    hr, ms, sk, da, ta, uk, ru]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [ELEVENLABS_API_KEY]
+  sources: ['compute-tiers:D8:api']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Productised cascade (control condition). Per-minute price is an estimate.
+  url: https://elevenlabs.io/docs/api-reference/dubbing/create

@@ -1,0 +1,13 @@
+name: a3_whisperat
+python: ~/.opendub/envs/a3_whisperat/bin/python
+description: Whisper-AT (BSD; whisper-at PyPI, openai-whisper fork).
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.11
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} whisper-at soundfile librosa numpy
+  aarch64:
+  - uv venv {prefix} --python 3.11
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} whisper-at soundfile librosa numpy
+check: import whisper_at

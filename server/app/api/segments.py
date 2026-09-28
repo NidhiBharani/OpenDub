@@ -102,8 +102,8 @@ def _update_segment_locked(pid: str, sid: str, body: SegmentPatchBody) -> tuple[
     if "speaker_id" in data and data["speaker_id"] and project.speaker(data["speaker_id"]) is None:
         raise HTTPException(400, f"unknown speaker '{data['speaker_id']}'")
 
-    new_start = data["start"] if "start" in data else segment.start
-    new_end = data["end"] if "end" in data else segment.end
+    new_start = data.get("start", segment.start)
+    new_end = data.get("end", segment.end)
     duration = project.media.duration if project.media else None
     if duration is not None and duration > 0:
         new_start = max(0.0, min(new_start, duration))
@@ -114,9 +114,9 @@ def _update_segment_locked(pid: str, sid: str, body: SegmentPatchBody) -> tuple[
     if new_start >= new_end:
         raise HTTPException(400, f"start ({new_start}) must be before end ({new_end})")
 
-    if "active_take_id" in data and data["active_take_id"] is not None:
-        if not any(t.id == data["active_take_id"] for t in segment.takes):
-            raise HTTPException(400, f"unknown take '{data['active_take_id']}'")
+    if data.get("active_take_id") is not None and not any(
+            t.id == data["active_take_id"] for t in segment.takes):
+        raise HTTPException(400, f"unknown take '{data['active_take_id']}'")
 
     # --- apply dirty rules (ARCHITECTURE.md "Dirty tracking / invalidation") -----------
     translate_dirty = False

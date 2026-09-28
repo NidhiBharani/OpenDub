@@ -1,0 +1,506 @@
+# F1 — live-action lip sync. Sources: data/research/model-research.html (#F1 ledger, 10 rows +
+# text mentions), data/research/compute-tiers.html (#F1 picks/alternates) and
+# docs/model-candidates-by-compute.md. Spec: bench/arena/specs/f1.py.
+# Thalassa = RTX 5060 Ti 16 GB x86_64 (no block-swap offload of 14B+ video models);
+# Spark = GB10 aarch64 ~112 GB unified. Every 14B/22B video DiT below is Spark-only by VRAM.
+capability: F1
+candidates:
+  # ---------------------------------------------------------------- local, fits Thalassa
+  - id: wav2lip-gan
+    url: https://github.com/Rudrabha/Wav2Lip
+    params_b: 0.04
+    worker: f1_wav2lip
+    env: f1_wav2lip
+    kind: local
+    params: {checkpoint: null, resize_factor: 1, pads: "0 10 0 0", nosmooth: false}
+    languages: "*"
+    license: Wav2Lip weights personal/research/non-commercial only (LRS2); code MIT-style
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 2, disk_gb: 1}
+    baseline: true
+    sources: ["research:F1:10"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Today's local baseline (app/providers/lipsync/wav2lip.py). 96x96 mouth; trained against a
+      SyncNet expert, so never rank it by SyncNet LSE. Repo HEAD bac9a81e; GAN checkpoint from the
+      authors' Google Drive (the env recipe fetches it with gdown).
+
+  - id: latentsync-1.6
+    url: https://huggingface.co/ByteDance/LatentSync-1.6
+    params_b: 0.9
+    worker: f1_latentsync
+    env: f1_latentsync
+    kind: local
+    params: {version: "1.6", unet_config: configs/unet/stage2_512.yaml,
+             checkpoint: checkpoints/latentsync_unet.pt, inference_steps: 20,
+             guidance_scale: 1.5, enable_deepcache: true, seed: 1247}
+    languages: "*"
+    license: openrail++ (weights, ByteDance/LatentSync-1.6); code Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 15.0, disk_gb: 8}
+    sources: ["research:F1:2", "compute-tiers:F1:spark"]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      512 px face crop composited back. Measured 15.8 GB process peak on a 16 GB card (README
+      says 18 GB); vram_gb is set to 15.0 so the runner's free-VRAM check (needs vram+0.5 GB free)
+      admits it on an idle 16 GB card — run it with nothing else resident. Upstream frozen since
+      June 2025; repo commit a229c394. The user's working clone (~/sources/LatentSync, torch
+      2.11+cu128) can be used by pointing the env python at its .venv and params.repo_dir at it.
+
+  - id: latentsync-1.5
+    url: https://huggingface.co/ByteDance/LatentSync-1.5
+    params_b: 0.9
+    worker: f1_latentsync
+    env: f1_latentsync
+    kind: local
+    params: {version: "1.5", unet_config: configs/unet/stage2.yaml,
+             checkpoint: checkpoints/1.5/latentsync_unet.pt, inference_steps: 20,
+             guidance_scale: 1.5, enable_deepcache: true, seed: 1247}
+    languages: "*"
+    license: openrail++ (weights, ByteDance/LatentSync-1.5); code Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 9, disk_gb: 8}
+    sources: ["research:F1:2"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      256 px crop (blurrier teeth than 1.6). README states 8 GB; +10% headroom. Runs from the
+      1.6 repo checkout with the 1.5 UNet in checkpoints/1.5/ (unverified that the 1.6 code path
+      is byte-identical to the 1.5 release for this checkpoint).
+
+  - id: keysync
+    url: https://huggingface.co/toninio19/keysync
+    params_b: null
+    worker: f1_keysync
+    env: f1_keysync
+    kind: local
+    params: {keyframes_ckpt: null, interpolation_ckpt: null, fix_occlusion: false}
+    languages: "*"
+    license: Apache-2.0 (code and HF weights toninio19/keysync)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 14, disk_gb: 12}
+    sources: ["research:F1:3", "compute-tiers:F1:spark-alt"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Leakage-free lower-face masking (LipLeak metric), occlusion handling. VRAM is an estimate
+      (SVD-class keyframe + interpolation UNets, WavLM, SAM2.1-L; not stated upstream) — if it
+      exceeds 16 GB it becomes Spark-only. Repo HEAD 5e2503b1. Model reloads per item.
+
+  - id: musetalk-1.5
+    url: https://huggingface.co/TMElyralab/MuseTalk
+    params_b: null
+    worker: f1_musetalk
+    env: f1_musetalk
+    kind: local
+    params: {version: v15, bbox_shift: 0, use_float16: true}
+    languages: "*"
+    license: MIT (code and weights; sub-models keep their own licences)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 5, disk_gb: 6}
+    sources: ["research:F1:6"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      256x256 latent inpainting, fastest open option (preview renderer). README: fp16 runs on a
+      4 GB laptop GPU; 5 GB with headroom. MM stack (mmcv 2.x) is the install risk on torch 2.9+
+      / sm_120 (see envs/f1_musetalk.yaml). Repo HEAD 0a89dec4.
+
+  - id: highsync
+    url: https://github.com/saeed5959/high_sync
+    params_b: null
+    worker: f1_highsync
+    env: f1_highsync
+    kind: local
+    params: {}
+    languages: "*"
+    license: MIT (code and HF weights saeed-5959/high_sync)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 12, disk_gb: 8}
+    sources: ["research:F1:text"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Named in the F1 research text (HDTF FID 7.36 / CSIM 0.85 / LSE-C 7.72; silence test).
+      Released with weights (github.com/saeed5959/high_sync). VRAM is an estimate for an
+      SD-1.5-class latent lip-sync model; unverified.
+
+  # ---------------------------------------------------------------- Spark only (14B/22B DiTs)
+  - id: ltx-2.3-dubit-bf16
+    url: https://huggingface.co/Lightricks/LTX-2.3-22b-IC-LoRA-DubIt
+    params_b: 22
+    worker: f1_ltx_dubit
+    env: f1_ltx2
+    kind: local
+    params: {hf_repo: Lightricks/LTX-2.3, checkpoint: ltx-2.3-22b-distilled.safetensors,
+             quantization: none, lora_repo: Lightricks/LTX-2.3-22b-IC-LoRA-DubIt,
+             lora_file: ltx-2.3-22b-ic-lora-dubit-0.9.safetensors, lora_strength: 1.0,
+             upsampler_repo: Lightricks/LTX-2.3,
+             upsampler_file: ltx-2.3-spatial-upscaler-x2-1.1.safetensors,
+             gemma_repo: google/gemma-3-12b-it-qat-q4_0-unquantized, reference_strength: 1.0,
+             seed: 0, offload_mode: none}
+    languages: [en, fr, es, de, ru]
+    license: LTX-2 Community License (free below $10M ARR; revenue-conditional, not open source)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 80, disk_gb: 90, api_keys: [HF_TOKEN]}
+    profiles: [spark]
+    sources: ["research:F1:5", "compute-tiers:F1:big"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Renamed from LipDub. TEXT-driven: regenerates lips and speech from item.meta.text (items
+      without it are unsupported); output carries its own generated audio. Single speaker,
+      beta. VRAM estimate: 22B BF16 (~44 GB) + Gemma-3-12B (~24 GB) + VAEs/activations. Gemma is
+      gated (HF_TOKEN). ship_ok false = revenue-conditional licence, not NC.
+
+  - id: ltx-2.3-dubit-fp8
+    url: https://huggingface.co/Lightricks/LTX-2.3-fp8
+    params_b: 22
+    worker: f1_ltx_dubit
+    env: f1_ltx2
+    kind: local
+    params: {hf_repo: Lightricks/LTX-2.3-fp8, checkpoint: ltx-2.3-22b-distilled-fp8.safetensors,
+             quantization: fp8-scaled-mm, lora_repo: Lightricks/LTX-2.3-22b-IC-LoRA-DubIt,
+             lora_file: ltx-2.3-22b-ic-lora-dubit-0.9.safetensors, lora_strength: 1.0,
+             upsampler_repo: Lightricks/LTX-2.3,
+             upsampler_file: ltx-2.3-spatial-upscaler-x2-1.1.safetensors,
+             gemma_repo: google/gemma-3-12b-it-qat-q4_0-unquantized, reference_strength: 1.0,
+             seed: 0, offload_mode: none}
+    languages: [en, fr, es, de, ru]
+    license: LTX-2 Community License (free below $10M ARR)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 50, disk_gb: 60, api_keys: [HF_TOKEN]}
+    profiles: [spark]
+    sources: ["research:F1:5", "compute-tiers:F1:big"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      FP8 distilled checkpoint (~29 GB file for dev-fp8; distilled similar) + Gemma BF16. Would
+      need block-swap offload to fit 16 GB, which Thalassa does not do for 14B+ video models.
+
+  - id: ltx-2.3-dubit-nvfp4
+    url: https://huggingface.co/Lightricks/LTX-2.3-22b-IC-LoRA-DubIt
+    params_b: 22
+    worker: f1_ltx_dubit
+    env: f1_ltx2
+    kind: local
+    params: {hf_repo: Lightricks/LTX-2.3, checkpoint: ltx-2.3-22b-distilled.safetensors,
+             quantization: nvfp4-cast, lora_repo: Lightricks/LTX-2.3-22b-IC-LoRA-DubIt,
+             lora_file: ltx-2.3-22b-ic-lora-dubit-0.9.safetensors, lora_strength: 1.0,
+             upsampler_repo: Lightricks/LTX-2.3,
+             upsampler_file: ltx-2.3-spatial-upscaler-x2-1.1.safetensors,
+             gemma_repo: google/gemma-3-12b-it-qat-q4_0-unquantized, reference_strength: 1.0,
+             seed: 0, offload_mode: none}
+    languages: [en, fr, es, de, ru]
+    license: LTX-2 Community License (free below $10M ARR)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 40, disk_gb: 90, min_compute_capability: "12.0",
+               api_keys: [HF_TOKEN]}
+    profiles: [spark]
+    sources: ["compute-tiers:F1:spark-alt"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Compute-tiers alternate ("fits the Spark at ~20 GB after NVFP4"; that figure excludes the
+      Gemma text encoder). No distilled NVFP4 file exists (only dev), so the BF16 distilled
+      checkpoint is cast at load (--quantization nvfp4-cast). NVFP4 saves memory, not speed, on
+      GB10. Blackwell-only kernels.
+
+  - id: ltx-2.3-dubit-gguf-q4
+    url: https://huggingface.co/unsloth/LTX-2.3-GGUF
+    params_b: 22
+    worker: f1_ltx_dubit
+    env: f1_ltx2
+    kind: local
+    params: {gguf: "unsloth/LTX-2.3-GGUF:Q4_K_M"}
+    languages: [en, fr, es, de, ru]
+    license: LTX-2 Community License (free below $10M ARR)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 30}
+    enabled: false
+    sources: ["research:F1:5"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      GGUF quants exist (unsloth/LTX-2.3-GGUF, QuantStack/LTX-2.3-GGUF) but only ComfyUI loads
+      them; ltx-pipelines (the DubIt pipeline) has no GGUF loader. Disabled until a non-ComfyUI
+      path exists.
+
+  - id: infinitetalk-480-bf16
+    url: https://huggingface.co/MeiGen-AI/InfiniteTalk
+    params_b: 14
+    worker: f1_infinitetalk
+    env: f1_infinitetalk
+    kind: local
+    params: {size: infinitetalk-480, sample_steps: 40, mode: streaming, motion_frame: 9,
+             quant: none, prompt: "A person is talking"}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 48, disk_gb: 90}
+    profiles: [spark]
+    sources: ["research:F1:7", "compute-tiers:F1:big-alt"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Wan2.1-I2V-14B-480P + InfiniteTalk adapter, video-to-video (regenerates head/body; CSIM
+      0.775 on HDTF in its own paper, so the CSIM gate should reject it for dubbing). VRAM
+      estimate (14B BF16 + umT5-XXL + CLIP + wav2vec); README gives no figure. Max 40 s default.
+
+  - id: infinitetalk-480-fp8
+    url: https://huggingface.co/MeiGen-AI/InfiniteTalk
+    params_b: 14
+    worker: f1_infinitetalk
+    env: f1_infinitetalk
+    kind: local
+    params: {size: infinitetalk-480, sample_steps: 40, mode: streaming, motion_frame: 9,
+             quant: fp8, quant_file: quant_models/infinitetalk_single_fp8.safetensors,
+             prompt: "A person is talking"}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 32, disk_gb: 100}
+    profiles: [spark]
+    sources: ["research:F1:7"]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      FP8 DiT (~14 GB) still needs the T5/CLIP/wav2vec encoders and activations; it only fits
+      16 GB with --num_persistent_param_in_dit 0 (block swap), which Thalassa does not do.
+
+  - id: wan2.2-s2v-14b
+    url: https://huggingface.co/Wan-AI/Wan2.2-S2V-14B
+    params_b: 16
+    worker: f1_wan_s2v
+    env: f1_wan22
+    kind: local
+    params: {size: "1024*704", infer_frames: 80, offload_model: false, convert_model_dtype: true,
+             prompt: "A person is talking.", ref_time: 0.0}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 80, disk_gb: 70}
+    profiles: [spark]
+    sources: ["compute-tiers:F1:big-alt"]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      Single reference image + audio → new video (not video-to-video); a whole-frame
+      comparator expected to lose on identity. README: ≥80 GB on one GPU. Repo HEAD 1ea34ff4.
+
+  # ---------------------------------------------------------------- APIs
+  - id: sync-3
+    url: https://docs.sync.so/models/lipsync
+    params_b: null
+    worker: f1_sync_api
+    env: server
+    kind: api
+    params: {model: sync-3, sync_mode: cut_off, model_mode: lips}
+    languages: "*"
+    license: proprietary API (sync. labs)
+    ship_ok: true
+    requires: {api_keys: [SYNC_API_KEY]}
+    sources: ["research:F1:1", "compute-tiers:F1:api"]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      4K-native, whole-shot model (launched 2026-08-14). $0.107–0.133/s of output at 25 fps
+      (checked 2026-09-28; the higher pay-as-you-go end is billed in _cost_usd). Multipart
+      upload < 20 MB per file.
+
+  - id: lipsync-2-pro
+    url: https://docs.sync.so/models/lipsync
+    params_b: null
+    worker: f1_sync_api
+    env: server
+    kind: api
+    params: {model: lipsync-2-pro, sync_mode: cut_off}
+    languages: "*"
+    license: proprietary API (sync. labs)
+    ship_ok: true
+    requires: {api_keys: [SYNC_API_KEY]}
+    sources: ["research:F1:4", "compute-tiers:F1:api-alt"]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: 512 px + diffusion super-resolution; $0.067–0.083/s (2026-09-28). Needs natural speaking motion in the input.
+
+  - id: lipsync-2
+    url: https://docs.sync.so/models/lipsync
+    params_b: null
+    worker: f1_sync_api
+    env: server
+    kind: api
+    params: {model: lipsync-2, sync_mode: cut_off}
+    languages: "*"
+    license: proprietary API (sync. labs)
+    ship_ok: true
+    requires: {api_keys: [SYNC_API_KEY]}
+    sources: ["research:F1:4"]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: The cheaper sync. labs rung named in the pricing evidence ($0.04–0.05/s, 2026-09-28).
+
+  - id: heygen-lipsync-precision
+    url: https://developers.heygen.com/
+    params_b: null
+    worker: f1_heygen_api
+    env: server
+    kind: api
+    params: {mode: precision}
+    languages: "*"
+    license: proprietary API (HeyGen)
+    ship_ok: true
+    requires: {api_keys: [HEYGEN_API_KEY]}
+    sources: ["research:F1:9", "compute-tiers:F1:api-alt"]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      v3 /lipsyncs with our own audio (not Video Translate, which would also replace C2/D1).
+      $0.0667/s (rate seen on its Replicate listing; heygen.com shows no table). Asset upload
+      field name is assumed ("file").
+
+  - id: heygen-lipsync-speed
+    url: https://developers.heygen.com/
+    params_b: null
+    worker: f1_heygen_api
+    env: server
+    kind: api
+    params: {mode: speed}
+    languages: "*"
+    license: proprietary API (HeyGen)
+    ship_ok: true
+    requires: {api_keys: [HEYGEN_API_KEY]}
+    sources: ["research:F1:9"]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: Cheaper HeyGen mode, $0.0333/s (2026-09-28).
+
+  - id: replicate-latentsync
+    url: https://replicate.com/bytedance/latentsync
+    params_b: 0.9
+    worker: f1_replicate
+    env: server
+    kind: api
+    params: {model: bytedance/latentsync, video_field: video, audio_field: audio,
+             extra_input: {guidance_scale: 1.5, seed: 1247}, price_per_run: 0.10}
+    languages: "*"
+    license: proprietary hosting of LatentSync (openrail++ weights)
+    ship_ok: true
+    requires: {api_keys: [REPLICATE_API_TOKEN]}
+    sources: ["research:F1:text"]
+    verified: {license: false, languages: true, vram: true, runs: false}
+    notes: >-
+      The app's lipsync.replicate default model. Which LatentSync version Replicate serves is not
+      stated; cost ≈ $0.10/run on L40S (GPU-seconds billed; estimate).
+
+  - id: replicate-video-retalking
+    url: https://replicate.com/chenxwh/video-retalking
+    params_b: null
+    worker: f1_replicate
+    env: server
+    kind: api
+    params: {model: chenxwh/video-retalking, video_field: face, audio_field: input_audio,
+             price_per_run: 0.15}
+    languages: "*"
+    license: proprietary hosting (VideoReTalking code Apache-2.0; weights research)
+    ship_ok: false
+    requires: {api_keys: [REPLICATE_API_TOKEN]}
+    sources: ["research:F1:text"]
+    verified: {license: false, languages: true, vram: true, runs: false}
+    notes: >-
+      Community model: the worker posts to /models/…/predictions, which Replicate only accepts
+      for official models — pin params.version before running. Price is a GPU-time estimate.
+
+  - id: replicate-musetalk
+    url: https://replicate.com/tmappdev/lipsync
+    params_b: null
+    worker: f1_replicate
+    env: server
+    kind: api
+    params: {model: tmappdev/lipsync, video_field: video_input, audio_field: audio_input,
+             extra_input: {bbox_shift: 0, fps: 25}, price_per_run: 0.05}
+    languages: "*"
+    license: proprietary hosting of MuseTalk (MIT)
+    ship_ok: true
+    requires: {api_keys: [REPLICATE_API_TOKEN]}
+    enabled: false
+    sources: ["research:F1:6"]
+    verified: {license: false, languages: true, vram: true, runs: false}
+    notes: Duplicate of the local musetalk-1.5 via a community host; disabled (enable only for an API-only machine, pin version).
+
+  - id: replicate-kling-lip-sync
+    url: https://replicate.com/kwaivgi/kling-lip-sync
+    params_b: null
+    worker: f1_replicate
+    env: server
+    kind: api
+    params: {model: kwaivgi/kling-lip-sync, video_field: video_url, audio_field: audio_file,
+             price_per_run: 0.10}
+    languages: "*"
+    license: proprietary API (Kuaishou Kling via Replicate)
+    ship_ok: true
+    requires: {api_keys: [REPLICATE_API_TOKEN]}
+    sources: ["research:F1:text"]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: Video 2–10 s, 720p–1080p, < 100 MB; audio < 5 MB. Price not shown on Replicate (estimate).
+
+  - id: replicate-pixverse-lipsync
+    url: https://replicate.com/pixverse/lipsync
+    params_b: null
+    worker: f1_replicate
+    env: server
+    kind: api
+    params: {model: pixverse/lipsync, video_field: video, audio_field: audio, price_per_run: 0.10}
+    languages: "*"
+    license: proprietary API (PixVerse via Replicate)
+    ship_ok: true
+    requires: {api_keys: [REPLICATE_API_TOKEN]}
+    sources: ["research:F1:text"]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: Official Replicate model; price not shown (estimate).
+
+  # ---------------------------------------------------------------- registered, not runnable
+  - id: omnisync
+    url: https://arxiv.org/abs/2505.21448
+    params_b: null
+    worker: f1_highsync
+    kind: local
+    languages: "*"
+    license: unknown
+    enabled: false
+    sources: ["research:F1:8"]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: NeurIPS 2025; no code or weights released (only the AIGC-LipSync benchmark and a Kling demo).
+
+  - id: just-dub-it
+    url: https://github.com/justdubit/just-dub-it
+    params_b: null
+    worker: f1_ltx_dubit
+    env: f1_ltx2
+    kind: local
+    languages: "*"
+    license: unknown
+    enabled: false
+    sources: ["research:F1:text"]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Weights released 2026-02-10 (justdubit/justdubit) but the repo is archived in favour of the LTX-2 DubIt pipeline, i.e. the ltx-2.3-dubit-* candidates.
+
+  - id: omnihuman-1.5
+    url: https://omnihuman-lab.github.io/v1_5/
+    params_b: null
+    worker: f1_replicate
+    kind: api
+    languages: "*"
+    license: proprietary API (ByteDance/BytePlus)
+    enabled: false
+    sources: ["research:F1:text"]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: Single-image-to-avatar generator (~$0.16/s, ~30 s clips); edits no existing footage — evaluate-only shelf for synthetic presenters, not dubbing.
+
+  - id: runway-act-two
+    url: https://docs.dev.runwayml.com/
+    params_b: null
+    worker: f1_replicate
+    kind: api
+    languages: "*"
+    license: proprietary API (Runway)
+    enabled: false
+    sources: ["research:F1:text"]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: Performance transfer onto a character reference (driven by a performer video, not audio); not an F1 task.
+
+  - id: veed-lipsync
+    url: https://help.elevenlabs.io/hc/en-us/articles/23793433149073-Do-you-offer-lip-sync-in-Dubbing
+    params_b: null
+    worker: f1_replicate
+    kind: api
+    languages: "*"
+    license: proprietary
+    enabled: false
+    sources: ["research:F1:text"]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: What ElevenLabs Dubbing routes footage to; no public developer API verified.

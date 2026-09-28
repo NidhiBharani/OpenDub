@@ -1,0 +1,23 @@
+name: e2_ap_bwe
+python: ~/.opendub/envs/e2_ap_bwe/bin/python
+description: AP-BWE (MIT code + weights) cloned at a pinned commit; 48 kHz checkpoints from the authors' Google Drive
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} numpy==1.26.4 scipy==1.13.1 soundfile==0.13.1 einops==0.8.0 librosa==0.10.2.post1 matplotlib==3.8.4 rich==13.9.4 natsort==8.3.0 joblib==1.3.2 gdown==5.2.0
+    - test -d {home}/.opendub/src/ap-bwe || git clone https://github.com/yxlu-0102/AP-BWE {home}/.opendub/src/ap-bwe
+    - git -C {home}/.opendub/src/ap-bwe checkout 751710f22404c27e5bcc983248f8b856a04b8422
+    - "{prefix}/bin/gdown --folder https://drive.google.com/drive/folders/1IIYTf2zbJWzelu4IftKD6ooHloJ8mnZF -O {home}/.opendub/models/ap-bwe"
+  aarch64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} numpy==1.26.4 scipy==1.13.1 soundfile==0.13.1 einops==0.8.0 librosa==0.10.2.post1 matplotlib==3.8.4 rich==13.9.4 natsort==8.3.0 joblib==1.3.2 gdown==5.2.0
+    - test -d {home}/.opendub/src/ap-bwe || git clone https://github.com/yxlu-0102/AP-BWE {home}/.opendub/src/ap-bwe
+    - git -C {home}/.opendub/src/ap-bwe checkout 751710f22404c27e5bcc983248f8b856a04b8422
+    - "{prefix}/bin/gdown --folder https://drive.google.com/drive/folders/1IIYTf2zbJWzelu4IftKD6ooHloJ8mnZF -O {home}/.opendub/models/ap-bwe"
+check: "import sys, os, torch; sys.path.insert(0, os.path.expanduser('~/.opendub/src/ap-bwe')); from models.model import APNet_BWE_Model; assert torch.cuda.is_available()"
+notes: >-
+  Repo pins torch 2.0 / librosa 0.7 (training); inference needs only torch/torchaudio/einops, so
+  newer pins are used (unverified against the checkpoints). The Drive folder layout (one dir per
+  lr→48k variant with config.json + g_*) is assumed; the worker discovers variants by config.

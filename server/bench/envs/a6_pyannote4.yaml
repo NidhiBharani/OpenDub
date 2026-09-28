@@ -1,0 +1,12 @@
+name: a6_pyannote4
+python: ~/.opendub/envs/a6_pyannote4/bin/python
+description: pyannote.audio 4.0.7 (community-1 / precision via token). Needs torchcodec + a system ffmpeg;
+  torchcodec 0.16 ships manylinux aarch64 wheels, so one recipe serves both arches (cu130 torch, matching
+  the server venv's torch 2.14 / torchcodec 0.16 pair).
+setup:
+  x86_64: &id001
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.14.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} pyannote.audio==4.0.7 torchcodec==0.16.0 soundfile librosa numpy
+  aarch64: *id001
+check: import pyannote.audio, torchcodec, torch; assert torch.cuda.is_available()

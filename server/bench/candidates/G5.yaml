@@ -1,0 +1,156 @@
+# G5 — lip-sync scorer, ranked by its response to injected A/V offsets (spec: specs/g5.py).
+# Scorers: workers/judge_lipsync.py, one env per backend (judge_lipsync_<model>).
+capability: G5
+candidates:
+  - id: syncnet-lse
+    worker: judge_lipsync
+    env: judge_lipsync_syncnet
+    kind: local
+    params: {model: syncnet}
+    languages: "*"
+    license: MIT code; VGG research weights
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 3, tools: [ffmpeg]}
+    baseline: true
+    url: https://github.com/joonson/syncnet_python
+    sources: [research:G5:3, compute-tiers:G5:spark]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      The bench harness's declared slot; LSE-C/LSE-D for comparability only (not shift invariant,
+      negatively correlated with preference). Offset sign convention unverified (params.sign).
+  - id: synchformer-lrs3
+    worker: judge_lipsync
+    env: judge_lipsync_synchformer
+    kind: local
+    params: {model: synchformer, exp_name: 23-12-23T18-33-57}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 4, tools: [ffmpeg]}
+    url: https://github.com/v-iashin/Synchformer
+    sources: [research:G5:1, compute-tiers:G5:spark]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      LRS3-trained (talking heads; 86.6% Acc@1 on LRS3). 0.2 s offset grid: sub-grid offsets come
+      from the posterior mean. Upstream env is torch 2.0 / py3.8; torch 2.8 is unverified.
+  - id: synchformer-audioset
+    worker: judge_lipsync
+    env: judge_lipsync_synchformer
+    kind: local
+    params: {model: synchformer, exp_name: 24-01-04T16-39-21}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 4, tools: [ffmpeg]}
+    url: https://github.com/v-iashin/Synchformer
+    sources: [research:G5:1]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: AudioSet-trained checkpoint (general AV sync, sparse cues); expected weaker on faces.
+  - id: peavs
+    worker: judge_lipsync
+    env: judge_lipsync_peavs
+    kind: local
+    params: {model: peavs}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 6, tools: [ffmpeg], arch: [x86_64]}
+    url: https://github.com/amazon-science/avgen-eval-toolkit
+    sources: [compute-tiers:G5:spark, compute-tiers:G5:big]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Co-primary (human-calibrated 1..5; Pearson 0.79 set / 0.54 clip). I3D flow uses cupy PWC
+      kernels: kept x86_64-only until cupy + OpenCV are checked on aarch64 (the env has an
+      aarch64 recipe to try). No signed offset.
+  - id: gemini-3.7-flash-sync
+    worker: g6_gemini
+    env: g6_api
+    kind: api
+    params: {model: gemini-3.7-flash, task: sync, prices: {in: 0.75, out: 3.75}}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    url: https://ai.google.dev/gemini-api/docs/video-understanding
+    sources: [compute-tiers:G5:api]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: Video-LLM "is the mouth obviously wrong" rater (probability, no offset).
+  - id: gemini-3.1-pro-sync
+    worker: g6_gemini
+    env: g6_api
+    kind: api
+    params: {model: gemini-3.1-pro-preview, task: sync, prices: {in: 2.0, out: 12.0}}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    url: https://ai.google.dev/gemini-api/docs/video-understanding
+    sources: [compute-tiers:G5:api-alt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+  - id: avhubert-sync-expert
+    worker: judge_lipsync
+    env: judge_lipsync_avhubert
+    kind: local
+    params: {model: avhubert}
+    languages: "*"
+    license: CC-BY-NC-4.0 (AV-HuBERT backbone)
+    ship_ok: false
+    enabled: false
+    url: https://arxiv.org/abs/2405.04327
+    sources: [research:G5:2, compute-tiers:G5:spark-alt, compute-tiers:G5:big]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: AVSu/AVSm/AVSv metrics (shift-invariant); code/weight release not verified, no backend yet.
+  - id: sparsesync
+    worker: judge_lipsync
+    env: judge_lipsync_synchformer
+    kind: local
+    params: {model: sparsesync}
+    languages: "*"
+    license: MIT (verify)
+    ship_ok: null
+    enabled: false
+    url: https://github.com/v-iashin/SparseSync
+    sources: [research:G5:4, compute-tiers:G5:spark-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Sparse-cue sibling of Synchformer; no backend in the worker yet.
+  - id: imagebind-av
+    worker: judge_lipsync
+    env: judge_lipsync_imagebind
+    kind: local
+    params: {model: imagebind}
+    languages: "*"
+    license: CC-BY-NC-4.0
+    ship_ok: false
+    enabled: false
+    url: https://github.com/facebookresearch/ImageBind
+    sources: [research:G5:5, compute-tiers:G5:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Semantic AV correspondence (wrong voice on screen), not a sync scorer; near chance on offsets.
+  - id: theval
+    worker: judge_lipsync
+    env: judge_lipsync_synchformer
+    kind: method
+    params: {model: theval}
+    languages: "*"
+    license: unknown
+    ship_ok: null
+    enabled: false
+    url: https://arxiv.org/search/?query=THEval&searchtype=all
+    sources: [research:G5:6]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: An evaluation framework to read, not a scorer.
+  - id: per-face-track-panel
+    worker: judge_lipsync
+    env: judge_lipsync_synchformer
+    kind: method
+    params: {model: panel}
+    languages: "*"
+    license: mixed
+    ship_ok: null
+    enabled: false
+    url: https://github.com/v-iashin/Synchformer
+    sources: [compute-tiers:G5:big, compute-tiers:G5:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      Shot-segmented, per-face-track PEAVS + Synchformer (+ AV-HuBERT) panel with LLM triage: the
+      structural change; build from the ranked single scorers.

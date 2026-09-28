@@ -20,6 +20,9 @@ configs/settings.yaml
 # local agent state
 .claude/
 
+# private project planning
+docs/private.md
+
 # playwright
 web/test-results/
 web/playwright-report/

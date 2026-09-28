@@ -1,0 +1,22 @@
+name: f3_rhubarb
+python: auto
+description: Rhubarb Lip Sync v1.14.0 (MIT) binary next to the server interpreter (the worker's own code
+  needs only numpy/soundfile from the server venv).
+setup:
+  x86_64:
+  - mkdir -p {home}/.opendub/envs/f3_rhubarb
+  - cd {home}/.opendub/envs/f3_rhubarb && curl -L -o rhubarb.zip https://github.com/DanielSWolf/rhubarb-lip-sync/releases/download/v1.14.0/Rhubarb-Lip-Sync-1.14.0-Linux.zip
+    && unzip -o rhubarb.zip && rm -rf rhubarb && mv Rhubarb-Lip-Sync-1.14.0-Linux rhubarb
+  aarch64:
+  - mkdir -p {home}/.opendub/envs/f3_rhubarb
+  - test -d {home}/.opendub/src/rhubarb-lip-sync || git clone https://github.com/DanielSWolf/rhubarb-lip-sync
+    {home}/.opendub/src/rhubarb-lip-sync
+  - git -C {home}/.opendub/src/rhubarb-lip-sync checkout v1.14.0
+  - cmake -S {home}/.opendub/src/rhubarb-lip-sync -B {home}/.opendub/src/rhubarb-lip-sync/build -DCMAKE_BUILD_TYPE=Release
+    && cmake --build {home}/.opendub/src/rhubarb-lip-sync/build --config Release -j
+  - mkdir -p {home}/.opendub/envs/f3_rhubarb/rhubarb && cp -r {home}/.opendub/src/rhubarb-lip-sync/build/rhubarb/rhubarb
+    {home}/.opendub/src/rhubarb-lip-sync/build/rhubarb/res {home}/.opendub/envs/f3_rhubarb/rhubarb/
+check: import os, pathlib; assert (pathlib.Path.home()/'.opendub/envs/f3_rhubarb/rhubarb/rhubarb').exists()
+notes: 'python: auto (the server venv). No arm64 release asset exists, so aarch64 builds from source (CMake
+  ≥ 3.10, GCC ≥ 10, Boost headers ≥ 1.54: `apt install libboost-dev cmake`). The build- output layout
+  (rhubarb binary + res/) is assumed from the release zip; verify.'

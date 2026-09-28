@@ -1,0 +1,16 @@
+name: b3_surya
+python: ~/.opendub/envs/b3_surya/bin/python
+description: >-
+  Surya OCR (code Apache-2.0, weights modified AI Pubs Open RAIL-M).
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} 'surya-ocr>=0.14'
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} 'surya-ocr>=0.14'
+check: "import surya, torch; assert torch.cuda.is_available()"
+notes: >-
+  Pin to the Surya 2 release once its predictor API is confirmed (see workers/b3_surya.py).

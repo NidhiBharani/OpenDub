@@ -1,0 +1,10 @@
+name: indicconformer
+python: ~/.opendub/envs/indicconformer/bin/python
+description: AI4Bharat IndicConformer (TorchScript preprocessor + ONNX encoder/CTC). onnxruntime-gpu
+  1.30 is a CUDA 13 wheel, so torch must be cu130 too; import torch before onnxruntime.
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0+cu130 torchaudio==2.11.0+cu130 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} onnxruntime-gpu numpy soundfile huggingface_hub
+check: "import torch, onnxruntime as o; assert 'CUDAExecutionProvider' in o.get_available_providers()"

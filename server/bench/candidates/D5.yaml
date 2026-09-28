@@ -1,0 +1,387 @@
+# D5 — licensed non-cloning (stock / designed) voices.
+# Rows from both research artifacts: data/research/model-research.html ledger (research:D5:<rank>)
+# and data/research/compute-tiers.html picks (compute-tiers:D5:spark|big|api, alternates *-alt),
+# docs/model-candidates-by-compute.md and plan §7 (plan:§7:D5).
+# requires places each row: vram ≤ 15 → Thalassa (x86_64 16 GB) and Spark; vram > 16 → Spark only;
+# arch [x86_64] where deps have no aarch64 wheels; kind api → API keys. d_unwired = registered only.
+capability: D5
+candidates:
+- id: azure-mai-voice-2
+  worker: d5_azure
+  env: server
+  kind: api
+  params:
+    voices:
+      en: {female: 'en-US-Harper:MAI-Voice-2', male: 'en-US-Ethan:MAI-Voice-2'}
+      hi: {female: 'hi-IN-Kavya:MAI-Voice-2', male: 'hi-IN-Dhruv:MAI-Voice-2'}
+  languages: [en, hi, de, es, fr, it, ko, nl, pt, ro, ru, th, tr, zh, hu]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [AZURE_SPEECH_KEY, AZURE_SPEECH_REGION]
+  sources: ['research:D5:1', 'compute-tiers:D5:api']
+  verified: {license: false, languages: true, vram: false, runs: false}
+  notes: Voice names from the MAI-Voice doc (2026-07-23); no ja-JP voice.
+  url: https://learn.microsoft.com/en-us/azure/ai-services/speech-service/mai-voices
+- id: azure-mai-voice-2-flash
+  worker: d5_azure
+  env: server
+  kind: api
+  params:
+    voices:
+      en: {female: 'en-US-Harper:MAI-Voice-2-Flash', male: 'en-US-Ethan:MAI-Voice-2-Flash'}
+      hi: {female: 'hi-IN-Kavya:MAI-Voice-2-Flash', male: 'hi-IN-Dhruv:MAI-Voice-2-Flash'}
+  languages: [en, hi, de, es, fr, it, ko, nl, pt, ro, ru, th, tr, zh, hu]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [AZURE_SPEECH_KEY, AZURE_SPEECH_REGION]
+  sources: ['compute-tiers:D5:api']
+  verified: {license: false, languages: true, vram: false, runs: false}
+  notes: Low-latency tier; no ja-JP voice.
+  url: https://learn.microsoft.com/en-us/azure/ai-services/speech-service/mai-voices
+- id: azure-neural
+  worker: d5_azure
+  env: server
+  kind: api
+  params:
+    voices:
+      en: {female: en-US-JennyNeural, male: en-US-GuyNeural}
+      hi: {female: hi-IN-SwaraNeural, male: hi-IN-MadhurNeural}
+      ja: {female: ja-JP-NanamiNeural, male: ja-JP-KeitaNeural}
+    usd_per_million_chars: 16
+  languages: [en, hi, ja]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [AZURE_SPEECH_KEY, AZURE_SPEECH_REGION]
+  sources: ['research:D5:1']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Standard neural catalogue (covers ja-JP); HD V3 voices can be swapped in via voices.
+  url: https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support
+- id: kokoro-82m
+  worker: d5_kokoro
+  env: d5_kokoro
+  kind: local
+  params: {speed: 1.0}
+  languages: [en, hi, ja, zh, es, fr, it, pt]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {ram_gb: 3, disk_gb: 1}
+  sources: ['research:D5:2', 'compute-tiers:D5:spark-alt']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: v1.0 voices (af_heart/am_michael, hf_alpha/hm_omega, jf_alpha/jm_kumo); runs on CPU. 'Kokoro
+    v3' claims unverified.
+  url: https://huggingface.co/hexgrad/Kokoro-82M
+  params_b: 0.082
+- id: cartesia-sonic-3.6-stock
+  worker: d1_cartesia
+  env: server
+  kind: api
+  params: {model: sonic-3.6-2026-08-27, mode: preset}
+  languages: [en, hi, ja, zh, ko, de, fr, es, it, pt, ru, ar, ta, te, bn]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [CARTESIA_API_KEY]
+  sources: ['research:D5:3', 'compute-tiers:D5:api-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Sonic 3.6 (44 languages, $49/M chars per Cartesia, 2026-08). Clone endpoint not re-verified.
+    Needs preset voice ids per language in params.voices (not filled).
+  url: https://docs.cartesia.ai/build-with-cartesia/tts-models/latest
+  enabled: false
+- id: chirp3-hd
+  worker: d5_google_tts
+  env: server
+  kind: api
+  params: {}
+  languages: [en, hi, ja]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [GOOGLE_API_KEY]
+  sources: ['research:D5:4', 'compute-tiers:D5:api-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'No cloning offered at all: the cleanest non-cloning guarantee. Voice names follow <locale>-Chirp3-HD-<Name>
+    (defaults Aoede/Charon, unverified per locale).'
+  url: https://cloud.google.com/text-to-speech/docs/chirp3-hd
+- id: chatterbox-multilingual-library
+  worker: d1_chatterbox
+  env: d1_chatterbox
+  kind: local
+  params:
+    mode: tts
+    t3_model: v3
+    stock_voices: {}
+  languages: [ar, da, de, el, en, es, fi, fr, he, hi, it, ja, ko, ms, nl, 'no', pl, pt, ru, sv, sw, tr,
+    zh]
+  license: MIT
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 5, disk_gb: 4}
+  sources: ['research:D5:5', 'compute-tiers:D5:spark-alt']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'chatterbox-tts 0.1.7 installed --no-deps over torch 2.11 (it pins torch 2.6, no sm_120 kernels).
+    Driven from a licensed reference library: set params.stock_voices {lang: {female, male}: wav}. Disabled
+    until the library exists.'
+  url: https://github.com/resemble-ai/chatterbox
+  params_b: 0.5
+  enabled: false
+- id: elevenlabs-voice-library
+  worker: d1_elevenlabs
+  env: server
+  kind: api
+  params:
+    model: eleven_multilingual_v2
+    mode: library
+    output_format: pcm_24000
+    voices:
+      '*': {female: 21m00Tcm4TlvDq8ikWAM, male: pNInz6obpgDQGcFmaJgB}
+  languages: [en, ja, zh, de, hi, fr, ko, pt, it, es, id, nl, tr, fil, pl, sv, bg, ro, ar, cs, el, fi,
+    hr, ms, sk, da, ta, uk, ru]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [ELEVENLABS_API_KEY]
+  sources: ['research:D5:6']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Mirrors app/providers/tts/elevenlabs.py; IVC voices are deleted at job end. Prices in _cost_usd
+    are estimates. Premade voices (Rachel / Adam ids); Voice Library Addendum governs shared voices.
+  url: https://elevenlabs.io/docs/api-reference/text-to-speech/convert
+- id: orpheus-3b
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'Orpheus TTS 3B: English-first (multilingual research preview), Llama 3.2 licence; compute-tiers
+      says superseded.'}
+  languages: [en]
+  license: Llama 3.2 Community License
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['research:D5:7', 'research:D7:8']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Orpheus TTS 3B: English-first (multilingual research preview), Llama 3.2 licence; compute-tiers
+    says superseded.'
+  url: https://huggingface.co/canopylabs/orpheus-3b-0.1-ft
+  params_b: 3.0
+- id: piper
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'Piper (GPL-3.0 engine, per-voice licences): evaluate-only; no worker (CPU, espeak-ng).'}
+  languages: '*'
+  license: GPL-3.0
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['research:D5:8']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Piper (GPL-3.0 engine, per-voice licences): evaluate-only; no worker (CPU, espeak-ng).'
+  url: https://github.com/OHF-Voice/piper1-gpl
+- id: breeze-tts-2
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'Breeze TTS 2 (research/NC weights, 2026-08): inference API and languages not verified.'}
+  languages: '*'
+  license: BreezeBlue Research and Non-Commercial License
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['research:D5:9']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Breeze TTS 2 (research/NC weights, 2026-08): inference API and languages not verified.'
+  url: https://huggingface.co/models?search=breeze
+- id: voxcpm2-design
+  worker: d1_voxcpm
+  env: d1_voxcpm
+  kind: local
+  params: {model: openbmb/VoxCPM2, revision: 32279effe8c19989596f05d353d1447f51d9e915, mode: design, cfg_value: 2.0,
+    inference_timesteps: 10, design: 'A natural, clear {gender} voice with a warm, mid-range tone and
+      neutral accent.'}
+  languages: [ar, my, zh, da, nl, en, fi, fr, de, el, he, hi, id, it, ja, km, ko, lo, ms, 'no', pl, pt,
+    ru, es, sw, sv, tl, th, tr, vi]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 9, disk_gb: 6}
+  sources: ['compute-tiers:D5:spark', 'compute-tiers:D5:big']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: ~8 GB on a 4090 per the README; 48 kHz output; no language argument (the model reads the script).
+  url: https://huggingface.co/openbmb/VoxCPM2
+  params_b: 2.0
+- id: qwen3-tts-1.7b-voicedesign
+  worker: d1_qwen3_tts
+  env: d1_qwen3_tts
+  kind: local
+  params: {model: Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign, revision: 5ecdb67327fd37bb2e042aab12ff7391903235d3,
+    mode: design, dtype: bfloat16, attn: sdpa, instruct: 'A natural, clear {gender} voice with a warm,
+      mid-range tone and neutral accent.'}
+  languages: [zh, en, ja, ko, de, fr, ru, pt, es, it]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 6.5, disk_gb: 5.25}
+  sources: ['compute-tiers:D5:spark-alt']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'No Hindi. SDPA attention (no FA3 on sm_120; FA2 optional). VRAM estimated from params (compute-tiers:
+    ~6 GB bf16 for 1.7B).'
+  url: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign
+  params_b: 1.7
+- id: qwen3-tts-1.7b-customvoice
+  worker: d1_qwen3_tts
+  env: d1_qwen3_tts
+  kind: local
+  params:
+    model: Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
+    revision: 0c0e3051f131929182e2c023b9537f8b1c68adfe
+    mode: custom
+    dtype: bfloat16
+    attn: sdpa
+    speakers:
+      en: {female: Serena, male: Ryan}
+      ja: {female: Ono_Anna, male: Ono_Anna}
+      '*': {female: Vivian, male: Eric}
+  languages: [zh, en, ja, ko, de, fr, ru, pt, es, it]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 6.5, disk_gb: 5.25}
+  sources: ['compute-tiers:D5:spark-alt', 'research:D1:1']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'No Hindi. SDPA attention (no FA3 on sm_120; FA2 optional). VRAM estimated from params (compute-tiers:
+    ~6 GB bf16 for 1.7B). 9 preset timbres; Ono_Anna is the only Japanese one (used for both genders).'
+  url: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
+  params_b: 1.7
+- id: qwen3-tts-0.6b-customvoice
+  worker: d1_qwen3_tts
+  env: d1_qwen3_tts
+  kind: local
+  params:
+    model: Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice
+    revision: 85e237c12c027371202489a0ec509ded67b5e4b5
+    mode: custom
+    dtype: bfloat16
+    attn: sdpa
+    speakers:
+      en: {female: Serena, male: Ryan}
+      ja: {female: Ono_Anna, male: Ono_Anna}
+      '*': {female: Vivian, male: Eric}
+  languages: [zh, en, ja, ko, de, fr, ru, pt, es, it]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 3.5, disk_gb: 2.5}
+  sources: ['research:D1:1']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'No Hindi. SDPA attention (no FA3 on sm_120; FA2 optional). VRAM estimated from params (compute-tiers:
+    ~6 GB bf16 for 1.7B).'
+  url: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice
+  params_b: 0.6
+- id: moss-voicegenerator-1.7b
+  worker: d1_moss_tts
+  env: d1_moss_tts
+  kind: local
+  params:
+    model: OpenMOSS-Team/MOSS-VoiceGenerator
+    revision: 97521ec2b6f3ec5026ac1f5751f8fc302d82c2d4
+    mode: design
+    instruction: A natural, clear {gender} voice with a warm, mid-range tone and neutral accent.
+    languages: [zh, en]
+  languages: [zh, en]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 6, disk_gb: 5}
+  sources: ['compute-tiers:D5:big-alt']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: Instruction-only voice design; language list not stated on the card (zh/en examples).
+  url: https://huggingface.co/OpenMOSS-Team/MOSS-VoiceGenerator
+  params_b: 2.11
+- id: raon-opentts-1b
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'Raon-OpenTTS 1B (open models + open data): release and inference API not verified.'}
+  languages: '*'
+  license: unknown
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['compute-tiers:D5:big-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Raon-OpenTTS 1B (open models + open data): release and inference API not verified.'
+  url: https://huggingface.co/models?search=raon
+  params_b: 1.0
+- id: qwen-audio-3.0-tts-plus
+  worker: d1_dashscope
+  env: server
+  kind: api
+  params:
+    backend: openrouter
+    model: qwen/qwen-audio-3.0-tts-plus
+    voices:
+      '*': {female: longanlingxin, male: longanlufeng}
+  languages: [zh, en, ja, ko, de, fr, ru, pt, es, it]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [OPENROUTER_API_KEY]
+  sources: ['compute-tiers:D1:api']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'OpenRouter: two preset voices; languages and price not stated there (unverified).'
+  url: https://openrouter.ai/qwen/qwen-audio-3.0-tts-plus
+- id: openai-gpt-4o-mini-tts
+  worker: d5_openai_tts
+  env: server
+  kind: api
+  params: {model: gpt-4o-mini-tts, instructions: 'Speak naturally in {language}.'}
+  languages: [en, hi, ja, zh, ko, de, fr, es, it, pt, ru, ar, ta, te, bn]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [OPENAI_API_KEY]
+  sources: ['task:api-list']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Stock voices (coral/ash); no language parameter.
+  url: https://platform.openai.com/docs/guides/text-to-speech
+- id: hume-octave-2-design
+  worker: d2_hume
+  env: server
+  kind: api
+  params: {description: 'A {gender} narrator with a clear, natural voice.', version: '2'}
+  languages: [en, ja, ko, es, fr, pt, it, de, ru, hi, ar]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [HUME_API_KEY]
+  sources: ['task:api-list']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Voice designed from a description; not re-verified.
+  url: https://dev.hume.ai/docs/text-to-speech-tts/overview
+- id: resemble-stock
+  worker: d1_resemble
+  env: server
+  kind: api
+  params:
+    voices: {}
+  languages: [en]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [RESEMBLE_API_KEY]
+  sources: ['task:api-list']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Needs voice uuids per language in params.voices; disabled until filled.
+  url: https://docs.resemble.ai
+  enabled: false
+- id: omnivoice-design
+  worker: d4_omnivoice
+  env: d4_omnivoice
+  kind: local
+  params: {model: k2-fsa/OmniVoice, revision: c5fdb5ccb189668d56333f77ba2629f4cd7535f4, mode: design,
+    instruct: '{gender}, clear voice'}
+  languages: '*'
+  license: code Apache-2.0; weights CC-BY-NC
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 3, disk_gb: 2}
+  sources: ['research:D4:6']
+  verified: {license: false, languages: true, vram: false, runs: false}
+  notes: instruct= attribute voice design; NC weights.
+  url: https://huggingface.co/k2-fsa/OmniVoice
+  params_b: 0.61

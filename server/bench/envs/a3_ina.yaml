@@ -1,0 +1,8 @@
+name: a3_ina
+python: ~/.opendub/envs/a3_ina/bin/python
+description: 'inaSpeechSegmenter 0.8.0 (MIT): pulls tensorflow[and-cuda] and onnxruntime-gpu; x86_64 only.'
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.11
+  - uv pip install --python {python} inaSpeechSegmenter==0.8.0 soundfile librosa numpy
+check: import inaSpeechSegmenter

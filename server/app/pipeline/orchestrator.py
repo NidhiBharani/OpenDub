@@ -7,22 +7,42 @@ job progress is ``(completed_stages + stage_fraction) / total_stages``.
 
 ``start_segment_job`` re-runs translate and/or synthesize for a single segment, then marks
 mix/lipsync/render dirty (it does NOT auto-run mix).
+
+Model lifecycle (see providers/_runtime.py): each stage runs inside a model-manager hold, so the
+models it loads stay warm for the whole stage. At every stage boundary, idle models the next stage
+does not use are unloaded, and when a pipeline job ends (done, error or cancelled) every idle model
+is unloaded. Segment jobs keep local models warm for the idle TTL (quick successive regenerations)
+but release LLM servers as soon as they finish.
 """
 from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
+import math
 from collections.abc import Callable, Sequence
 
 from .. import store
 from ..jobs import Runner, engine
 from ..models import STAGE_ORDER, Job, Project, StageKey, StageStatus, now
+from ..providers._runtime import family, manager
 from ..providers.base import ProgressFn
 from . import stages as stage_impl
 from . import versions
 from .stages import StageSkipped, resolve_provider
 
+log = logging.getLogger(__name__)
+
 _SEGMENT_STAGES: tuple[StageKey, ...] = ("transcribe", "translate", "synthesize")
+
+# Model families (first part of a model-manager key) each stage loads in-process; stages not
+# listed load none (demucs and the lip-sync models run as subprocesses). 'llm' is deliberately in
+# no set: an Ollama model left resident after translation (~9 GB) is what starves the next GPU stage.
+_STAGE_MODELS: dict[StageKey, frozenset[str]] = {
+    "transcribe": frozenset({"asr", "diarization", "quality"}),
+    "synthesize": frozenset({"tts", "asr", "quality"}),  # F5's verifier shares asr's whisper
+    "mix": frozenset({"quality"}),
+}
 
 
 # ---- public API ------------------------------------------------------------------------------
@@ -100,6 +120,12 @@ def start_segment_job(project_id: str, segment_id: str, stages: list[str]) -> Jo
 
 def _pipeline_runner(project_id: str, prior: dict[StageKey, StageStatus]) -> Runner:
     async def run(job: Job) -> None:
+        try:
+            await _run_pipeline(job)
+        finally:
+            await _release_models(None)
+
+    async def _run_pipeline(job: Job) -> None:
         total = len(job.stages)
         project: Project | None = None
         try:
@@ -122,7 +148,8 @@ def _pipeline_runner(project_id: str, prior: dict[StageKey, StageStatus]) -> Run
 
                 progress = _stage_progress(job, index, total)
                 try:
-                    detail = await stage_impl.STAGE_RUNNERS[key](project, job, progress)
+                    async with manager.hold_async():
+                        detail = await stage_impl.STAGE_RUNNERS[key](project, job, progress)
                     state.status = "done"
                     state.detail = detail or ""
                 except StageSkipped as skip:
@@ -139,6 +166,8 @@ def _pipeline_runner(project_id: str, prior: dict[StageKey, StageStatus]) -> Run
                     raise RuntimeError(f"stage '{key}' failed: {message}") from exc
 
                 state.updated_at = now()
+                if index + 1 < total:
+                    await _release_models(job.stages[index + 1])
                 job.progress = (index + 1) / total
                 job.message = f"{key}: {state.status}"
                 await _checkpoint(project)
@@ -187,6 +216,15 @@ def _pipeline_runner(project_id: str, prior: dict[StageKey, StageStatus]) -> Run
 
 def _segment_runner(project_id: str, segment_id: str) -> Runner:
     async def run(job: Job) -> None:
+        try:
+            async with manager.hold_async():
+                await _run_segment(job)
+        finally:
+            # Local models stay warm for the idle TTL (the user often regenerates line after
+            # line); LLM servers are released now.
+            await _release_models(None, keep=lambda key: family(key) != "llm")
+
+    async def _run_segment(job: Job) -> None:
         project = store.load(project_id, track=True)
         if project is None:
             raise RuntimeError("project was deleted while the job was running")
@@ -241,6 +279,32 @@ def _segment_runner(project_id: str, segment_id: str) -> Runner:
 # ---- helpers ---------------------------------------------------------------------------------
 
 
+async def _release_models(
+    next_stage: StageKey | None, *, keep: Callable[[tuple], bool] | None = None
+) -> None:
+    """Unload idle models. Between stages: those ``next_stage`` does not load (models another
+    project's job is using or holding are spared). At job end (``next_stage=None``): everything
+    idle, and anything still busy (e.g. an uncancellable worker thread) as soon as it's released.
+    Best effort: a model that fails to unload must never fail the job."""
+    if next_stage is not None:
+        wanted = _STAGE_MODELS.get(next_stage, frozenset())
+
+        def keep(key: tuple) -> bool:
+            return family(key) in wanted
+
+    try:
+        await asyncio.shield(asyncio.to_thread(
+            manager.unload_idle, keep=keep, defer_busy=next_stage is None
+        ))
+    except asyncio.CancelledError:
+        # The shielded unload still completes in its thread. Mid-run the cancel must stop the
+        # job; at job end the work is already finished (or already being cancelled).
+        if next_stage is not None:
+            raise
+    except Exception as exc:  # noqa: BLE001
+        log.warning("releasing models failed: %s", exc)
+
+
 async def _checkpoint(project: Project) -> None:
     """Persist and broadcast the project under its lock, re-applying any user edits that
     landed on disk since the job loaded this copy (see store.save_merged)."""
@@ -290,7 +354,7 @@ def _stage_progress(job: Job, index: int, total: int) -> ProgressFn:
             f = float(fraction)
         except (TypeError, ValueError):
             f = 0.0
-        if f != f:  # NaN
+        if math.isnan(f):
             f = 0.0
         f = min(1.0, max(0.0, f))
         job.progress = min((index + f) / max(total, 1), 0.999)

@@ -1,0 +1,19 @@
+name: f1_ltx2
+python: ~/.opendub/src/LTX-2/.venv/bin/python
+description: 'Lightricks LTX-2 monorepo (ltx-pipelines; DubItPipeline = python -m ltx_pipelines.dubit)
+  @ a95ab856. The repo is its own uv workspace, so the env IS the repo''s .venv. Weights are fetched at
+  load by the worker via huggingface_hub (Gemma is gated: HF_TOKEN).'
+setup:
+  x86_64:
+  - test -d {home}/.opendub/src/LTX-2 || git clone https://github.com/Lightricks/LTX-2 {home}/.opendub/src/LTX-2
+  - git -C {home}/.opendub/src/LTX-2 checkout a95ab856bf29407b6b066ede0abe1846050db56c
+  - cd {home}/.opendub/src/LTX-2 && uv sync --frozen
+  aarch64:
+  - test -d {home}/.opendub/src/LTX-2 || git clone https://github.com/Lightricks/LTX-2 {home}/.opendub/src/LTX-2
+  - git -C {home}/.opendub/src/LTX-2 checkout a95ab856bf29407b6b066ede0abe1846050db56c
+  - cd {home}/.opendub/src/LTX-2 && UV_TORCH_BACKEND=cu130 uv sync
+check: import torch, ltx_pipelines; assert torch.cuda.is_available()
+notes: 'main now targets LTX-2.5 (Gemma 4); DubIt is validated on 2.3 — if a95ab856 no longer loads 2.3
+  checkpoints, pin the last 2.3 commit (not identified). The natten extra (uv sync --extra natten) is
+  skipped: it has no aarch64 wheels; add it on x86 if the pipeline requires it. python points at the repo''s
+  own .venv.'

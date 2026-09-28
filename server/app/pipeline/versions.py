@@ -141,6 +141,11 @@ def _snapshot_sync(project: Project, *, kind: VersionKind, label: str, job_id: s
     version.has_mix = "dub_mix" in version.outputs
     version.has_render = "dubbed" in version.outputs
 
+    quality_dir = pdir / 'quality'
+    if quality_dir.is_dir():
+        shutil.copytree(quality_dir, vdir / 'quality')
+        total += sum(p.stat().st_size for p in (vdir / 'quality').rglob('*') if p.is_file())
+
     segments: list[Segment] = []
     for seg in project.segments:
         copy = seg.model_copy(deep=True)
@@ -167,6 +172,8 @@ def _snapshot_sync(project: Project, *, kind: VersionKind, label: str, job_id: s
                 dst = vdir / "speakers" / spk.id / src.name
                 total += _link_or_copy(src, dst)
                 copy.reference_path = _rel(project.id, dst)
+                if src.with_suffix('.txt').exists():
+                    shutil.copy2(src.with_suffix('.txt'), dst.with_suffix('.txt'))
             else:
                 copy.reference_path = None
         speakers.append(copy)
@@ -231,6 +238,12 @@ def _restore_sync(project: Project, version: Version, state: VersionState) -> Pr
     pdir = store.project_dir(project.id).resolve()
     vdir = versions_dir(project.id) / version.id
 
+    # Reports belong to the snapshotted run, never to the previously active output.
+    if (pdir / 'quality').exists():
+        shutil.rmtree(pdir / 'quality')
+    if (vdir / 'quality').is_dir():
+        shutil.copytree(vdir / 'quality', pdir / 'quality')
+
     project.pipeline = state.pipeline
     project.source_lang = version.source_lang
     project.target_lang = version.target_lang
@@ -245,6 +258,8 @@ def _restore_sync(project: Project, version: Version, state: VersionState) -> Pr
             if src.exists():
                 _link_or_copy(src, dst)
                 copy.reference_path = _rel(project.id, dst)
+                if src.with_suffix('.txt').exists():
+                    shutil.copy2(src.with_suffix('.txt'), dst.with_suffix('.txt'))
             else:
                 copy.reference_path = None
         speakers.append(copy)

@@ -1,0 +1,20 @@
+name: d1_indextts
+python: ~/.opendub/envs/d1_indextts/bin/python
+description: "IndexTTS2 + IndexTTS 2.5 from the index-tts repo (bilibili model licence)"
+setup:
+  x86_64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu128 torch==2.11.0 torchaudio==2.11.0"
+    - "test -d {home}/.opendub/src/index-tts || git clone https://github.com/index-tts/index-tts {home}/.opendub/src/index-tts && git -C {home}/.opendub/src/index-tts checkout ee40fa7d6c6b8a2c7f06105f9f1e65775b74868c"
+    - "uv pip install --python {python} -e {home}/.opendub/src/index-tts"
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('IndexTeam/IndexTTS-2.5', local_dir='{home}/.opendub/src/index-tts/checkpoints-2.5', revision='c39ce5ba981572cb187443877ff559dfb246ce63')\""
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('IndexTeam/IndexTTS-2', local_dir='{home}/.opendub/src/index-tts/checkpoints-2', revision='740dcaff396282ffb241903d150ac011cd4b1ede')\""
+  aarch64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu130 torch==2.11.0 torchaudio==2.11.0"
+    - "test -d {home}/.opendub/src/index-tts || git clone https://github.com/index-tts/index-tts {home}/.opendub/src/index-tts && git -C {home}/.opendub/src/index-tts checkout ee40fa7d6c6b8a2c7f06105f9f1e65775b74868c"
+    - "uv pip install --python {python} -e {home}/.opendub/src/index-tts"
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('IndexTeam/IndexTTS-2.5', local_dir='{home}/.opendub/src/index-tts/checkpoints-2.5', revision='c39ce5ba981572cb187443877ff559dfb246ce63')\""
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('IndexTeam/IndexTTS-2', local_dir='{home}/.opendub/src/index-tts/checkpoints-2', revision='740dcaff396282ffb241903d150ac011cd4b1ede')\""
+check: "import indextts, torch; assert torch.cuda.is_available()"
+notes: "The repo recommends `uv sync --all-extras` in its own venv; this recipe installs it into the arena env instead. DeepSpeed and the custom CUDA kernel are off by default."

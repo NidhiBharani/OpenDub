@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
+import math
 import re
 import shutil
 from collections.abc import Awaitable, Callable
@@ -49,8 +51,9 @@ from ..providers.base import (
     TTSProvider,
     get_provider_class,
 )
-from . import analysis, regions, segmentation
+from . import analysis, quality, regions, segmentation
 from . import audio as audio_utils
+from . import runtime_quality as rq
 
 StageRunner = Callable[[Project, Job, ProgressFn], Awaitable[str]]
 
@@ -58,7 +61,7 @@ _P = TypeVar("_P", bound=Provider)
 
 # speaker reference construction (transcribe stage)
 _REF_MIN_SEGMENT = 1.0  # only use segments at least this long (seconds)
-_REF_MAX_TOTAL = 30.0  # total reference length cap (seconds)
+_REF_MAX_TOTAL = 10.0  # total reference length cap (seconds)
 _REF_PAD = 0.05  # padding around each slice (seconds)
 
 _MIN_SLOT = 0.01  # segments shorter than this are considered degenerate
@@ -126,7 +129,7 @@ def _sub(progress: ProgressFn, lo: float, hi: float) -> ProgressFn:
             f = float(fraction)
         except (TypeError, ValueError):
             f = 0.0
-        if f != f:  # NaN
+        if math.isnan(f):
             f = 0.0
         progress(lo + span * min(1.0, max(0.0, f)), message)
 
@@ -287,6 +290,12 @@ async def run_separate(project: Project, job: Job, progress: ProgressFn) -> str:
     if not vocals.exists() or not background.exists():
         raise StageError(f"separation provider '{provider.meta.id}' did not produce output files")
 
+    expected = await ffmpeg.wav_duration(original)
+    for name, path in (("vocals", vocals), ("background", background)):
+        stats = await asyncio.to_thread(quality.audio_stats, path)
+        if stats['status'] != 'ok' or abs((stats.get('duration_s') or 0) - expected) > 0.15:
+            raise StageError(f"invalid {name} stem: unreadable or duration differs from source")
+
     progress(0.9, "computing vocals waveform")
     await waveform.generate_peaks(vocals, _out(project, "waveforms/vocals.json"))
     with contextlib.suppress(RuntimeError):
@@ -307,21 +316,18 @@ async def run_transcribe(project: Project, job: Job, progress: ProgressFn) -> st
 
     progress(0.0, f"transcribing with {asr.meta.id}")
     raw = await asr.transcribe(vocals, project.source_lang, _sub(progress, 0.0, 0.55))
-    cleaned = [
-        ASRSegment(start=max(0.0, s.start), end=s.end, text=s.text.strip(), words=s.words)
-        for s in raw
-        if s.text.strip() and (s.end - s.start) > _MIN_SLOT
-    ]
+    duration = project.media.duration if project.media else await ffmpeg.wav_duration(vocals)
+    cleaned = []
+    for item in raw:
+        if not math.isfinite(item.start) or not math.isfinite(item.end):
+            continue
+        start, end = max(0.0, item.start), min(duration, item.end)
+        if item.text.strip() and end - start > _MIN_SLOT:
+            words = [w for w in item.words if math.isfinite(w.start) and math.isfinite(w.end)
+                     and start <= w.start < w.end <= end]
+            cleaned.append(ASRSegment(start=start, end=end, text=item.text.strip(), words=words))
     if not cleaned:
         raise StageError(f"ASR ({asr.meta.id}) produced no usable segments")
-
-    c1 = capabilities.resolve(project.pipeline)["C1"]
-    if c1.provider_id == "segmentation.pause":
-        cleaned = segmentation.resegment(
-            cleaned,
-            min_pause=float(c1.params.get("min_pause") or 0.35),
-            max_line_seconds=float(c1.params.get("max_line_seconds") or 12.0),
-        )
 
     progress(0.55, f"diarizing with {diarizer.meta.id}")
     labels = await diarizer.diarize(vocals, cleaned, _sub(progress, 0.55, 0.75))
@@ -329,6 +335,14 @@ async def run_transcribe(project: Project, job: Job, progress: ProgressFn) -> st
         raise StageError(
             f"diarization ({diarizer.meta.id}) returned {len(labels)} labels "
             f"for {len(cleaned)} segments"
+        )
+
+    c1 = capabilities.resolve(project.pipeline)["C1"]
+    if c1.provider_id == "segmentation.pause":
+        cleaned, labels = segmentation.resegment_speakers(
+            cleaned, labels,
+            min_pause=float(c1.params.get("min_pause") or 0.35),
+            max_line_seconds=float(c1.params.get("max_line_seconds") or 12.0),
         )
 
     # Speakers named in label order of first appearance, colors from the palette.
@@ -365,52 +379,59 @@ async def run_transcribe(project: Project, job: Job, progress: ProgressFn) -> st
     project.speakers = speakers
     regions.apply_skip_ranges(project)
 
-    progress(0.75, "building speaker references")
+    progress(0.75, "analyzing source delivery")
+    for seg in segments:
+        clip = _out(project, f"audio/segments/{seg.id}/source.wav")
+        await ffmpeg.slice_audio(vocals, clip, seg.start, seg.end)
+        await rq.source_delivery(project, seg, clip)
     for i, speaker in enumerate(speakers):
         await _build_speaker_reference(project, speaker, vocals)
-        progress(0.75 + 0.25 * (i + 1) / len(speakers), f"reference for {speaker.name}")
-
+        progress(0.85 + 0.15 * (i + 1) / len(speakers), f"reference for {speaker.name}")
     project.mark_downstream_dirty("transcribe")
     return f"{len(segments)} segments, {len(speakers)} speaker(s)"
 
 
 async def _build_speaker_reference(project: Project, speaker: Speaker, vocals: Path) -> None:
-    """Concat the speaker's longest segments (each ≥1 s, sliced from vocals.wav with a small pad)
-    up to ~30 s total into speakers/<id>/reference.wav."""
-    segs = [s for s in project.segments if s.speaker_id == speaker.id]
-    if not segs:
-        return
-    candidates = sorted(
-        (s for s in segs if s.duration >= _REF_MIN_SEGMENT),
-        key=lambda s: s.duration,
-        reverse=True,
-    )
-    if not candidates:  # nothing ≥1 s — fall back to the single longest utterance
-        candidates = [max(segs, key=lambda s: s.duration)]
-    picked: list[Segment] = []
-    total = 0.0
-    for s in candidates:
-        if picked and total + s.duration > _REF_MAX_TOTAL:
-            continue  # too big for the remaining budget; a shorter one may still fit
-        picked.append(s)
-        total += s.duration
-        if total >= _REF_MAX_TOTAL:
-            break
-    picked.sort(key=lambda s: s.start)  # chronological order sounds most natural
-
-    ref_rel = f"speakers/{speaker.id}/reference.wav"
-    ref = _out(project, ref_rel)
-    parts: list[Path] = []
-    try:
-        for i, s in enumerate(picked):
-            part = ref.parent / f"part_{i}.wav"
-            await ffmpeg.slice_audio(vocals, part, s.start, s.end, pad=_REF_PAD)
-            parts.append(part)
-        await ffmpeg.concat_audio(parts, ref)
-        speaker.reference_path = ref_rel
-    finally:
-        for part in parts:
-            part.unlink(missing_ok=True)
+    """Choose clean, isolated speech; keep an exact transcript alongside the reference."""
+    candidates = []
+    diagnostics = []
+    for seg in project.segments:
+        if seg.speaker_id != speaker.id or seg.skipped or seg.duration < _REF_MIN_SEGMENT:
+            continue
+        overlaps = any(other.id != seg.id and other.start < seg.end and other.end > seg.start
+                       for other in project.segments)
+        if overlaps or seg.duration > _REF_MAX_TOTAL:
+            diagnostics.append({'id': seg.id, 'excluded': 'overlap or reference too long'})
+            continue
+        clip = _out(project, f"audio/segments/{seg.id}/source.wav")
+        await ffmpeg.slice_audio(vocals, clip, seg.start, seg.end)
+        stats = await asyncio.to_thread(quality.audio_stats, clip)
+        if stats['status'] != 'ok' or (stats.get('peak_dbfs') or -120) < -45:
+            continue
+        delivery = rq.read(project, f'segments/{seg.id}').get('source_delivery', {})
+        if delivery.get('emotion') in ('singing', 'crying', 'screaming'):
+            diagnostics.append({'id': seg.id, 'excluded': 'unsuitable expressive reference'})
+            continue
+        confidence = [w.confidence for w in seg.words if w.confidence is not None]
+        confidence = sum(confidence) / len(confidence) if confidence else 0.5
+        clipping = stats.get('clipping_fraction') or 0
+        if clipping > 0.01:
+            continue
+        # Favour stable intelligible speech, not maximally loud/emotional recordings.
+        score = confidence - clipping * 10 + min(seg.duration, 6) / 30
+        diagnostics.append({'id': seg.id, 'score': score, 'audio': stats})
+        candidates.append((score, seg, clip))
+    speaker.reference_path = None
+    if candidates:
+        _, best, clip = max(candidates, key=lambda entry: entry[0])
+        rel = f"speakers/{speaker.id}/reference.wav"
+        await asyncio.to_thread(shutil.copyfile, clip, _out(project, rel))
+        _out(project, f"speakers/{speaker.id}/reference.txt").write_text(best.source_text)
+        speaker.reference_path = rel
+    rq.write(project, f'references/{speaker.id}', {
+        'selected': speaker.reference_path, 'candidates': diagnostics,
+        'status': 'selected' if candidates else 'unavailable',
+        'reason': '' if candidates else 'no isolated, unclipped speech reference available'})
 
 
 # ---- work selection ------------------------------------------------------------------------
@@ -482,6 +503,16 @@ async def transcribe_one(
 # ---- translate -----------------------------------------------------------------------------
 
 
+def _terminology() -> dict[str, str]:
+    value = rq.options().get('terminology', {})
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            return {}
+    return value if isinstance(value, dict) else {}
+
+
 def _translation_request(
     project: Project, ordered: list[Segment], pos: dict[str, int], seg: Segment
 ) -> TranslationRequest:
@@ -489,11 +520,12 @@ def _translation_request(
     speaker = project.speaker(seg.speaker_id)
     return TranslationRequest(
         text=seg.source_text,
-        emotion=seg.emotion,
+        emotion=rq.emotion_hint(project, seg),
         speaker_name=speaker.name if speaker else "",
         duration=seg.duration,
         context_before=[s.source_text for s in ordered[max(0, i - 2) : i]],
         context_after=[s.source_text for s in ordered[i + 1 : i + 3]],
+        terminology=_terminology(),
     )
 
 
@@ -520,6 +552,8 @@ async def run_translate(project: Project, job: Job, progress: ProgressFn) -> str
             f"for {len(requests)} requests"
         )
 
+    if any(not (text or '').strip() for text in results):
+        raise StageError("translation returned an empty line; refusing to silently drop speech")
     changed = 0
     for seg, text in zip(targets, results):
         new = (text or "").strip()
@@ -553,6 +587,8 @@ async def translate_one(
     if not results:
         raise StageError(f"translation provider '{provider.meta.id}' returned no result")
     new = (results[0] or "").strip()
+    if not new:
+        raise StageError("translation returned an empty line")
     if new != segment.translated_text:
         segment.translated_text = new
         segment.synth_dirty = True
@@ -582,6 +618,12 @@ async def _synthesize_segment(
     if seg.duration <= _MIN_SLOT:
         raise StageError("segment has zero duration")
 
+    seg.synth_dirty = True
+    project.mark_downstream_dirty('synthesize')
+    report = rq.read(project, f'segments/{seg.id}')
+    report.pop('fitted', None)
+    report['synthesis'] = {'status': 'running'}
+    rq.write(project, f'segments/{seg.id}', report)
     rel_dir = f"audio/segments/{seg.id}"
     seg_dir = store.resolve(project, rel_dir)
     seg_dir.mkdir(parents=True, exist_ok=True)
@@ -600,19 +642,88 @@ async def _synthesize_segment(
         if ref.exists():
             speaker_ref = str(ref)
 
+    overlaps = any(other.id != seg.id and other.start < seg.end and other.end > seg.start
+                   for other in project.segments)
+    source_stats = await asyncio.to_thread(quality.audio_stats, source_ref)
+    style_usable = (not overlaps and source_stats.get('status') == 'ok'
+                    and (source_stats.get('clipping_fraction') or 0) < .01
+                    and 0.5 <= seg.duration <= 10)
     request = TTSRequest(
         text=seg.translated_text,
         language=project.target_lang,
-        emotion=seg.emotion,
+        emotion=rq.emotion_hint(project, seg),
         target_duration=seg.duration,
         speaker_reference=speaker_ref,
-        segment_reference=str(source_ref),
+        segment_reference=str(source_ref) if style_usable else None,
         segment_reference_text=seg.source_text,
     )
-    await provider.synthesize(request, out_wav, progress)
-    if not out_wav.exists():
-        raise StageError(f"TTS provider '{provider.meta.id}' produced no output file")
-
+    source_analysis = await rq.source_delivery(project, seg, source_ref)
+    request.emotion = rq.emotion_hint(project, seg)
+    attempts = []
+    maximum = max(1, min(5, int(rq.number('tts_attempts', 3))))
+    for attempt in range(maximum):
+        out_wav.unlink(missing_ok=True)
+        try:
+            await provider.synthesize(request, out_wav, progress)
+        except Exception as exc:
+            attempts.append({'attempt': attempt + 1, 'failures': [str(exc)], 'text': request.text})
+            if attempt + 1 == maximum:
+                rq.segment_report(project, seg, 'synthesis', {
+                    'status': 'failed', 'attempts': attempts, 'provider': provider.meta.id})
+                raise
+            if speaker_ref:
+                request.segment_reference = None
+                request.segment_reference_text = ''
+            continue
+        stats = await asyncio.to_thread(quality.audio_stats, out_wav)
+        verification = await rq.verify(out_wav, request.text, project.target_lang)
+        failures = rq.speech_failures(stats, verification, text=request.text)
+        from .emotion import compare_delivery
+        delivery_comparison = {'status': 'unavailable', 'reason': 'invalid output audio'}
+        if stats.get('status') == 'ok' and not failures:
+            output_analysis = await rq.analyze_delivery(out_wav, project.target_lang)
+            delivery_comparison = compare_delivery(source_analysis, output_analysis)
+            if (not seg.emotion.strip() and rq.enabled('require_emotion_match', True)
+                    and delivery_comparison.get('emotion_match') is False):
+                failures.append('confident source/output emotion mismatch')
+        record = {'delivery': delivery_comparison, 'attempt': attempt + 1, 'audio': stats, 'verification': verification,
+                  'text': request.text, 'failures': failures}
+        attempts.append(record)
+        if not failures:
+            try:
+                await audio_utils.fit_to_duration(out_wav, seg_dir / 'quality_fitted.wav', seg.duration)
+            except audio_utils.TimingOverflowError as exc:
+                failures.append(str(exc))
+                if attempt + 1 < maximum:
+                    shorter = await _shorten_for_timing(project, seg, request.text,
+                                                       stats['duration_s'], progress)
+                    if shorter:
+                        request.text = shorter
+                        continue
+            else:
+                break
+        if attempt + 1 == maximum:
+            rq.segment_report(project, seg, 'synthesis', {
+                'status': 'failed', 'attempts': attempts, 'provider': provider.meta.id})
+            raise StageError(f"{seg.id}: quality checks failed: {'; '.join(failures)}")
+        # A stable identity reference is preferable when line conditioning produced bad speech.
+        if speaker_ref:
+            request.segment_reference = None
+            request.segment_reference_text = ''
+    from .emotion import compare_delivery
+    output_analysis = await rq.analyze_delivery(out_wav, project.target_lang)
+    similarity = {'status': 'unavailable', 'reason': 'no identity reference or local embedder'}
+    if speaker_ref:
+        similarity = await rq.speaker_similarity(speaker_ref, out_wav)
+    rq.segment_report(project, seg, 'synthesis', {
+        'source_fingerprint': rq.fingerprint(project, seg),
+        'take_path': f'{rel_dir}/take_{n}.wav', 'status': 'accepted', 'attempts': attempts, 'provider': provider.meta.id,
+        'speaker_similarity': similarity,
+        'delivery': compare_delivery(source_analysis, output_analysis),
+        'output_delivery': output_analysis, 'text': request.text,
+        'reference': request.segment_reference or request.speaker_reference})
+    if request.text != seg.translated_text:
+        seg.translated_text = request.text
     duration = await ffmpeg.wav_duration(out_wav)
     take = Take(
         path=f"{rel_dir}/take_{n}.wav",
@@ -620,10 +731,30 @@ async def _synthesize_segment(
         provider_id=provider.meta.id,
         lang=project.target_lang,
     )
+    record = rq.read(project, f'segments/{seg.id}').get('synthesis', {})
+    record['take_id'] = take.id
+    rq.segment_report(project, seg, 'synthesis', record)
     seg.takes.append(take)
     seg.active_take_id = take.id
     seg.synth_dirty = False
     return take
+
+
+async def _shorten_for_timing(project: Project, seg: Segment, text: str,
+                              duration: float, progress: ProgressFn) -> str | None:
+    provider = _typed_provider(project, 'translation', TranslationProvider)
+    # Only dubbing-aware LLM translators implement measured-duration feedback.
+    if provider.meta.id not in ('translation.openai', 'translation.anthropic',
+                               'translation.openai_compatible'):
+        return None
+    ordered = sorted(project.segments, key=lambda s: (s.start, s.end))
+    request = _translation_request(project, ordered, {s.id: i for i, s in enumerate(ordered)}, seg)
+    request.previous_translation = text
+    request.measured_duration = duration
+    results = await provider.translate([request], project.source_lang, project.target_lang, progress)
+    if len(results) == 1 and results[0].strip() and results[0].strip() != text:
+        return results[0].strip()
+    return None
 
 
 async def run_synthesize(project: Project, job: Job, progress: ProgressFn) -> str:
@@ -649,9 +780,9 @@ async def run_synthesize(project: Project, job: Job, progress: ProgressFn) -> st
             await _checkpoint(project)  # persist per segment so the UI updates live
         except asyncio.CancelledError:
             raise
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - one bad line is reported, the rest still synthesize
             errors.append(f"{seg.id}: {str(exc) or type(exc).__name__}")
-    if done == 0:
+    if errors or done == 0:
         raise StageError(errors[0] if errors else "no segments to synthesize")
 
     project.mark_downstream_dirty("synthesize")
@@ -688,6 +819,10 @@ async def run_mix(project: Project, job: Job, progress: ProgressFn) -> str:
         raise StageError("project media info is missing; run ingest first")
     background = _require(project, "audio/background.wav", "run separate first")
 
+    missing = [s.id for s in project.segments if not s.skipped and s.source_text.strip()
+               and (not s.translated_text.strip() or s.active_take() is None or s.synth_dirty)]
+    if missing:
+        raise StageError(f"unvoiced or stale lines: {', '.join(missing[:5])}; run synthesis first")
     entries = [
         (seg, take)
         for seg in sorted(project.segments, key=lambda s: (s.start, s.end))
@@ -701,10 +836,26 @@ async def run_mix(project: Project, job: Job, progress: ProgressFn) -> str:
     for i, (seg, take) in enumerate(entries):
         take_path = store.resolve(project, take.path)
         if not take_path.exists() or seg.duration <= _MIN_SLOT:
-            skipped += 1
-            continue
+            raise StageError(f"{seg.id}: missing take or invalid duration; refusing incomplete mix")
         fitted = _out(project, f"audio/segments/{seg.id}/fitted.wav")
-        rate = await audio_utils.fit_to_duration(take_path, fitted, seg.duration)
+        try:
+            rate = await audio_utils.fit_to_duration(take_path, fitted, seg.duration)
+        except audio_utils.TimingOverflowError as exc:
+            rq.segment_report(project, seg, 'fitted', {'status': 'failed', 'reason': str(exc)})
+            raise StageError(f"{seg.id}: {exc}; regenerate this line") from exc
+        stats = await asyncio.to_thread(quality.audio_stats, fitted)
+        verification = await rq.verify(fitted, seg.translated_text, project.target_lang)
+        failures = rq.speech_failures(stats, verification, text=seg.translated_text)
+        from .emotion import compare_delivery
+        source_analysis = rq.read(project, f'segments/{seg.id}').get('source_delivery', {})
+        fitted_analysis = await rq.analyze_delivery(fitted, project.target_lang)
+        rq.segment_report(project, seg, 'fitted', {'status': 'failed' if failures else 'accepted',
+            'take_id': take.id, 'source_fingerprint': rq.fingerprint(project, seg),
+            'text': seg.translated_text,
+            'audio': stats, 'verification': verification, 'rate': rate, 'failures': failures,
+            'delivery': compare_delivery(source_analysis, fitted_analysis)})
+        if failures:
+            raise StageError(f"{seg.id}: fitted speech failed checks: {'; '.join(failures)}")
         take.rate_factor = rate
         placements.append((seg.start, fitted))
         progress(0.7 * (i + 1) / len(entries), f"fitting take {i + 1}/{len(entries)}")
@@ -713,19 +864,26 @@ async def run_mix(project: Project, job: Job, progress: ProgressFn) -> str:
 
     progress(0.72, "assembling dub vocal track")
     dub_vocals = _out(project, "audio/dub_vocals.wav")
-    await audio_utils.assemble_track(placements, project.media.duration, dub_vocals)
+    await audio_utils.assemble_track(placements, project.media.duration, dub_vocals,
+                                     level_outliers=rq.enabled('level_outliers', False))
 
     progress(0.85, "mixing with background")
     dub_mix = _out(project, "audio/dub_mix.wav")
-    await audio_utils.mix_tracks(
+    levels = await audio_utils.mix_tracks(
         dub_vocals,
         background,
         dub_mix,
         reference_vocals=store.resolve(project, "audio/vocals.wav"),
         target_lufs=_delivery_lufs(capabilities.resolve(project.pipeline)["E4"].params),
+        background_gain_db=rq.number("background_gain_db", 0.0),
+        ducking_mix=max(0.0, min(1.0, rq.number("ducking_mix", 0.0))),
         keep_original=regions.spans(project),
         original=store.resolve(project, "audio/original.wav"),
     )
+
+    levels = levels or {}
+    levels['target_lufs'] = _delivery_lufs(capabilities.resolve(project.pipeline)["E4"].params)
+    rq.write(project, "mix_levels", levels)
 
     progress(0.91, "muxing dub preview")
     # The editor previews the dub by swapping its <video> source to this file. One file, one
@@ -784,7 +942,18 @@ async def run_render(project: Project, job: Job, progress: ProgressFn) -> str:
     video = lipsync_video if use_lipsync else _require(project, "playback.mp4", "run ingest first")
 
     progress(0.05, "muxing final video")
-    await ffmpeg.mux(video, dub_mix, _out(project, "render/dubbed.mp4"))
+    final = _out(project, "render/dubbed.mp4")
+    candidate = final.with_name('.dubbed.validating.mp4')
+    try:
+        await ffmpeg.mux(video, dub_mix, candidate)
+        validation = await ffmpeg.validate_render(
+            candidate, expected_duration=project.media.duration if project.media
+            else await ffmpeg.wav_duration(dub_mix))
+        validation['true_peak_dbtp'] = await ffmpeg.measure_true_peak(candidate)
+        candidate.replace(final)
+        rq.write(project, 'render_validation', validation)
+    finally:
+        candidate.unlink(missing_ok=True)
     progress(1.0, "render complete")
     return f"render/dubbed.mp4 (video: {'lipsync' if use_lipsync else 'playback'})"
 
@@ -801,3 +970,25 @@ STAGE_RUNNERS: dict[StageKey, StageRunner] = {
     "review": _with_steps("review", None),
     "render": _with_steps("render", run_render),
 }
+
+
+def _quality_wrapper(stage: StageKey, runner: StageRunner) -> StageRunner:
+    async def measured(project: Project, job: Job, progress: ProgressFn) -> str:
+        rq.write(project, stage, {'stage': stage, 'status': 'running', 'job_id': getattr(job, 'id', None)})
+        try:
+            detail = await runner(project, job, progress)
+        except asyncio.CancelledError:
+            rq.write(project, stage, {'stage': stage, 'status': 'cancelled', 'job_id': getattr(job, 'id', None)})
+            raise
+        except StageSkipped:
+            rq.write(project, stage, {'stage': stage, 'status': 'skipped'})
+            raise
+        except Exception as exc:
+            await rq.stage_report(project, stage, error=str(exc))
+            raise
+        await rq.stage_report(project, stage)
+        return detail
+    return measured
+
+
+STAGE_RUNNERS = {key: _quality_wrapper(key, runner) for key, runner in STAGE_RUNNERS.items()}

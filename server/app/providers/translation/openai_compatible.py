@@ -9,6 +9,7 @@ from __future__ import annotations
 import httpx
 
 from ...models import TranslationRequest
+from .._runtime import llm_endpoint
 from ..base import ConfigField, ProgressFn, ProviderMeta, TranslationProvider, register
 from ._llm import post_with_retries, translate_dubbing
 
@@ -58,6 +59,17 @@ class OpenAICompatibleTranslationProvider(TranslationProvider):
                 default=0.3,
                 help="Sampling temperature for translation.",
             ),
+            ConfigField(
+                key="unload_after_use",
+                label="Unload model after use",
+                type="boolean",
+                default=True,
+                help=(
+                    "When the server is Ollama, ask it to free the model (keep_alive 0) once the "
+                    "stage that used it finishes, so the next GPU stage has the memory. "
+                    "No effect on other servers."
+                ),
+            ),
         ],
     )
 
@@ -77,7 +89,7 @@ class OpenAICompatibleTranslationProvider(TranslationProvider):
             if resp.status_code >= 400:
                 return False, f"server returned HTTP {resp.status_code}"
             return True, "ready"
-        except Exception as e:
+        except (httpx.HTTPError, httpx.InvalidURL, OSError, ValueError) as e:
             return False, f"could not reach {base_url}: {e}"
 
     async def translate(
@@ -92,8 +104,10 @@ class OpenAICompatibleTranslationProvider(TranslationProvider):
         # opt_float (not `or 0.3`): an explicitly configured temperature of 0 must be honored.
         temperature = self.opt_float("temperature", 0.3)
         headers = _auth_headers(self.opt("api_key"))
+        unload = self.opt_bool("unload_after_use", True)
 
-        async with httpx.AsyncClient() as client:
+        async with llm_endpoint(base_url, str(model), unload_after_use=unload, headers=headers), \
+                httpx.AsyncClient() as client:
 
             async def complete(messages: list[dict[str, str]]) -> str:
                 resp = await post_with_retries(

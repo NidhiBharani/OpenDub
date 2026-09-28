@@ -1,0 +1,20 @@
+name: f_judge_face
+python: ~/.opendub/envs/f_judge_face/bin/python
+description: 'Phase-F face judge: InsightFace buffalo_l (SCRFD + ArcFace + 2d106 landmarks; model pack
+  non- commercial research, fine for judging) + LPIPS (AlexNet). buffalo_l auto-downloads to ~/.insightface
+  on first use.'
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.11
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} insightface==0.7.3 onnxruntime-gpu==1.22.0 lpips==0.1.4 opencv-python-headless
+    numpy==1.26.4 pillow
+  aarch64:
+  - uv venv {prefix} --python 3.11
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} insightface==0.7.3 onnxruntime==1.22.0 lpips==0.1.4 opencv-python-headless
+    numpy==1.26.4 pillow
+check: import insightface, onnxruntime, lpips, torch; assert torch.cuda.is_available()
+notes: 'insightface 0.7.3 builds a small Cython extension (needs a C compiler). aarch64 uses CPU onnxruntime
+  (no PyPI aarch64 GPU wheel): ~50 sampled frames per clip is fine on 20 Arm cores. onnxruntime-gpu on
+  x86 needs the CUDA libs preloaded — importing torch first (the worker does, via lpips) handles it.'

@@ -1,0 +1,14 @@
+name: e2_audiosr
+python: ~/.opendub/envs/e2_audiosr/bin/python
+description: AudioSR 0.0.7 (MIT) latent-diffusion super-resolution, speech checkpoint (HF download on first use)
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.10
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} audiosr==0.0.7 soundfile==0.13.1
+  aarch64:
+    - uv venv {prefix} --python 3.10
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} audiosr==0.0.7 soundfile==0.13.1
+check: "import audiosr, torch; assert torch.cuda.is_available()"
+notes: audiosr pins old numpy/librosa in some releases; if resolution fails, pin numpy<2 (unverified).

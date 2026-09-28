@@ -1,0 +1,14 @@
+name: a3_audiotag
+python: ~/.opendub/envs/a3_audiotag/bin/python
+description: 'AudioSet taggers with remote code (CED): transformers 4.57 so trust_remote_code models written
+  for 4.x load.'
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+  - uv pip install --python {python} transformers==4.57.6 accelerate soundfile librosa numpy
+  aarch64:
+  - uv venv {prefix} --python 3.12
+  - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+  - uv pip install --python {python} transformers==4.57.6 accelerate soundfile librosa numpy
+check: import transformers, torch; assert torch.cuda.is_available()

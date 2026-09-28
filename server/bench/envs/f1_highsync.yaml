@@ -1,0 +1,30 @@
+name: f1_highsync
+python: ~/.opendub/envs/f1_highsync/bin/python
+description: HighSync (saeed5959/high_sync, MIT; weights HF saeed-5959/high_sync). Not pinned to a commit
+  yet (none recorded) — pin after the first successful run.
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url
+    https://download.pytorch.org/whl/cu128
+  - test -d {home}/.opendub/src/high_sync || git clone https://github.com/saeed5959/high_sync {home}/.opendub/src/high_sync
+  - git -C {home}/.opendub/src/high_sync checkout main
+  - grep -v -i -E '^(torch|torchvision|torchaudio)' {home}/.opendub/src/high_sync/requirements.txt > {home}/.opendub/src/high_sync/requirements.arena.txt
+  - uv pip install --python {python} -r {home}/.opendub/src/high_sync/requirements.arena.txt
+  - uv pip install --python {python} huggingface-hub
+  - cd {home}/.opendub/src/high_sync && uvx --from huggingface_hub hf download saeed-5959/high_sync --local-dir
+    {home}/.opendub/src/high_sync/checkpoints
+  aarch64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url
+    https://download.pytorch.org/whl/cu130
+  - test -d {home}/.opendub/src/high_sync || git clone https://github.com/saeed5959/high_sync {home}/.opendub/src/high_sync
+  - git -C {home}/.opendub/src/high_sync checkout main
+  - grep -v -i -E '^(torch|torchvision|torchaudio)' {home}/.opendub/src/high_sync/requirements.txt > {home}/.opendub/src/high_sync/requirements.arena.txt
+  - uv pip install --python {python} -r {home}/.opendub/src/high_sync/requirements.arena.txt
+  - uv pip install --python {python} huggingface-hub
+  - cd {home}/.opendub/src/high_sync && uvx --from huggingface_hub hf download saeed-5959/high_sync --local-dir
+    {home}/.opendub/src/high_sync/checkpoints
+check: import torch; assert torch.cuda.is_available()
+notes: requirements.txt minus torch pins, after the cu128/cu130 torch. Where the inference script expects
+  the weights (checkpoints/ here) is unverified.

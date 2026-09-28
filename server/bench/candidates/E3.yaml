@@ -1,0 +1,153 @@
+# E3 — acoustic scene / room matching (parked in the plan). Sources: model-research.html #E3
+# (ranks 1–9) and compute-tiers.html #E3. No hosted API exists; the closed options are plugins.
+capability: E3
+candidates:
+  - id: passthrough
+    url: server/bench/arena/workers/e3_dsp.py (in-house)
+    params_b: 0
+    worker: e3_dsp
+    kind: local
+    params: {mode: passthrough}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {}
+    baseline: true
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: today's behaviour — no room matching, the dry take is mixed as is
+  - id: blind-parametric-dsp
+    url: server/bench/arena/workers/e3_dsp.py (in-house)
+    params_b: 0
+    worker: e3_dsp
+    kind: local
+    params: {mode: blind_parametric, t60_percentile: 20, drr_at_03s: 8.0, drr_slope: 6.0}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {}
+    sources: [in-house]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      Classical free-decay T60 estimate + DRR prior + exponential-noise RIR (in-house). The
+      synthetic test rooms share the exponential-tail family, which flatters it slightly.
+  - id: rec-rir
+    url: https://github.com/Audio-WestlakeU/Rec-RIR
+    worker: e3_rec_rir
+    env: e3_rec_rir
+    params: {repo: ~/.opendub/src/rec-rir, config: config/Rec-RIR.toml, ckpt: ckpt/epoch35.tar,
+             commit: b3ac6fc1421bd58e017022037feb14f30366b46f, sr: 16000}
+    languages: "*"
+    license: MIT (code + checkpoint in repo)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3, disk_gb: 1, arch: [x86_64]}
+    sources: [research:E3:2, compute-tiers:E3:spark-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Blind RIR identification (16 kHz); needs mamba-ssm/causal-conv1d CUDA extensions (x86_64
+      only here). Estimation runs once per job in load(), so rtfx excludes it.
+  # ---- registered, not runnable
+  - id: flamo-fdn-matching
+    url: https://arxiv.org/abs/2510.23158
+    worker: e3_flamo_fdn
+    enabled: false
+    languages: "*"
+    license: paper CC BY 4.0; FLAMO framework MIT
+    sources: [research:E3:1, compute-tiers:E3:spark]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      Götz et al. (arXiv 2510.23158) VAE-embedding + differentiable FDN; FLAMO (pip flamo) is the
+      framework, but the trained acoustic-embedding VAE is not released — no runnable matcher yet.
+  - id: accentize-chameleon
+    worker: e3_chameleon
+    enabled: false
+    languages: "*"
+    license: proprietary plugin
+    ship_ok: false
+    sources: [research:E3:3, compute-tiers:E3:api]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: GUI/DAW plugin, no headless API; reference ceiling only
+  - id: izotope-dialogue-match
+    worker: e3_dialogue_match
+    enabled: false
+    languages: "*"
+    license: proprietary (RX 12 Advanced, AAX AudioSuite)
+    ship_ok: false
+    sources: [research:E3:4, compute-tiers:E3:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: plugin only (Pro Tools); no scripting
+  - id: av-soundscape-stylisation
+    worker: e3_soundscape
+    enabled: false
+    languages: "*"
+    license: unknown
+    sources: [research:E3:5]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      Li & Owens ECCV 2024 latent diffusion; also transfers ambience (duplicates the A1 bed) and
+      resynthesises the voice; evaluate-only, worker not written.
+  - id: buddy
+    url: https://github.com/sp-uhh/buddy
+    worker: e3_buddy
+    enabled: false
+    languages: "*"
+    license: none stated (no LICENSE in sp-uhh/buddy)
+    ship_ok: false
+    sources: [research:E3:6, compute-tiers:E3:big-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      Code + VCTK checkpoint exist (Google Drive) but no licence and bash-script-driven diffusion
+      posterior sampling (slow, per scene); worker deferred while E3 is parked.
+  - id: st-ito
+    url: https://github.com/csteinmetz1/st-ito
+    worker: e3_st_ito
+    enabled: false
+    languages: "*"
+    license: Apache-2.0
+    sources: [research:E3:7]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: run_optim.py searches a VST effect chain (plugins not bundled; Linux/aarch64 unverified); matches colour, not decay
+  - id: deepafx-st
+    url: https://github.com/adobe-research/DeepAFx-ST
+    worker: e3_deepafx_st
+    enabled: false
+    languages: "*"
+    license: NOASSERTION (adobe-research, treat as non-commercial)
+    ship_ok: false
+    sources: [research:E3:7]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: production-style transfer; licence to clear; no reverberation-time model
+  - id: gencho
+    url: https://linjac.github.io/Gencho/
+    worker: e3_gencho
+    enabled: false
+    languages: "*"
+    license: not stated
+    sources: [research:E3:8, compute-tiers:E3:spark-alt, compute-tiers:E3:big]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Adobe/UIUC ICASSP 2026 DiT RIR generator; demos only, no code or weights
+  - id: fins
+    worker: e3_fins
+    enabled: false
+    languages: "*"
+    license: research code
+    sources: [research:E3:8]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Steinmetz et al. WASPAA 2021 filtered-noise RIR estimation; no released weights found
+  - id: reverbmiipher
+    url: https://arxiv.org/abs/2505.05077
+    worker: e3_reverbmiipher
+    enabled: false
+    languages: "*"
+    license: closed
+    sources: [research:E3:9, compute-tiers:E3:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Google; not open-sourced
+  - id: rirflow
+    url: https://pubs.aip.org/asa/jasa/article/159/6/5527/3395888/Solving-room-impulse-response-inverse-problems
+    worker: e3_rirflow
+    enabled: false
+    languages: "*"
+    license: unknown
+    sources: [compute-tiers:E3:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: JASA 2026 training-free flow matching for RIR inverse problems; code not confirmed

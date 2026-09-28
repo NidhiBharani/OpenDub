@@ -1,0 +1,270 @@
+# A3 — speech / music / singing regions. Sources: model-research A3 ledger (8 rows) and
+# compute-tiers A3 picks + alternates, deduplicated.
+capability: A3
+candidates:
+  - id: stem-energy
+    worker: a3_stem_energy
+    env: server
+    kind: method
+    params: {model: htdemucs, frame_s: 0.1, speech_db: 25, music_db: 20, min_dur: 0.3}
+    url: https://github.com/NidhiBharani/OpenDub
+    languages: "*"
+    license: MIT (Demucs)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3}
+    baseline: true
+    sources: [research:A3:5, plan:capability-map:A3]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: cross-stem energy heuristic on the Demucs split (OpenDub's builtin A3 plan); cannot tell singing from speech
+  - id: ced-base
+    worker: a3_audiotag
+    env: a3_audiotag
+    kind: local
+    params: {family: ced, model: mispeech/ced-base, window_s: 1.0, hop_s: 0.5, threshold: 0.3}
+    url: https://huggingface.co/mispeech/ced-base
+    params_b: 0.086
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    sources: [research:A3:1, research:A8:8, compute-tiers:A3:spark]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: Spark pick; AudioSet 527 multi-label (Speech / Music / Singing groups), trust_remote_code
+  - id: ced-small
+    worker: a3_audiotag
+    env: a3_audiotag
+    kind: local
+    params: {family: ced, model: mispeech/ced-small, window_s: 1.0, hop_s: 0.5, threshold: 0.3}
+    url: https://huggingface.co/mispeech/ced-small
+    params_b: 0.022
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    sources: [research:A3:1]
+    verified: {license: true, languages: true, vram: false, runs: false}
+  - id: ced-mini
+    worker: a3_audiotag
+    env: a3_audiotag
+    kind: local
+    params: {family: ced, model: mispeech/ced-mini, window_s: 1.0, hop_s: 0.5, threshold: 0.3}
+    url: https://huggingface.co/mispeech/ced-mini
+    params_b: 0.0096
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {}
+    sources: [research:A3:1]
+    verified: {license: true, languages: true, vram: true, runs: false}
+  - id: ced-tiny
+    worker: a3_audiotag
+    env: a3_audiotag
+    kind: local
+    params: {family: ced, model: mispeech/ced-tiny, window_s: 1.0, hop_s: 0.5, threshold: 0.3}
+    url: https://huggingface.co/mispeech/ced-tiny
+    params_b: 0.0055
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {}
+    sources: [research:A3:1]
+    verified: {license: true, languages: true, vram: true, runs: false}
+  - id: inaspeechsegmenter-smn
+    worker: a3_ina
+    env: a3_ina
+    kind: local
+    params: {vad_engine: smn}
+    url: https://github.com/ina-foss/inaSpeechSegmenter
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {arch: [x86_64]}
+    sources: [research:A3:2, compute-tiers:A3:spark-alt]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: speech/music backstop; labels singing as music (the failure this pack measures). TF + onnxruntime-gpu → x86_64
+  - id: whisper-at-large-v1
+    worker: a3_whisper_at
+    env: a3_whisperat
+    kind: local
+    params: {model: large-v1, at_time_res: 0.4, top_k: 10, threshold: -1}
+    url: https://github.com/YuanGongND/whisper-at
+    params_b: 1.55
+    languages: "*"
+    license: BSD (code); MIT (Whisper weights)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 6}
+    sources: [research:A3:3]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: AudioSet tags from a Whisper encoder at 0.4 s resolution; label names parsed in English (language='en' — verify)
+  - id: qwen3-omni-30b-a3b-regions
+    worker: a8_qwen_omni
+    env: a8_qwen_omni
+    kind: local
+    params: {model: Qwen/Qwen3-Omni-30B-A3B-Instruct, task: regions, max_new_tokens: 1024}
+    url: https://huggingface.co/Qwen/Qwen3-Omni-30B-A3B-Instruct
+    params_b: 30
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 80, disk_gb: 70}
+    sources: [research:A3:7, compute-tiers:A3:big]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      Unconstrained pick (open weights) as a region labeller; the plan's adjudicator over dense CED
+      posteriors is a composition to add later. ~79 GB bf16 for a 15 s clip → Spark.
+  - id: qwen3.5-omni-plus-regions
+    worker: a8_dashscope_omni
+    env: server
+    kind: api
+    params: {model: qwen3.5-omni-plus, task: regions}
+    url: https://www.alibabacloud.com/help/en/model-studio/qwen-omni
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [DASHSCOPE_API_KEY]}
+    sources: [compute-tiers:A3:big]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: API-only Qwen3.5-Omni-Plus; price not verified (usd_per_call param)
+  - id: audio-flamingo-3-regions
+    worker: a8_audio_flamingo
+    env: a4_transformers
+    kind: local
+    params: {model: nvidia/audio-flamingo-3-hf, family: af3, task: regions}
+    url: https://huggingface.co/nvidia/audio-flamingo-3-hf
+    params_b: 8
+    languages: "*"
+    license: NVIDIA non-commercial
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 20, disk_gb: 20}
+    sources: [research:A3:7]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: 8B bf16 (~18–24 GB estimated) → Spark; eval-only licence
+  - id: audio-flamingo-next-think-regions
+    worker: a8_audio_flamingo
+    env: a4_transformers
+    kind: local
+    params: {model: nvidia/audio-flamingo-next-think-hf, family: next, task: regions}
+    url: https://huggingface.co/nvidia/audio-flamingo-next-think-hf
+    params_b: 8
+    languages: "*"
+    license: NVIDIA OneWay Noncommercial
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 20, disk_gb: 20}
+    sources: [compute-tiers:A3:big-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: stronger audio reasoning (MMAU-Pro 58.7) but non-commercial; transformers class availability in 5.17 unverified
+  - id: gemini-3.8-flash-regions
+    worker: a8_gemini
+    env: server
+    kind: api
+    params: {model: gemini-3.8-flash, task: regions, usd_per_m_audio_tokens: 1.0, usd_per_m_out_tokens: 2.5}
+    url: https://ai.google.dev/gemini-api/docs/audio
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    sources: [compute-tiers:A3:api]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: API pick family (Gemini 3-class audio); audio price for 3.8 Flash not captured — set the params
+  - id: scribe-v2-events
+    worker: a4_elevenlabs
+    env: server
+    kind: api
+    params: {model_id: scribe_v2, task: events, tag_audio_events: true, usd_per_hour: 0.22}
+    url: https://elevenlabs.io/docs/api-reference/speech-to-text/convert
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ELEVENLABS_API_KEY]}
+    sources: [compute-tiers:A3:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: speech spans from word timings + inline audio-event tags (music / singing when tagged)
+  - id: dasheng-1.2b
+    worker: a3_audiotag
+    env: a3_audiotag
+    kind: local
+    params: {family: dasheng, model: mispeech/dasheng-1.2B}
+    url: https://github.com/XiaoMi/dasheng
+    params_b: 1.2
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 6}
+    enabled: false
+    sources: [compute-tiers:A3:big-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: no packaged AudioSet head for 1.2B; the Zenodo 49.7-mAP tagging checkpoint needs a hand-written wrapper
+  - id: beats-iter3-as2m
+    worker: a3_audiotag
+    env: a3_audiotag
+    kind: local
+    params: {family: beats}
+    url: https://github.com/microsoft/unilm/tree/master/beats
+    params_b: 0.09
+    languages: "*"
+    license: MIT (repo)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1}
+    enabled: false
+    sources: [research:A3:8]
+    verified: {license: false, languages: true, vram: false, runs: false}
+    notes: AudioSet-finetuned checkpoints are OneDrive links only and there is no pip package — manual download + adapter
+  - id: openbeats-large
+    worker: a3_audiotag
+    env: a3_audiotag
+    kind: local
+    params: {family: openbeats}
+    url: https://arxiv.org/abs/2507.14129
+    params_b: 0.3
+    languages: "*"
+    license: see release
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 2}
+    enabled: false
+    sources: [research:A3:8]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: encoder release (ESPnet); no AudioSet tagging head packaged for inference
+  - id: sr-sad
+    worker: a3_audiotag
+    env: a3_audiotag
+    kind: local
+    params: {}
+    url: https://arxiv.org/abs/2512.09713
+    params_b: 0.00087
+    languages: "*"
+    license: not stated
+    ship_ok: null
+    requires: {}
+    enabled: false
+    sources: [research:A3:6, compute-tiers:A3:spark-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: singing-robust speech activity detection — no code or weights released
+  - id: qwen3-asr-adjudicator
+    worker: asr_qwen3
+    env: qwen3asr
+    kind: method
+    params: {}
+    url: https://huggingface.co/Qwen/Qwen3-ASR-1.7B
+    params_b: 1.7
+    languages: [en, hi, ja]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 5}
+    enabled: false
+    sources: [research:A3:4, compute-tiers:A3:spark-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: singing-aware ASR as an adjudicator of ambiguous CED windows — a composition method, not a region detector on its own
+  - id: audioshake-stem-energy
+    worker: a3_stem_energy
+    env: server
+    kind: method
+    params: {}
+    url: https://developer.audioshake.ai/models
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [AUDIOSHAKE_API_KEY]}
+    enabled: false
+    sources: [compute-tiers:A3:api-alt]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: stem-energy heuristic on AudioShake stems — needs the stem heuristic to take API stems; tiebreaker only

@@ -1,0 +1,262 @@
+# D7 — non-verbal vocalisations.
+# Rows from both research artifacts: data/research/model-research.html ledger (research:D7:<rank>)
+# and data/research/compute-tiers.html picks (compute-tiers:D7:spark|big|api, alternates *-alt),
+# docs/model-candidates-by-compute.md and plan §7 (plan:§7:D7).
+# requires places each row: vram ≤ 15 → Thalassa (x86_64 16 GB) and Spark; vram > 16 → Spark only;
+# arch [x86_64] where deps have no aarch64 wheels; kind api → API keys. d_unwired = registered only.
+capability: D7
+candidates:
+- id: splice-f5
+  worker: d7_splice
+  env: server
+  kind: method
+  params:
+    inner:
+      worker: d1_f5_tts
+      params:
+        model: F5TTS_v1_Base
+        languages: [en, zh]
+    fade_ms: 30
+  languages: [en, zh]
+  license: CC-BY-NC-4.0 (inner F5)
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 3, disk_gb: 2}
+  sources: ['research:D7:1', 'compute-tiers:D7:spark']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Pass-through splice of the source vocalisation around F5 speech (research primary); the CED/BEATs
+    gate is upstream (A8) — here the pack says where events are.
+  url: https://github.com/SWivid/F5-TTS
+  params_b: 0.34
+- id: splice-f5-hindi
+  worker: d7_splice
+  env: server
+  kind: method
+  params:
+    inner:
+      worker: d1_f5_tts
+      params:
+        model: F5TTS_Small
+        ckpt_file: hf://SPRINGLab/F5-Hindi-24KHz/model_2500000.safetensors
+        vocab_file: hf://SPRINGLab/F5-Hindi-24KHz/vocab.txt
+        languages: [hi]
+    fade_ms: 30
+  languages: [hi]
+  license: CC-BY-4.0 (inner F5-Hindi)
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 2, disk_gb: 1}
+  sources: ['research:D7:1']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Splice method over F5-Hindi.
+  url: https://huggingface.co/SPRINGLab/F5-Hindi-24KHz
+  params_b: 0.16
+- id: splice-voxcpm2
+  worker: d7_splice
+  env: d1_voxcpm
+  kind: method
+  params:
+    inner:
+      worker: d1_voxcpm
+      params: {model: openbmb/VoxCPM2, revision: 32279effe8c19989596f05d353d1447f51d9e915, mode: clone}
+  languages: [ar, my, zh, da, nl, en, fi, fr, de, el, he, hi, id, it, ja, km, ko, lo, ms, 'no', pl, pt,
+    ru, es, sw, sv, tl, th, tr, vi]
+  license: Apache-2.0 (inner VoxCPM2)
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 9, disk_gb: 6}
+  sources: ['research:D7:1']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Splice method over VoxCPM2.
+  url: https://huggingface.co/openbmb/VoxCPM2
+  params_b: 2.0
+- id: ced-beats-tagging
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'CED / BEATs are detectors, not generators: CED is the D7 judge (nv_events.ced) and the
+      A8 tagger that gates the splice.'}
+  languages: '*'
+  license: Apache-2.0 / MIT
+  ship_ok: true
+  requires: {}
+  enabled: false
+  sources: ['research:D7:2']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'CED / BEATs are detectors, not generators: CED is the D7 judge (nv_events.ced) and the A8 tagger
+    that gates the splice.'
+  url: https://huggingface.co/mispeech/ced-base
+- id: step-audio-editx-paralinguistic
+  worker: d2_step_audio_editx
+  env: d2_step_audio_editx
+  kind: local
+  params: {mode: clone+paralinguistic}
+  languages: [zh, en, ja, ko]
+  license: Apache-2.0
+  ship_ok: true
+  requires:
+    gpu: true
+    vram_gb: 15
+    disk_gb: 12
+    arch: [x86_64]
+  sources: ['research:D7:3', 'compute-tiers:D7:spark']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: Clone the untagged text, then a paralinguistic edit pass with the tags ([laugh], [sigh] …). x86
+    only.
+  url: https://huggingface.co/stepfun-ai/Step-Audio-EditX
+  params_b: 3.0
+- id: nvspeech-sensevoice
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'NVSpeech paralinguistic ASR (inline event tokens): a detector for the router (A8), not
+      a generator.'}
+  languages: '*'
+  license: unknown
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['research:D7:4', 'compute-tiers:D7:big-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'NVSpeech paralinguistic ASR (inline event tokens): a detector for the router (A8), not a generator.'
+  url: https://arxiv.org/abs/2508.04195
+- id: multilinguahah
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'MultiLinguahah laughter segmentation: a detector (A8).'}
+  languages: '*'
+  license: unknown
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['research:D7:5']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'MultiLinguahah laughter segmentation: a detector (A8).'
+  url: https://github.com/sofia-callejas/Multilinguahah
+- id: elevenlabs-v3-tags
+  worker: d1_elevenlabs
+  env: server
+  kind: api
+  params: {model: eleven_v3, mode: clone, output_format: pcm_24000}
+  languages: [en, hi, ja, zh, ko, de, fr, es, it, pt, ru, ar, ta, te, bn, pl, nl, tr, sv, id, fil, uk,
+    vi, cs, ro, el, hu]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [ELEVENLABS_API_KEY]
+  sources: ['research:D7:6', 'compute-tiers:D7:api-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Mirrors app/providers/tts/elevenlabs.py; IVC voices are deleted at job end. Prices in _cost_usd
+    are estimates. Script tags passed through as v3 audio tags.
+  url: https://elevenlabs.io/docs/api-reference/text-to-speech/convert
+- id: cartesia-sonic-3.6
+  worker: d1_cartesia
+  env: server
+  kind: api
+  params: {model: sonic-3.6-2026-08-27, mode: clone}
+  languages: [en, hi, ja, zh, ko, de, fr, es, it, pt, ru, ar, ta, te, bn]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [CARTESIA_API_KEY]
+  sources: ['research:D7:7', 'compute-tiers:D7:api-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Sonic 3.6 (44 languages, $49/M chars per Cartesia, 2026-08). Clone endpoint not re-verified.
+    Infers non-verbals from the transcript; literal [tags] may be read out.
+  url: https://docs.cartesia.ai/build-with-cartesia/tts-models/latest
+- id: dia-1.6b
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'Dia-1.6B (English, Apache-2.0): compute-tiers says superseded; no worker.'}
+  languages: [en]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {}
+  enabled: false
+  sources: ['research:D7:8']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Dia-1.6B (English, Apache-2.0): compute-tiers says superseded; no worker.'
+  url: https://huggingface.co/nari-labs/Dia-1.6B
+  params_b: 1.6
+- id: higgs-audio-v3-4b
+  worker: d1_higgs_audio
+  env: d1_higgs_audio
+  kind: local
+  params: {model: bosonai/higgs-tts-3-4b, revision: 239f63fb7b02b1aa085f98d9efae5e35cc5523e8, server: vllm-omni,
+    gpu_memory_utilization: 0.85}
+  languages: [en, hi, ja, zh, ko, de, fr, es, it, pt, ru, ar, ta, te, bn]
+  license: Boson Higgs TTS 3 Research and Non-Commercial License
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 24, disk_gb: 12}
+  sources: ['compute-tiers:D7:spark-alt', 'compute-tiers:D7:big-alt']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: '100+ languages per the card (listed: the in-scope subset). Served by vLLM-Omni (the card cites
+    ≥24 GB reported, 40 GB for SGLang-Omni) → Spark. Request fields from the repo''s AGENTS.md; not run
+    yet. Script tags passed as text; Higgs'' own control tokens are <|…|>.'
+  url: https://huggingface.co/bosonai/higgs-tts-3-4b
+  params_b: 4.0
+- id: moss-soundeffect-v2
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'MOSS-SoundEffect v2.0 generates sound effects, not voice (E/F-phase material).'}
+  languages: '*'
+  license: Apache-2.0
+  ship_ok: true
+  requires: {}
+  enabled: false
+  sources: ['compute-tiers:D7:spark-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: MOSS-SoundEffect v2.0 generates sound effects, not voice (E/F-phase material).
+  url: https://huggingface.co/OpenMOSS-Team/MOSS-SoundEffect-v2.0
+  params_b: 1.3
+- id: fish-s2-pro
+  worker: d1_fish_speech
+  env: d1_fish_speech
+  kind: local
+  params: {checkpoint_dir: checkpoints/s2-pro, temperature: 0.7, top_p: 0.7}
+  languages: [zh, en, ja, ko, es, pt, ar, ru, fr, de, sv, it, tr, 'no', nl, cy, eu, ca, da, gl, ta, hu,
+    fi, pl, et, hi, la, ur, th, vi, jw, bn, yo, sl, cs, sw, nn, he, ms, uk, id, kk, bg, lv, my, tl, sk,
+    ne, fa, af, el, bo, hr, ro, sn, mi, yi, am, be, km, is, az, sd, br, sq, ps, mn, ht, ml, sr, sa, te,
+    ka, bs, pa, lt, kn, si, hy, mr, as, gu, fo]
+  license: Fish-Audio-Research-License (NC)
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 24, disk_gb: 12}
+  sources: ['compute-tiers:D7:big']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'fishaudio/s2-pro @1de9996. Docs recommend ≥24 GB → Spark. SGLang fast path unverified on aarch64/sm_121:
+    plain PyTorch api_server. Bracket tags are native.'
+  url: https://huggingface.co/fishaudio/s2-pro
+  params_b: 4.56
+- id: qwen-audio-3.0-tts-plus
+  worker: d1_dashscope
+  env: server
+  kind: api
+  params:
+    backend: openrouter
+    model: qwen/qwen-audio-3.0-tts-plus
+    voices:
+      '*': {female: longanlingxin, male: longanlufeng}
+  languages: [zh, en, ja, ko, de, fr, ru, pt, es, it]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [OPENROUTER_API_KEY]
+  sources: ['compute-tiers:D7:api']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Preset voices; tag vocabulary (86 inline tags) not mapped from ours — unverified.
+  url: https://openrouter.ai/qwen/qwen-audio-3.0-tts-plus
+- id: chatterbox-turbo
+  worker: d1_chatterbox
+  env: d1_chatterbox
+  kind: local
+  params: {mode: turbo}
+  languages: [en]
+  license: MIT
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 5, disk_gb: 4}
+  sources: ['task:chatterbox-family']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: chatterbox-tts 0.1.7 installed --no-deps over torch 2.11 (it pins torch 2.6, no sm_120 kernels).
+    English Turbo with native [laugh]/[cough] tags.
+  url: https://github.com/resemble-ai/chatterbox
+  params_b: 0.5

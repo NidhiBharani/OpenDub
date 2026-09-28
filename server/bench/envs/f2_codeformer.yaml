@@ -1,0 +1,25 @@
+name: f2_codeformer
+python: ~/.opendub/envs/f2_codeformer/bin/python
+description: CodeFormer (sczhou/CodeFormer @ b33cc7d6; NTU S-Lab 1.0). Weights auto-download from the
+  v0.1.0 release on first use.
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+  - test -d {home}/.opendub/src/CodeFormer || git clone https://github.com/sczhou/CodeFormer {home}/.opendub/src/CodeFormer
+  - git -C {home}/.opendub/src/CodeFormer checkout b33cc7d639d6
+  - grep -v -i -E '^(torch|torchvision|torchaudio)' {home}/.opendub/src/CodeFormer/requirements.txt >
+    {home}/.opendub/src/CodeFormer/requirements.arena.txt
+  - uv pip install --python {python} -r {home}/.opendub/src/CodeFormer/requirements.arena.txt ffmpeg-python
+  - cd {home}/.opendub/src/CodeFormer && {python} basicsr/setup.py develop
+  aarch64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+  - test -d {home}/.opendub/src/CodeFormer || git clone https://github.com/sczhou/CodeFormer {home}/.opendub/src/CodeFormer
+  - git -C {home}/.opendub/src/CodeFormer checkout b33cc7d639d6
+  - grep -v -i -E '^(torch|torchvision|torchaudio)' {home}/.opendub/src/CodeFormer/requirements.txt >
+    {home}/.opendub/src/CodeFormer/requirements.arena.txt
+  - uv pip install --python {python} -r {home}/.opendub/src/CodeFormer/requirements.arena.txt ffmpeg-python
+  - cd {home}/.opendub/src/CodeFormer && {python} basicsr/setup.py develop
+check: import torch; assert torch.cuda.is_available()
+notes: Video input path uses ffmpeg-python; dlib only for the dlib detector (not used).

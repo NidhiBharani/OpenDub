@@ -1,0 +1,303 @@
+# A1 — dialogue / music-and-effects separation. Sources: model-research A1 ledger (8 rows) and
+# compute-tiers A1 picks + alternates, deduplicated. MSST configs are pinned to commit 84b1eac.
+capability: A1
+candidates:
+  - id: htdemucs
+    worker: a1_demucs
+    env: server
+    kind: local
+    params: {model: htdemucs, shifts: 2, overlap: 0.5, bed_by_subtraction: true}
+    url: https://github.com/adefossez/demucs
+    params_b: 0.042
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3, disk_gb: 1}
+    baseline: true
+    sources: [research:A1:6]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Current OpenDub separator (vocals stem = dialogue, bed = mix − dialogue). demucs 4.1 needs
+      sphn, which has no aarch64 wheel (Rust build on the Spark).
+  - id: htdemucs-ft
+    worker: a1_demucs
+    env: server
+    kind: local
+    params: {model: htdemucs_ft, shifts: 2, overlap: 0.5, bed_by_subtraction: true}
+    url: https://huggingface.co/adefossez/HTDemucs-ft
+    params_b: 0.168
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 4, disk_gb: 1}
+    sources: [research:A1:6]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: bag of 4 fine-tuned HTDemucs models (4× slower than htdemucs)
+  - id: passthrough
+    worker: a1_passthrough
+    env: server
+    kind: method
+    params: {mode: passthrough}
+    url: https://github.com/NidhiBharani/OpenDub
+    languages: "*"
+    license: n/a
+    ship_ok: true
+    requires: {}
+    sources: [plan:capability-map:A1]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: OpenDub's separation.passthrough default (dialogue = bed = mix) — the floor
+  - id: centre-channel
+    worker: a1_passthrough
+    env: server
+    kind: method
+    params: {mode: centre, centre_channel: 2, bed_by_subtraction: false}
+    url: https://github.com/NidhiBharani/OpenDub
+    languages: "*"
+    license: n/a
+    ship_ok: true
+    requires: {}
+    sources: [research:A1:5]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      Classical supplied-stem / 5.1 centre-channel extraction. Needs multichannel input: every
+      mono/stereo pack item is Unsupported (DnR is mono) — scored only on 5.1 in-house items.
+  - id: bandit-v2-multi
+    worker: a1_msst
+    env: a1_msst
+    kind: local
+    params:
+      model_type: bandit_v2
+      config: https://raw.githubusercontent.com/ZFTurbo/Music-Source-Separation-Training/84b1eac0887756b4f1a9d7a1ff49105939749ed2/configs/config_dnr_bandit_v2_mus64.yaml
+      checkpoint: https://zenodo.org/records/12701995/files/checkpoint-multi.ckpt
+      stems: {dialogue: speech, music: music, effects: sfx}
+      bed_by_subtraction: true
+    url: https://github.com/kwatcharasupat/bandit-v2
+    params_b: 0.046
+    languages: "*"
+    license: Apache-2.0 code; CC-BY-SA-4.0 weights
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 6, disk_gb: 1}
+    sources: [research:A1:1, compute-tiers:A1:spark]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      Spark pick. Multilingual DnR v3 checkpoint (48 kHz, speech/music/sfx) run through MSST's
+      bandit_v2 model type; that the Zenodo checkpoints load unmodified in MSST is unverified
+      (native repo pins torch 2.0 + internal nflx packages). Share-alike weights.
+  - id: bandit-v2-eng
+    worker: a1_msst
+    env: a1_msst
+    kind: local
+    params:
+      model_type: bandit_v2
+      config: https://raw.githubusercontent.com/ZFTurbo/Music-Source-Separation-Training/84b1eac0887756b4f1a9d7a1ff49105939749ed2/configs/config_dnr_bandit_v2_mus64.yaml
+      checkpoint: https://zenodo.org/records/12701995/files/checkpoint-eng.ckpt
+      stems: {dialogue: speech, music: music, effects: sfx}
+      bed_by_subtraction: true
+    url: https://zenodo.org/records/12701995
+    params_b: 0.046
+    languages: [en]
+    license: Apache-2.0 code; CC-BY-SA-4.0 weights
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 6, disk_gb: 1}
+    sources: [research:A1:1]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: "English-dialogue DnR v3 checkpoint (one of seven: eng/deu/fra/spa/cmn/fao/multi)"
+  - id: bandit-plus-dnr
+    worker: a1_msst
+    env: a1_msst
+    kind: local
+    params:
+      model_type: bandit
+      config: https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v.1.0.3/config_dnr_bandit_bsrnn_multi_mus64.yaml
+      checkpoint: https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v.1.0.3/model_bandit_plus_dnr_sdr_11.47.chpt
+      stems: {dialogue: speech, music: music, effects: effects}
+      bed_by_subtraction: true
+    url: https://github.com/ZFTurbo/Music-Source-Separation-Training
+    params_b: 0.046
+    languages: "*"
+    license: MIT repo; checkpoint licence not stated
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 6, disk_gb: 1}
+    sources: [research:A1:4]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: DnR v2 (English LibriSpeech dialogue) BandIt Plus, 44.1 kHz, DnR SDR 11.47
+  - id: melband-roformer-kim-vocals
+    worker: a1_msst
+    env: a1_msst
+    kind: local
+    params:
+      model_type: mel_band_roformer
+      config: https://raw.githubusercontent.com/ZFTurbo/Music-Source-Separation-Training/84b1eac0887756b4f1a9d7a1ff49105939749ed2/configs/KimberleyJensen/config_vocals_mel_band_roformer_kj.yaml
+      checkpoint: https://huggingface.co/KimberleyJSN/melbandroformer/resolve/main/MelBandRoformer.ckpt
+      stems: {dialogue: vocals}
+      bed_by_subtraction: true
+    url: https://huggingface.co/KimberleyJSN/melbandroformer
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 5, disk_gb: 1}
+    sources: [compute-tiers:A1:spark-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Music vocal separator used as a dialogue extractor (the "MSST ensemble" alternate); like
+      Demucs it will also pull singing into the dialogue stem.
+  - id: bandit-v2-roformer-blend
+    worker: a1_msst
+    env: a1_msst
+    kind: method
+    params: {}
+    url: https://mvsep.com/algorithms
+    languages: "*"
+    license: mixed
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 8}
+    enabled: false
+    sources: [compute-tiers:A1:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: blended ensemble (demixing-challenge practice); needs a composition worker — add once the single models are ranked
+  - id: auk-flash
+    worker: a1_auk
+    env: a1_auk
+    kind: local
+    params: {role: dialogue}
+    url: https://huggingface.co/tencent/AuK-Flash
+    params_b: 1.5
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 26, disk_gb: 15}
+    sources: [compute-tiers:A1:spark-alt, compute-tiers:A2:spark-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      Tencent AuK-Flash (released 2026-09-09): instruction-driven generative separation, 24 kHz
+      output; ~25 GiB bf16 on A800 (17 GiB with cpu_offload, still above 16 GB) → Spark. The bed is
+      mix − regenerated dialogue, so any drift shows as bleed. Plus Qwen2.5-Omni-3B.
+  - id: auk
+    worker: a1_auk
+    env: a1_auk
+    kind: local
+    params: {role: dialogue}
+    url: https://huggingface.co/tencent/AuK
+    params_b: 1.5
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 26, disk_gb: 15}
+    enabled: false
+    sources: [compute-tiers:A1:spark-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: full (non-Flash) AuK — checkpoint file names not verified; set params.config/checkpoint and enable
+  - id: av-cass
+    worker: a1_msst
+    env: a1_msst
+    kind: local
+    params: {}
+    url: https://github.com/pantheon5100/AVCASS
+    languages: "*"
+    license: MIT code (weights terms not stated)
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 16, arch: [x86_64]}
+    enabled: false
+    sources: [research:A1:7, compute-tiers:A1:big]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      Unconstrained pick (CVPR 2026 flow matching; +0.22 dB SI-SDRi over BandIt on DnR v3). Weights
+      are on Google Drive, but inference expects the AVDnR dataset layout (+ CAVP/TalkNet for the
+      AV model, mmcv/xformers) — needs its own adapter; audio-only mode fits A1 packs.
+  - id: banquet
+    worker: a1_msst
+    env: a1_msst
+    kind: local
+    params: {}
+    url: https://github.com/kwatcharasupat/query-bandit
+    params_b: 0.025
+    languages: "*"
+    license: MIT code; CC-BY-NC-SA-4.0 weights
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 4}
+    enabled: false
+    sources: [research:A1:3]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: query-based single-decoder separator trained on MoisesDB music stems — no dialogue query; research-only weights
+  - id: audioshake-dialogue
+    worker: a1_audioshake
+    env: server
+    kind: api
+    params: {targets: [dialogue], role: dialogue, usd_per_credit: 0.0}
+    url: https://developer.audioshake.ai/models
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [AUDIOSHAKE_API_KEY]}
+    sources: [research:A1:2, compute-tiers:A1:api, compute-tiers:A1:big-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      API pick (dialogue model + residual = bed; 1.5 credits/min). USD per credit is dashboard-only:
+      set usd_per_credit to record spend. The asset-upload route is unverified.
+  - id: audioshake-multi-voice
+    worker: a1_audioshake
+    env: server
+    kind: api
+    params: {targets: [multi_voice], role: dialogue}
+    url: https://developer.audioshake.ai/models
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [AUDIOSHAKE_API_KEY]}
+    enabled: false
+    sources: [compute-tiers:A1:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: separates overlapping voices (10 credits/min) — belongs upstream of A6, not a DME split
+  - id: lalal-voice
+    worker: a1_lalal
+    env: server
+    kind: api
+    params: {stem: voice, splitter: auto, bed_by_subtraction: true, usd_per_min: 0.067}
+    url: https://www.lalal.ai/api/v1/openapi.json
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [LALAL_API_KEY]}
+    sources: [plan:model-ranking:7]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: existing OpenDub provider (separation.lalalai); price from the 750 min / $50 top-up
+  - id: mvsep-bandit-v2
+    worker: a1_mvsep
+    env: server
+    kind: api
+    params: {sep_type: 45, add_opt1: 0, stems: {dialogue: speech, music: music, effects: sfx}}
+    url: https://mvsep.com/full_api
+    languages: "*"
+    license: proprietary API (hosts CC-BY-SA BandIt v2)
+    ship_ok: true
+    requires: {api_keys: [MVSEP_API_TOKEN]}
+    sources: [compute-tiers:A1:api-alt]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: hosted BandIt v2 multi; credits per minute, USD not published (usd_per_min param)
+  - id: mvsep-dnr-v3-ensemble
+    worker: a1_mvsep
+    env: server
+    kind: api
+    params: {sep_type: 56, stems: {dialogue: speech, music: music, effects: sfx}}
+    url: https://mvsep.com/full_api
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [MVSEP_API_TOKEN]}
+    sources: [compute-tiers:A1:api-alt]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: MVSep DnR v3 (SCNet / Mel-RoFormer ensemble) hosted algorithm
+  - id: dnr-nonverbal
+    worker: a1_msst
+    env: a1_msst
+    kind: method
+    params: {}
+    url: https://zenodo.org/search?q=DnR-nonverbal
+    languages: "*"
+    license: dataset (Zenodo)
+    ship_ok: null
+    requires: {}
+    enabled: false
+    sources: [research:A1:8]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: a dataset (non-verbal vocalisation augmentation), not a model — use it as an extra A1 pack source (a1-dnr-v3 source=<dir>)

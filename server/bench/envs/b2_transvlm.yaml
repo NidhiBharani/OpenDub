@@ -1,0 +1,23 @@
+name: b2_transvlm
+python: ~/.opendub/src/TransVLM/inference/.venv/bin/python
+description: >-
+  TransVLM (Apache-2.0; Qwen3-VL-4B + NeuFlow v2 optical flow). The repo's own inference venv (uv
+  sync, cu130 group, cuDNN 9.16 pin that every uv sync undoes) is the worker interpreter; the
+  checkpoint goes to inference/pretrained/TransVLM-v1.
+setup:
+  x86_64:
+    - git clone https://github.com/heygen-com/TransVLM {home}/.opendub/src/TransVLM || true
+    - git -C {home}/.opendub/src/TransVLM checkout 7880c9066d8ae548cc270c843a530c8e60c6d513
+    - cd {home}/.opendub/src/TransVLM/inference && uv venv --python 3.12 && uv sync --group cu130 --group dev
+    - cd {home}/.opendub/src/TransVLM/inference && uv pip install nvidia-cudnn-cu13==9.16.0.29
+    - cd {home}/.opendub/src/TransVLM/inference && .venv/bin/hf download HeyGenAI/TransVLM-Qwen3-VL-4B-Instruct --local-dir ./pretrained/TransVLM-v1
+  aarch64:
+    - git clone https://github.com/heygen-com/TransVLM {home}/.opendub/src/TransVLM || true
+    - git -C {home}/.opendub/src/TransVLM checkout 7880c9066d8ae548cc270c843a530c8e60c6d513
+    - cd {home}/.opendub/src/TransVLM/inference && uv venv --python 3.12 && uv sync --group cu130 --group dev
+    - cd {home}/.opendub/src/TransVLM/inference && uv pip install nvidia-cudnn-cu13==9.16.0.29
+    - cd {home}/.opendub/src/TransVLM/inference && .venv/bin/hf download HeyGenAI/TransVLM-Qwen3-VL-4B-Instruct --local-dir ./pretrained/TransVLM-v1
+check: "import torch; assert torch.backends.cudnn.version() >= 91600"
+notes: >-
+  Needs Python 3.12 and ffmpeg on PATH. The aarch64 recipe is the same commands and is untested on
+  GB10 (the HF backend is plain transformers; vLLM/SGLang backends are not used).

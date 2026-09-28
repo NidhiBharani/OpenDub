@@ -468,6 +468,62 @@ async def mux(video: Path, audio: Path, out_path: Path) -> None:
     )
 
 
+async def validate_render(path: Path, expected_duration: float, tolerance: float = 0.5) -> dict[str, float]:
+    """Verify the encoded file can be decoded and has a complete audio stream.
+
+    This checks the delivered container after muxing, rather than trusting the
+    intermediate WAV. An audio-only source is valid when its source has no video.
+    """
+    if not path.is_file() or path.stat().st_size == 0:
+        raise RuntimeError(f"render missing or empty: {path}")
+    info = await probe(path)
+    if not info.has_audio:
+        raise RuntimeError(f"render has no audio stream: {path}")
+    if info.duration <= 0 or abs(info.duration - expected_duration) > tolerance:
+        raise RuntimeError(
+            f"render duration {info.duration:.3f}s differs from expected "
+            f"{expected_duration:.3f}s (tolerance {tolerance:.3f}s): {path}"
+        )
+    raw = await _ffprobe(
+        "-print_format", "json", "-show_entries",
+        "stream=codec_type,start_time,duration", str(path),
+    )
+    streams = json.loads(raw or b"{}").get("streams", [])
+    audio = next((s for s in streams if s.get("codec_type") == "audio"), None)
+    video = next((s for s in streams if s.get("codec_type") == "video"), None)
+    if audio is None:
+        raise RuntimeError(f"render has no audio stream: {path}")
+    audio_start = _parse_fraction(audio.get("start_time"))
+    audio_duration = _parse_fraction(audio.get("duration"))
+    if audio_duration > 0 and abs(audio_duration - expected_duration) > tolerance:
+        raise RuntimeError(
+            f"render audio duration {audio_duration:.3f}s differs from expected "
+            f"{expected_duration:.3f}s: {path}"
+        )
+    if video is not None:
+        video_start = _parse_fraction(video.get("start_time"))
+        video_duration = _parse_fraction(video.get("duration"))
+        if abs(audio_start - video_start) > 0.15:
+            raise RuntimeError(
+                f"render audio/video start offset {audio_start - video_start:+.3f}s exceeds 0.15s: {path}"
+            )
+        if audio_duration > 0 and video_duration > 0 and abs(audio_duration - video_duration) > tolerance:
+            raise RuntimeError(
+                f"render audio/video end mismatch {audio_duration - video_duration:+.3f}s: {path}"
+            )
+    # Decode every stream through the end; corrupt AAC packets and broken video
+    # can pass a metadata probe yet fail here.
+    await _ffmpeg(
+        "-xerror", "-i", str(path), "-map", "0:v?", "-map", "0:a?", "-f", "null", "-"
+    )
+    return {
+        "duration": info.duration,
+        "expected_duration": expected_duration,
+        "audio_duration": audio_duration,
+        "audio_start": audio_start,
+    }
+
+
 async def loudness_normalize(wav: Path, out_wav: Path, i: float = -16.0) -> None:
     """One-pass loudnorm to integrated loudness `i` LUFS.
 
@@ -487,6 +543,7 @@ async def loudness_normalize(wav: Path, out_wav: Path, i: float = -16.0) -> None
 
 
 _EBUR128_I_RE = re.compile(r"I:\s*(-?[0-9.]+)\s*LUFS")
+_EBUR128_PEAK_RE = re.compile(r"True peak:\s*Peak:\s*(-?(?:[0-9.]+|inf))\s*dBFS")
 
 # ebur128's gated integrated-loudness floor: a (near-)silent file measures at/below this.
 SILENCE_LUFS = -70.0
@@ -521,6 +578,29 @@ async def measure_loudness(wav: Path) -> float:
     if not matches:
         raise RuntimeError(f"could not parse ebur128 integrated loudness for {wav}")
     return max(float(matches[-1]), SILENCE_LUFS)  # summary block's I: is the last match
+
+
+async def measure_true_peak(audio: Path) -> float:
+    """EBU R128 oversampled true peak in dBTP, measured on the encoded artifact."""
+    proc = await asyncio.create_subprocess_exec(
+        FFMPEG_BIN, "-hide_banner", "-nostats", "-i", str(audio),
+        "-af", "ebur128=peak=true", "-f", "null", "-",
+        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        _, stderr = await proc.communicate()
+    except asyncio.CancelledError:
+        with contextlib.suppress(ProcessLookupError):
+            proc.kill()
+        raise
+    report = stderr.decode("utf-8", "replace")
+    if proc.returncode != 0:
+        raise RuntimeError(f"{FFMPEG_BIN} true-peak meter failed: {report[-4000:]}")
+    matches = _EBUR128_PEAK_RE.findall(report)
+    if not matches:
+        raise RuntimeError(f"could not parse true peak for {audio}")
+    peak = float(matches[-1])
+    return max(-120.0, peak)  # finite sentinel for a silent render report
 
 
 async def apply_gain(wav: Path, out_wav: Path, gain_db: float, true_peak_db: float | None = None) -> None:
@@ -611,13 +691,25 @@ async def pad_or_trim(wav: Path, out_wav: Path, target: float) -> None:
     )
 
 
-async def amix(vocals: Path, background: Path, out_wav: Path, background_gain_db: float = -2.0) -> None:
-    """Mix two wavs (ffmpeg amix, normalize=0) with a volume filter applied to `background`."""
+async def amix(
+    vocals: Path, background: Path, out_wav: Path, background_gain_db: float = -2.0,
+    float_output: bool = False,
+    ducking_mix: float = 0.0,
+) -> None:
+    """Mix two wavs, optionally compressing the bed only under audible vocals."""
     out_wav.parent.mkdir(parents=True, exist_ok=True)
-    filt = (
-        f"[1:a]volume={background_gain_db}dB[bg];"
-        "[0:a][bg]amix=inputs=2:duration=first:normalize=0[out]"
-    )
+    if ducking_mix > 0:
+        filt = (
+            f"[1:a]volume={background_gain_db}dB[bg];"
+            "[0:a]asplit=2[vox][key];"
+            f"[bg][key]sidechaincompress=threshold=0.04:ratio=3:attack=25:release=250:mix={min(1.0, ducking_mix):.3f}[ducked];"
+            "[vox][ducked]amix=inputs=2:duration=first:normalize=0[out]"
+        )
+    else:
+        filt = (
+            f"[1:a]volume={background_gain_db}dB[bg];"
+            "[0:a][bg]amix=inputs=2:duration=first:normalize=0[out]"
+        )
     await _ffmpeg(
         "-i", str(vocals),
         "-i", str(background),
@@ -625,6 +717,6 @@ async def amix(vocals: Path, background: Path, out_wav: Path, background_gain_db
         "-map", "[out]",
         "-ar", str(_STD_SAMPLE_RATE),
         "-ac", str(_STD_CHANNELS),
-        "-c:a", "pcm_s16le",
+        "-c:a", "pcm_f32le" if float_output else "pcm_s16le",
         str(out_wav),
     )

@@ -123,6 +123,8 @@ class DemucsSeparationProvider(SeparationProvider):
                 sys.executable, "-m", "demucs.separate",
                 "--two-stems", "vocals",
                 "-n", model,
+                "--shifts", str(max(1, min(10, int(self.opt_float("shifts", 2))))),
+                "--overlap", str(max(0.0, min(0.9, self.opt_float("overlap", 0.5)))),
                 "-o", tmpdir,
             ]
             if device != "auto":

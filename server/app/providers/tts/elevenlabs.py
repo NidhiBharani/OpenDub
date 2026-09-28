@@ -2,10 +2,8 @@
 
 Clones each speaker's identity once from `speaker_reference` (cached in-process, keyed by a sha1
 hash of the reference audio bytes, so repeated takes for the same speaker reuse the same cloned
-voice_id instead of re-cloning). ElevenLabs has no explicit emotion/style-reference input, so
-expressive delivery here comes entirely from the model's own interpretation of the translated text
-(the `emotion` hint is folded into that text upstream by the translation stage) rather than from a
-segment-level audio style reference.
+voice_id instead of re-cloning). Eleven v3 supports bracketed audio tags in its text input;
+other ElevenLabs models continue to interpret the translated text naturally.
 """
 from __future__ import annotations
 
@@ -26,6 +24,25 @@ DEFAULT_MODEL = "eleven_multilingual_v2"
 _VOICE_CACHE: dict[str, str] = {}
 
 
+def _v3_text(text: str, emotion: str) -> str:
+    """Map known delivery hints to documented Eleven v3 tags, never arbitrary user text."""
+    import re
+
+    words = set(re.findall(r"[a-z]+", emotion.lower()))
+    for labels, tag in (
+        ({"whisper", "whispering", "whispers"}, "whispers"),
+        ({"shout", "shouting", "shouts"}, "shouts"),
+        ({"angry", "anger"}, "angry"),
+        ({"happy", "happiness", "joyful"}, "happy"),
+        ({"sad", "sadness"}, "sad"),
+        ({"curious"}, "curious"),
+        ({"excited", "excitement"}, "excited"),
+    ):
+        if words & labels:
+            return f"[{tag}] {text}"
+    return text
+
+
 def _friendly_error(resp: httpx.Response, action: str) -> RuntimeError:
     detail = ""
     try:
@@ -37,7 +54,7 @@ def _friendly_error(resp: httpx.Response, action: str) -> RuntimeError:
             detail = str(d)
         else:
             detail = str(body)
-    except Exception:
+    except ValueError:  # not JSON
         detail = resp.text[:300]
     if resp.status_code == 401:
         return RuntimeError(f"ElevenLabs: invalid or unauthorized API key ({action}). {detail}")
@@ -56,8 +73,8 @@ class ElevenLabsProvider(TTSProvider):
         name="ElevenLabs",
         description=(
             "Cloud instant voice cloning. Clones the speaker's identity from speaker_reference "
-            "(cached per speaker for reuse across takes). No dedicated emotion/style-reference "
-            "input — expressive delivery comes from the model's interpretation of the text itself."
+            "(cached per speaker for reuse across takes). Eleven v3 uses supported audio tags "
+            "for emotion hints; other models interpret the spoken text naturally."
         ),
         runtime="cloud",
         fields=[
@@ -118,17 +135,20 @@ class ElevenLabsProvider(TTSProvider):
                 _VOICE_CACHE[digest] = voice_id
 
             progress(0.4, "synthesizing speech")
+            model_id = str(self.opt("model", DEFAULT_MODEL) or DEFAULT_MODEL)
+            text = req.text
+            if model_id == "eleven_v3" and self.opt_bool("emotion_tags", True):
+                text = _v3_text(text, req.emotion)
+            settings = {"stability": self.opt_float("stability", 0.4)}
+            if model_id != "eleven_v3":
+                settings["similarity_boost"] = self.opt_float("similarity", 0.8)
             resp = await client.post(
                 f"{API_BASE}/v1/text-to-speech/{voice_id}",
                 headers={"Accept": "audio/mpeg"},
                 json={
-                    "text": req.text,
-                    "model_id": str(self.opt("model", DEFAULT_MODEL) or DEFAULT_MODEL),
-                    "voice_settings": {
-                        # opt_float (not `or default`): 0 is a valid, explicitly-set value here.
-                        "stability": self.opt_float("stability", 0.4),
-                        "similarity_boost": self.opt_float("similarity", 0.8),
-                    },
+                    "text": text,
+                    "model_id": model_id,
+                    "voice_settings": settings,
                 },
             )
             if resp.status_code >= 400:

@@ -1,0 +1,16 @@
+name: a5_mfa
+python: ~/.opendub/envs/a5_mfa/bin/python
+description: Montreal Forced Aligner 3.4.2 in a micromamba env (conda-forge only; Kaldi). No linux-aarch64
+  build on conda-forge, so x86_64 (Docker image mmcauliffe/montreal-forced-aligner is the Spark fallback).
+  No hindi_mfa model exists.
+setup:
+  x86_64:
+  - micromamba create -y -p {prefix} -c conda-forge montreal-forced-aligner=3.4.2 python=3.12 soundfile
+    numpy
+  - '{prefix}/bin/pip install sudachipy sudachidict-core'
+  - '{prefix}/bin/mfa model download acoustic english_mfa'
+  - '{prefix}/bin/mfa model download dictionary english_mfa'
+  - '{prefix}/bin/mfa model download acoustic japanese_mfa'
+  - '{prefix}/bin/mfa model download dictionary japanese_mfa'
+check: import subprocess, sys, pathlib; subprocess.run([str(pathlib.Path(sys.executable).parent / 'mfa'),
+  'version'], check=True)

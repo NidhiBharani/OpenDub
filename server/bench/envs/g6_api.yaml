@@ -1,0 +1,15 @@
+name: g6_api
+python: ~/.opendub/envs/g6_api/bin/python
+description: >-
+  API reviewers (workers/g6_gemini.py, g6_openai.py, g6_transcript_review.py): google-genai,
+  openai and anthropic SDKs, plus faster-whisper for the transcript review (CUDA-12 cuBLAS wheel
+  on x86_64; CTranslate2 is CPU-only on aarch64, so the transcript review runs on CPU there).
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} google-genai openai anthropic faster-whisper nvidia-cublas-cu12 "nvidia-cudnn-cu12==9.*" numpy soundfile
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} google-genai openai anthropic faster-whisper numpy soundfile
+check: "import google.genai, openai, anthropic, faster_whisper, soundfile"
+notes: On aarch64 set the transcript-review candidate's asr params to device cpu, compute_type int8.

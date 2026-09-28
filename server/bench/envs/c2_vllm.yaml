@@ -1,0 +1,19 @@
+name: c2_vllm
+python: ~/.opendub/envs/c2_vllm/bin/python
+description: >-
+  vLLM 0.30.0 OpenAI-compatible server for the local C-phase LLM candidates (backend: vllm).
+  The worker (c2_openai_compat, stdlib) starts `python -m vllm.entrypoints.openai.api_server`
+  from this env for one job and SIGTERMs it when the job ends. PyPI vLLM 0.30.0 wheels are
+  built for CUDA 13.0 on both x86_64 and aarch64 (Thalassa's driver is CUDA 13.2; Spark is
+  CUDA 13). Alternative on the Spark: backend vllm_docker with nvcr.io/nvidia/vllm:26.05.post1-py3.
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} vllm==0.30.0
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} vllm==0.30.0
+check: "import vllm, torch; assert torch.cuda.is_available(); print(vllm.__version__)"
+notes: >-
+  Hy-MT2-30B-A3B (HYV3ForCausalLM) needed vLLM built from source and transformers>=5.6 at its
+  release; if 0.30.0 does not load it, use backend vllm_docker with a nightly image.

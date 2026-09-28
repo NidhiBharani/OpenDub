@@ -1,0 +1,203 @@
+# A5 — forced alignment of known text. Sources: model-research A5 ledger (8 rows) and
+# compute-tiers A5 picks + alternates, deduplicated.
+capability: A5
+candidates:
+  - id: asr-words-fw-turbo
+    worker: a5_asr_words
+    env: server
+    kind: method
+    params: {model: large-v3-turbo, compute_type: float16, beam_size: 5}
+    url: https://github.com/SYSTRAN/faster-whisper
+    params_b: 0.81
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2.5}
+    baseline: true
+    sources: [plan:model-ranking:7]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: what OpenDub does today — A4 faster-whisper word timings projected onto the given text (no aligner)
+  - id: proportional
+    worker: a5_proportional
+    env: server
+    kind: method
+    params: {floor_db: 30}
+    url: https://github.com/NidhiBharani/OpenDub
+    languages: "*"
+    license: n/a
+    ship_ok: true
+    requires: {}
+    sources: [plan:capability-map:A5]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: builtin proportional word interpolation over the voiced span — the floor
+  - id: mfa-3.4
+    worker: a5_mfa
+    env: a5_mfa
+    kind: local
+    params: {}
+    url: https://montreal-forced-aligner.readthedocs.io
+    languages: [en, ja]
+    license: MIT code; CC BY 4.0 models
+    ship_ok: true
+    requires: {arch: [x86_64], ram_gb: 4}
+    sources: [research:A5:1, compute-tiers:A5:spark]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: >-
+      Spark pick (CPU, Kaldi). english_mfa / japanese_mfa pretrained models; no hindi_mfa exists
+      (a user-trained or IndicMFA model can be set via params.dictionary/acoustic_model). No
+      linux-aarch64 conda build → x86_64 (Docker image is the Spark route). One align_one per item.
+  - id: qwen3-forced-aligner-0.6b
+    worker: a5_qwen_aligner
+    env: qwen3asr
+    kind: local
+    params: {model: Qwen/Qwen3-ForcedAligner-0.6B, revision: c7cbfc2048c462b0d63a45797104fc9db3ad62b7, dtype: bfloat16}
+    url: https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B
+    params_b: 0.6
+    languages: [zh, en, yue, fr, de, it, ja, ko, pt, ru, es]
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3}
+    sources: [research:A5:2, compute-tiers:A5:spark-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: co-primary on the Spark (27.8 ms AAS); no Hindi; clips ≤ 5 min
+  - id: mms-ctc-forced-aligner
+    worker: a5_ctc_align
+    env: a5_ctc
+    kind: local
+    params: {backend: ctc_forced_aligner, batch_size: 8}
+    url: https://github.com/MahmoudAshraf97/ctc-forced-aligner
+    params_b: 0.3
+    languages: "*"
+    license: BSD code; default checkpoint CC-BY-NC-4.0
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 2}
+    sources: [research:A5:3, compute-tiers:A5:spark-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      MMS-300m CTC aligner via torchaudio forced_align (uroman romanisation for hi/ja). The default
+      checkpoint is NC — the torchaudio MMS_FA bundle (deprecated) is the commercial route.
+  - id: whisperx-wav2vec2-align
+    worker: a5_ctc_align
+    env: a4_whisperx
+    kind: local
+    params: {backend: whisperx}
+    url: https://github.com/m-bain/whisperX
+    languages: [en, hi, ja, zh, de, fr, es, it, pt, ru, ko]
+    license: BSD-2 (code); align models per checkpoint
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 2, arch: [x86_64]}
+    sources: [research:A4:4]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: WhisperX's per-language wav2vec2 aligners (hi theainerd/Wav2Vec2-large-xlsr-hindi, ja jonatasgrosman xlsr-53) on the given text
+  - id: elevenlabs-forced-alignment
+    worker: a5_elevenlabs_fa
+    env: server
+    kind: api
+    params: {usd_per_hour: 0.22}
+    url: https://elevenlabs.io/docs/api-reference/forced-alignment/create
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ELEVENLABS_API_KEY]}
+    sources: [research:A5:5, compute-tiers:A5:api]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: API pick; 29 languages incl. en/hi/ja; billed at the STT rate (character timings used for ja)
+  - id: gradient-saliency-align
+    worker: a5_asr_words
+    env: server
+    kind: method
+    params: {}
+    url: https://arxiv.org/search/?query=Zeyer+Schl%C3%BCter+Ney+saliency+alignment
+    languages: "*"
+    license: CC BY-SA 4.0 (paper)
+    ship_ok: null
+    requires: {gpu: true}
+    enabled: false
+    sources: [research:A5:4, compute-tiers:A5:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: RWTH/AppTek 2026 gradient-saliency alignment over a loaded ASR — research code, no packaged release
+  - id: charsiu
+    worker: a5_ctc_align
+    env: a5_ctc
+    kind: local
+    params: {}
+    url: https://github.com/lingjzhu/charsiu
+    params_b: 0.095
+    languages: [en, zh]
+    license: unknown
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 1}
+    enabled: false
+    sources: [research:A5:6]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: phone-level aligner (en/zh checkpoints); no hi/ja models; licence unverified
+  - id: mwa
+    worker: a5_ctc_align
+    env: a5_ctc
+    kind: local
+    params: {}
+    url: https://arxiv.org/search/?query=Multilingual+Word+Aligner+Keshet
+    languages: "*"
+    license: CC BY 4.0 (paper)
+    ship_ok: null
+    requires: {gpu: true}
+    enabled: false
+    sources: [research:A5:7]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: code and checkpoints promised on acceptance — not released
+  - id: bfa
+    worker: a5_ctc_align
+    env: a5_ctc
+    kind: local
+    params: {}
+    url: https://arxiv.org/search/?query=Bournemouth+Forced+Aligner
+    languages: "*"
+    license: CC-BY-NC-SA-4.0
+    ship_ok: false
+    requires: {}
+    enabled: false
+    sources: [research:A5:8, compute-tiers:A5:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: fast phoneme-CTC aligner that trades boundary precision for speed; adapter not written
+  - id: three-way-ensemble
+    worker: a5_mfa
+    env: a5_mfa
+    kind: method
+    params: {}
+    url: https://github.com/NidhiBharani/OpenDub
+    languages: [en, ja]
+    license: mixed
+    ship_ok: null
+    requires: {}
+    enabled: false
+    sources: [compute-tiers:A5:big]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: unconstrained pick (MFA + Qwen3-ForcedAligner + MMS_FA with per-word agreement) — a composition across three envs, add after the parts are ranked
+  - id: gemini-3.5-transcribe-words
+    worker: a4_gemini_transcribe
+    env: server
+    kind: api
+    params: {}
+    url: https://ai.google.dev/gemini-api/docs/transcribe
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    enabled: false
+    sources: [compute-tiers:A5:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: transcribes instead of aligning the approved script — ranked in A4
+  - id: scribe-v2-words
+    worker: a4_elevenlabs
+    env: server
+    kind: api
+    params: {}
+    url: https://elevenlabs.io/docs/api-reference/speech-to-text/convert
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ELEVENLABS_API_KEY]}
+    enabled: false
+    sources: [compute-tiers:A5:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: word timestamps from transcription — ranked in A4

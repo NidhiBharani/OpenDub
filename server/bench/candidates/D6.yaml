@@ -1,0 +1,215 @@
+# D6 — voice conversion.
+# Rows from both research artifacts: data/research/model-research.html ledger (research:D6:<rank>)
+# and data/research/compute-tiers.html picks (compute-tiers:D6:spark|big|api, alternates *-alt),
+# docs/model-candidates-by-compute.md and plan §7 (plan:§7:D6).
+# requires places each row: vram ≤ 15 → Thalassa (x86_64 16 GB) and Spark; vram > 16 → Spark only;
+# arch [x86_64] where deps have no aarch64 wheels; kind api → API keys. d_unwired = registered only.
+capability: D6
+candidates:
+- id: vevo2-fm
+  worker: d6_vevo2
+  env: d6_vevo2
+  kind: local
+  params: {mode: fm, flow_matching_steps: 32}
+  languages: [en, zh, ja, ko, de, fr]
+  license: CC-BY-NC-ND-4.0 (checkpoints); Amphion code MIT
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 4, disk_gb: 6}
+  sources: ['research:D6:1', 'compute-tiers:D6:spark']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: Timbre conversion, style preserved (inference_fm). ~3 GB per compute-tiers.
+  url: https://huggingface.co/RMSnow/Vevo2
+  params_b: 0.87
+- id: vevo2-ar-fm
+  worker: d6_vevo2
+  env: d6_vevo2
+  kind: local
+  params: {mode: ar_fm}
+  languages: [en, zh, ja, ko, de, fr]
+  license: CC-BY-NC-ND-4.0 (checkpoints); Amphion code MIT
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 6, disk_gb: 6}
+  sources: ['research:D6:1']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: Style-converted VC via inference_ar_and_fm with the source transcript (inputs.text).
+  url: https://huggingface.co/RMSnow/Vevo2
+  params_b: 0.87
+- id: elevenlabs-voice-changer
+  worker: d1_elevenlabs
+  env: server
+  kind: api
+  params: {model: eleven_multilingual_sts_v2, mode: sts, output_format: pcm_24000}
+  languages: [en, ja, zh, de, hi, fr, ko, pt, it, es, id, nl, tr, fil, pl, sv, bg, ro, ar, cs, el, fi,
+    hr, ms, sk, da, ta, uk, ru]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [ELEVENLABS_API_KEY]
+  sources: ['research:D6:2', 'compute-tiers:D6:api']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Mirrors app/providers/tts/elevenlabs.py; IVC voices are deleted at job end. Prices in _cost_usd
+    are estimates.
+  url: https://elevenlabs.io/docs/api-reference/text-to-speech/convert
+- id: x-vc
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'X-VC (2026-04): code at Jerrister/X-VC, licence not stated and checkpoints unverified.'}
+  languages: '*'
+  license: unknown
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['research:D6:3', 'compute-tiers:D6:big-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'X-VC (2026-04): code at Jerrister/X-VC, licence not stated and checkpoints unverified.'
+  url: https://github.com/Jerrister/X-VC
+- id: chatterbox-vc
+  worker: d1_chatterbox
+  env: d1_chatterbox
+  kind: local
+  params: {mode: vc}
+  languages: '*'
+  license: MIT
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 3, disk_gb: 4}
+  sources: ['research:D6:4', 'compute-tiers:D6:spark-alt']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: chatterbox-tts 0.1.7 installed --no-deps over torch 2.11 (it pins torch 2.6, no sm_120 kernels).
+    S3Gen VC is language-agnostic.
+  url: https://github.com/resemble-ai/chatterbox
+  params_b: 0.5
+- id: seed-vc-v1
+  worker: d6_seed_vc
+  env: d6_seed_vc
+  kind: local
+  params: {diffusion_steps: 25, fp16: true}
+  languages: '*'
+  license: GPL-3.0
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 4, disk_gb: 3}
+  sources: ['research:D6:5']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: Evaluate-only (GPL). CLI per item (model reloads each item).
+  url: https://github.com/Plachtaa/seed-vc
+- id: knn-vc
+  worker: d6_knn_vc
+  env: d6_knn_vc
+  kind: local
+  params: {topk: 4, prematched: true}
+  languages: '*'
+  license: MIT
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 3, disk_gb: 2}
+  sources: ['research:D6:6', 'compute-tiers:D6:spark-alt']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: Non-parametric floor; a single short reference is its worst case.
+  url: https://github.com/bshall/knn-vc
+  params_b: 0.3
+- id: respeecher-marketplace
+  worker: d_unwired
+  env: server
+  kind: api
+  params: {why: 'Respeecher Marketplace: subscription product, no public per-request API confirmed.'}
+  languages: '*'
+  license: proprietary
+  ship_ok: true
+  requires: {}
+  enabled: false
+  sources: ['research:D6:7', 'compute-tiers:D6:api-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Respeecher Marketplace: subscription product, no public per-request API confirmed.'
+  url: https://www.respeecher.com
+- id: freevc
+  worker: d6_freevc
+  env: d6_freevc
+  kind: local
+  params: {variant: freevc}
+  languages: '*'
+  license: MIT
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 2, disk_gb: 2}
+  sources: ['research:D6:8', 'compute-tiers:D6:spark-alt']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: 16 kHz; checkpoints fetched from the OlaWod/FreeVC Space (unverified).
+  url: https://github.com/OlaWod/FreeVC
+- id: freevc-24
+  worker: d6_freevc
+  env: d6_freevc
+  kind: local
+  params: {variant: freevc-24}
+  languages: '*'
+  license: MIT
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 2, disk_gb: 2}
+  sources: ['research:D6:8']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: 24 kHz output variant.
+  url: https://github.com/OlaWod/FreeVC
+- id: voxcpm2-resynth
+  worker: d1_voxcpm
+  env: d1_voxcpm
+  kind: local
+  params: {model: openbmb/VoxCPM2, revision: 32279effe8c19989596f05d353d1447f51d9e915, mode: clone, cfg_value: 2.0,
+    inference_timesteps: 10}
+  languages: [ar, my, zh, da, nl, en, fi, fr, de, el, he, hi, id, it, ja, km, ko, lo, ms, 'no', pl, pt,
+    ru, es, sw, sv, tl, th, tr, vi]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 9, disk_gb: 6}
+  sources: ['compute-tiers:D6:big']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: '~8 GB on a 4090 per the README; 48 kHz output; no language argument (the model reads the script).
+    Re-synthesis instead of conversion: the source transcript (inputs.text) spoken in the target voice
+    (compute-tiers Unconstrained pick).'
+  url: https://huggingface.co/openbmb/VoxCPM2
+  params_b: 2.0
+- id: fish-s2-pro-resynth
+  worker: d1_fish_speech
+  env: d1_fish_speech
+  kind: local
+  params: {checkpoint_dir: checkpoints/s2-pro, temperature: 0.7, top_p: 0.7}
+  languages: [zh, en, ja, ko, es, pt, ar, ru, fr, de, sv, it, tr, 'no', nl, cy, eu, ca, da, gl, ta, hu,
+    fi, pl, et, hi, la, ur, th, vi, jw, bn, yo, sl, cs, sw, nn, he, ms, uk, id, kk, bg, lv, my, tl, sk,
+    ne, fa, af, el, bo, hr, ro, sn, mi, yi, am, be, km, is, az, sd, br, sq, ps, mn, ht, ml, sr, sa, te,
+    ka, bs, pa, lt, kn, si, hy, mr, as, gu, fo]
+  license: Fish-Audio-Research-License (NC)
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 24, disk_gb: 12}
+  sources: ['compute-tiers:D6:big']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'fishaudio/s2-pro @1de9996. Docs recommend ≥24 GB → Spark. SGLang fast path unverified on aarch64/sm_121:
+    plain PyTorch api_server. Re-synthesis with the source transcript.'
+  url: https://huggingface.co/fishaudio/s2-pro
+  params_b: 4.56
+- id: vevo2-bestof16-sim
+  worker: d_unwired
+  env: server
+  kind: method
+  params: {why: 'Vevo2 at N=16 re-ranked by a WavLM SIM judge: needs a SIM verifier in the best-of-N worker
+      (only an ASR verifier is wired).'}
+  languages: '*'
+  license: CC-BY-NC-ND-4.0
+  ship_ok: false
+  requires: {}
+  enabled: false
+  sources: ['compute-tiers:D6:big-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Vevo2 at N=16 re-ranked by a WavLM SIM judge: needs a SIM verifier in the best-of-N worker (only
+    an ASR verifier is wired).'
+  url: https://huggingface.co/RMSnow/Vevo2
+- id: cartesia-resynth
+  worker: d1_cartesia
+  env: server
+  kind: api
+  params: {model: sonic-3.6-2026-08-27, mode: clone}
+  languages: [en, hi, ja, zh, ko, de, fr, es, it, pt, ru, ar, ta, te, bn]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [CARTESIA_API_KEY]
+  sources: ['compute-tiers:D6:api-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Sonic 3.6 (44 languages, $49/M chars per Cartesia, 2026-08). Clone endpoint not re-verified.
+    Pseudo-VC: 10 s clone of the target + the source transcript.'
+  url: https://docs.cartesia.ai/build-with-cartesia/tts-models/latest

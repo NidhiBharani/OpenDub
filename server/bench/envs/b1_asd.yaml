@@ -1,0 +1,40 @@
+name: b1_asd
+python: ~/.opendub/envs/b1_asd/bin/python
+description: >-
+  Active speaker detection: TalkNet-ASD, LR-ASD and LoCoNet+TalkNCE checkouts pinned to commits,
+  S3FD face detector (TalkNet's), PySceneDetect <0.7 for shot cuts, python_speech_features MFCCs,
+  VGGish log-mel (TalkNCE). Weights via gdown (Google Drive ids from the repos).
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} 'numpy<2.3' scipy pandas tqdm opencv-python-headless python_speech_features 'scenedetect<0.7' gdown resampy soundfile easydict pyyaml
+    - git clone https://github.com/TaoRuijie/TalkNet-ASD {home}/.opendub/src/TalkNet-ASD || true
+    - git -C {home}/.opendub/src/TalkNet-ASD checkout 6d6821479af485e251c4991487e40573b42181b4
+    - git clone https://github.com/Junhua-Liao/LR-ASD {home}/.opendub/src/LR-ASD || true
+    - git -C {home}/.opendub/src/LR-ASD checkout 1b6dcd2d8fc2
+    - git clone https://github.com/kaistmm/TalkNCE {home}/.opendub/src/TalkNCE || true
+    - git -C {home}/.opendub/src/TalkNCE checkout 429599621c864620dfe4b223b95ecb3d11b4b244
+    - cd {home}/.opendub/src/TalkNet-ASD && {prefix}/bin/gdown 1AbN9fCf9IexMxEKXLQY2KYBlb-IhSEea -O pretrain_TalkSet.model
+    - cd {home}/.opendub/src/TalkNet-ASD && {prefix}/bin/gdown 1KafnHz7ccT-3IyddBsL5yi2xGtxAKypt -O model/faceDetector/s3fd/sfd_face.pth
+    - cd {home}/.opendub/src/TalkNCE && {prefix}/bin/gdown 1k8sS3Io6dVMFKqluvoORt6u6MaEgvQOG -O talknce_ava_pretrained.model
+  aarch64:
+    - uv venv {prefix} --python 3.11
+    - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} 'numpy<2.3' scipy pandas tqdm opencv-python-headless python_speech_features 'scenedetect<0.7' gdown resampy soundfile easydict pyyaml
+    - git clone https://github.com/TaoRuijie/TalkNet-ASD {home}/.opendub/src/TalkNet-ASD || true
+    - git -C {home}/.opendub/src/TalkNet-ASD checkout 6d6821479af485e251c4991487e40573b42181b4
+    - git clone https://github.com/Junhua-Liao/LR-ASD {home}/.opendub/src/LR-ASD || true
+    - git -C {home}/.opendub/src/LR-ASD checkout 1b6dcd2d8fc2
+    - git clone https://github.com/kaistmm/TalkNCE {home}/.opendub/src/TalkNCE || true
+    - git -C {home}/.opendub/src/TalkNCE checkout 429599621c864620dfe4b223b95ecb3d11b4b244
+    - cd {home}/.opendub/src/TalkNet-ASD && {prefix}/bin/gdown 1AbN9fCf9IexMxEKXLQY2KYBlb-IhSEea -O pretrain_TalkSet.model
+    - cd {home}/.opendub/src/TalkNet-ASD && {prefix}/bin/gdown 1KafnHz7ccT-3IyddBsL5yi2xGtxAKypt -O model/faceDetector/s3fd/sfd_face.pth
+    - cd {home}/.opendub/src/TalkNCE && {prefix}/bin/gdown 1k8sS3Io6dVMFKqluvoORt6u6MaEgvQOG -O talknce_ava_pretrained.model
+check: "import torch, cv2, python_speech_features, scenedetect; assert torch.cuda.is_available()"
+notes: >-
+  LR-ASD weights ship in its repo (weight/finetuning_TalkSet.model). LoCoNet downloads the VGGish
+  weights (harritaylor/torchvggish release) through torch.hub on first load. Optional detectors:
+  yunet needs opencv_zoo face_detection_yunet_2023mar.onnx (MIT); scrfd needs `uv pip install
+  insightface onnxruntime-gpu` (insightface model packs are non-commercial). Everything here is
+  plain PyTorch, so the aarch64 cu130 wheels cover it.

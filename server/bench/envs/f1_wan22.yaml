@@ -1,0 +1,31 @@
+name: f1_wan22
+python: ~/.opendub/envs/f1_wan22/bin/python
+description: Wan2.2 (Wan-Video/Wan2.2 @ 1ea34ff4) for Wan2.2-S2V-14B (Apache-2.0). flash-attn is optional
+  (SDPA fallback); never FA3 on sm_120/121.
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url
+    https://download.pytorch.org/whl/cu128
+  - test -d {home}/.opendub/src/Wan2.2 || git clone https://github.com/Wan-Video/Wan2.2 {home}/.opendub/src/Wan2.2
+  - git -C {home}/.opendub/src/Wan2.2 checkout 1ea34ff48f87168174e12956e200b1d908b1c5ff
+  - grep -v -i -E '^(torch|torchvision|torchaudio|flash)' {home}/.opendub/src/Wan2.2/requirements.txt
+    > {home}/.opendub/src/Wan2.2/requirements.arena.txt
+  - uv pip install --python {python} -r {home}/.opendub/src/Wan2.2/requirements.arena.txt huggingface-hub
+    librosa decord
+  - uvx --from huggingface_hub hf download Wan-AI/Wan2.2-S2V-14B --local-dir {home}/.opendub/weights/Wan2.2-S2V-14B
+  aarch64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 torchaudio==2.11.0 --index-url
+    https://download.pytorch.org/whl/cu130
+  - test -d {home}/.opendub/src/Wan2.2 || git clone https://github.com/Wan-Video/Wan2.2 {home}/.opendub/src/Wan2.2
+  - git -C {home}/.opendub/src/Wan2.2 checkout 1ea34ff48f87168174e12956e200b1d908b1c5ff
+  - grep -v -i -E '^(torch|torchvision|torchaudio|flash|decord)' {home}/.opendub/src/Wan2.2/requirements.txt
+    > {home}/.opendub/src/Wan2.2/requirements.arena.txt
+  - uv pip install --python {python} -r {home}/.opendub/src/Wan2.2/requirements.arena.txt huggingface-hub
+    librosa eva-decord==0.6.1
+  - uvx --from huggingface_hub hf download Wan-AI/Wan2.2-S2V-14B --local-dir {home}/.opendub/weights/Wan2.2-S2V-14B
+check: import torch; assert torch.cuda.is_available()
+notes: S2V extra requirements (requirements_s2v.txt, if present at the pinned commit) are not installed;
+  add them on first setup. The 1ea34ff4 SHA came from the research pass and may be the HF model repo rather
+  than the GitHub repo — verify.

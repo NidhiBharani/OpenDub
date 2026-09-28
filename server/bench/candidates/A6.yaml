@@ -1,0 +1,381 @@
+# A6 — diarization with overlap. Sources: model-research A6 ledger (8 rows) and compute-tiers A6
+# picks + alternates, deduplicated. Joint ASR+diarization workers are shared with A4.
+capability: A6
+candidates:
+  - id: pyannote-3.1
+    worker: a6_pyannote
+    env: a6_pyannote3
+    kind: local
+    params: {model: pyannote/speaker-diarization-3.1}
+    url: https://huggingface.co/pyannote/speaker-diarization-3.1
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2, api_keys: [HF_TOKEN]}
+    baseline: true
+    sources: [plan:model-ranking:7]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: OpenDub's diarization.pyannote provider; gated repo (accept terms, HF_TOKEN). Card DER VoxConverse 11.3
+  - id: single-speaker
+    worker: a6_single_speaker
+    env: server
+    kind: method
+    params: {floor_db: 35, min_gap: 0.3}
+    url: https://github.com/NidhiBharani/OpenDub
+    languages: "*"
+    license: n/a
+    ship_ok: true
+    requires: {}
+    sources: [plan:capability-map:A6]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: OpenDub's default diarization.single_speaker (energy VAD, one speaker) — the DER floor
+  - id: pyannote-community-1
+    worker: a6_pyannote
+    env: a6_pyannote4
+    kind: local
+    params: {model: pyannote/speaker-diarization-community-1}
+    url: https://huggingface.co/pyannote/speaker-diarization-community-1
+    languages: "*"
+    license: CC-BY-4.0 weights; MIT code
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2, api_keys: [HF_TOKEN], tools: [ffmpeg]}
+    sources: [research:A6:2, compute-tiers:A6:spark-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: pyannote.audio 4 (torchcodec + system ffmpeg); torchcodec 0.16 now has aarch64 wheels
+  - id: pyannote-community-1-exclusive
+    worker: a6_pyannote
+    env: a6_pyannote4
+    kind: local
+    params: {model: pyannote/speaker-diarization-community-1, exclusive: true}
+    url: https://huggingface.co/pyannote/speaker-diarization-community-1
+    languages: "*"
+    license: CC-BY-4.0 weights; MIT code
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2, api_keys: [HF_TOKEN], tools: [ffmpeg]}
+    sources: [research:A6:2]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: exclusive (no-overlap) view — what word-level attribution consumes; overlap DER shows the cost
+  - id: diarizen-large-s80-v2
+    worker: a6_diarizen
+    env: a6_diarizen
+    kind: local
+    params: {model: BUT-FIT/diarizen-wavlm-large-s80-md-v2}
+    url: https://huggingface.co/BUT-FIT/diarizen-wavlm-large-s80-md-v2
+    params_b: 0.063
+    languages: "*"
+    license: MIT code; CC-BY-NC-4.0 weights
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 4, arch: [x86_64]}
+    sources: [research:A6:3, compute-tiers:A6:spark]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Spark pick (AMI 13.9 / VoxConverse 9.1 DER, collar 0). Repo pins torch 2.1.1+cu121 →
+      x86_64 recipe; on the Spark relax the pin (then drop the arch limit).
+  - id: diarizen-base-s80
+    worker: a6_diarizen
+    env: a6_diarizen
+    kind: local
+    params: {model: BUT-FIT/diarizen-wavlm-base-s80-md}
+    url: https://huggingface.co/BUT-FIT/diarizen-wavlm-base-s80-md
+    languages: "*"
+    license: MIT code; CC-BY-NC-4.0 weights
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 3, arch: [x86_64]}
+    sources: [research:A6:3]
+    verified: {license: true, languages: true, vram: false, runs: false}
+  - id: sortformer-4spk-v1
+    worker: a6_sortformer
+    env: a4_nemo
+    kind: local
+    params: {model: nvidia/diar_sortformer_4spk-v1, streaming: false}
+    url: https://huggingface.co/nvidia/diar_sortformer_4spk-v1
+    params_b: 0.123
+    languages: "*"
+    license: CC-BY-NC-4.0
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 14}
+    sources: [research:A6:4]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: offline end-to-end, max 4 speakers; memory grows with length (~12 min max on a 48 GB A6000 per the card) — long recordings will OOM on 16 GB
+  - id: sortformer-streaming-4spk-v2
+    worker: a6_sortformer
+    env: a4_nemo
+    kind: local
+    params: {model: nvidia/diar_streaming_sortformer_4spk-v2, streaming: true}
+    url: https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2
+    params_b: 0.117
+    languages: "*"
+    license: CC-BY-4.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 4}
+    sources: [research:A6:4, compute-tiers:A6:spark-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: streaming (bounded memory) with the card's chunk / speaker-cache settings; max 4 speakers
+  - id: sortformer-streaming-4spk-v2.1
+    worker: a6_sortformer
+    env: a4_nemo
+    kind: local
+    params: {model: nvidia/diar_streaming_sortformer_4spk-v2.1, streaming: true}
+    url: https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1
+    params_b: 0.117
+    languages: "*"
+    license: NVIDIA Open Model License
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 4}
+    sources: [research:A6:4, compute-tiers:A6:spark-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: DIHARD3 ≤4-spk 15.09 / CALLHOME-2 6.65 on the card; licence terms not reviewed
+  - id: moss-transcribe-diarize
+    worker: a4_moss_td
+    env: a4_moss
+    kind: local
+    params: {model: OpenMOSS-Team/MOSS-Transcribe-Diarize, dtype: bfloat16, max_new_tokens: 4096}
+    url: https://huggingface.co/OpenMOSS-Team/MOSS-Transcribe-Diarize
+    params_b: 0.9
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 8}
+    sources: [compute-tiers:A6:spark-alt, compute-tiers:A4:spark-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: joint ASR + diarization over up to 90 min; attention memory grows quadratically in eager mode (VRAM estimated for short files)
+  - id: vibevoice-asr
+    worker: a4_hf_asr
+    env: a4_transformers
+    kind: local
+    params: {family: vibevoice, model: microsoft/VibeVoice-ASR-HF, dtype: bfloat16}
+    url: https://huggingface.co/microsoft/VibeVoice-ASR-HF
+    params_b: 8
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 24, disk_gb: 20}
+    sources: [compute-tiers:A4:big-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: joint ASR + speaker segments (60 min context); VRAM estimated (bf16 weights + KV) → Spark
+  - id: pyannoteai-precision-3
+    worker: a6_pyannoteai
+    env: server
+    kind: api
+    params: {model: precision-3}
+    url: https://docs.pyannote.ai/api-reference/diarize
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [PYANNOTEAI_API_KEY]}
+    sources: [compute-tiers:A6:api]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: API pick; €0.112/h (recorded at ≈ $0.13/h)
+  - id: pyannoteai-precision-2
+    worker: a6_pyannoteai
+    env: server
+    kind: api
+    params: {model: precision-2}
+    url: https://docs.pyannote.ai/api-reference/diarize
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [PYANNOTEAI_API_KEY]}
+    sources: [research:A6:1]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: prior primary; also OpenDub's diarization.pyannote_api provider; price not listed separately
+  - id: pyannoteai-community-1
+    worker: a6_pyannoteai
+    env: server
+    kind: api
+    params: {model: community-1}
+    url: https://docs.pyannote.ai/api-reference/diarize
+    languages: "*"
+    license: proprietary API (hosted CC-BY-4.0 model)
+    ship_ok: true
+    requires: {api_keys: [PYANNOTEAI_API_KEY]}
+    sources: [research:A6:2]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: hosted community-1 (€0.035/h) — isolates hosting from model differences
+  - id: scribe-v2-diarize
+    worker: a4_elevenlabs
+    env: server
+    kind: api
+    params: {model_id: scribe_v2, diarize: true, usd_per_hour: 0.22}
+    url: https://elevenlabs.io/docs/api-reference/speech-to-text/convert
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ELEVENLABS_API_KEY]}
+    sources: [compute-tiers:A6:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: word-level speaker ids merged into turns (up to 32 speakers)
+  - id: assemblyai-universal-3-5-pro-diarize
+    worker: a4_assemblyai
+    env: server
+    kind: api
+    params: {speech_model: universal-3-5-pro, speaker_labels: true}
+    url: https://www.assemblyai.com/docs/speaker-diarization
+    languages: [en, hi, ja, es, fr, de, it, pt, nl, zh, ko, ru]
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ASSEMBLYAI_API_KEY]}
+    sources: [research:A6:8]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: utterance-level speakers; $0.21/h + $0.02/h diarization; the 18-language list is abbreviated here
+  - id: deepgram-nova-3-diarize
+    worker: a4_deepgram
+    env: server
+    kind: api
+    params: {model: nova-3, diarize: true, usd_per_min: 0.0077, diarize_usd_per_min: 0.002}
+    url: https://developers.deepgram.com/docs/diarization
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [DEEPGRAM_API_KEY]}
+    sources: [research:A6:8]
+    verified: {license: true, languages: false, vram: true, runs: false}
+  - id: speechmatics-enhanced-diarize
+    worker: a4_speechmatics
+    env: server
+    kind: api
+    params: {operating_point: enhanced, diarize: true, usd_per_hour: 0.30}
+    url: https://docs.speechmatics.com/speech-to-text/features/diarization
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [SPEECHMATICS_API_KEY]}
+    sources: [research:A6:8]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: price unclear on the pricing page (param)
+  - id: openai-gpt-4o-transcribe-diarize
+    worker: a4_openai
+    env: server
+    kind: api
+    params: {model: gpt-4o-transcribe-diarize}
+    url: https://developers.openai.com/api/docs/guides/speech-to-text
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [OPENAI_API_KEY]}
+    sources: [plan:user-request]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: diarized_json segments; $0.006/min
+  - id: gemini-3.5-transcribe-diarize
+    worker: a4_gemini_transcribe
+    env: server
+    kind: api
+    params: {model: gemini-3.5-transcribe, diarize: true, usd_per_min: 0.005}
+    url: https://ai.google.dev/gemini-api/docs/transcribe
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    sources: [compute-tiers:A4:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: the diarization flag name in transcription_config is not verified
+  - id: azure-mai-transcribe-2-diarize
+    worker: a4_azure_fast
+    env: server
+    kind: api
+    params: {model: mai-transcribe-2, diarize: true, usd_per_hour: 0.10}
+    url: https://learn.microsoft.com/azure/ai-services/speech-service/fast-transcription-create
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [AZURE_SPEECH_KEY, AZURE_SPEECH_REGION]}
+    sources: [compute-tiers:A4:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+  - id: picovoice-falcon
+    worker: a6_falcon
+    env: a6_falcon
+    kind: local
+    params: {}
+    url: https://github.com/Picovoice/falcon
+    languages: "*"
+    license: proprietary engine (Apache-2.0 SDK)
+    ship_ok: null
+    requires: {arch: [x86_64], api_keys: [PICOVOICE_ACCESS_KEY]}
+    sources: [research:A6:7]
+    verified: {license: true, languages: true, vram: true, runs: false}
+    notes: on-device CPU engine with an online AccessKey check; enterprise pricing unpublished
+  - id: aws-transcribe-diarize
+    worker: a4_speechmatics
+    env: server
+    kind: api
+    params: {}
+    url: https://aws.amazon.com/transcribe/pricing/
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [AWS_ACCESS_KEY_ID]}
+    enabled: false
+    sources: [research:A6:8]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: StartTranscriptionJob needs an S3 bucket + boto3 — worker not written; price conflicting ($0.006 vs $0.024/min)
+  - id: muse-voice-transcribe
+    worker: a4_openai
+    env: server
+    kind: api
+    params: {}
+    url: https://dev.meta.ai/models/muse-voice-transcribe
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {}
+    enabled: false
+    sources: [compute-tiers:A6:api-alt]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: Meta Muse Voice Transcribe (2026-09-01, $0.18/h, 20+ speakers) — endpoint and auth not documented on the model page
+  - id: dicow
+    worker: a4_hf_asr
+    env: a4_transformers
+    kind: local
+    params: {}
+    url: https://huggingface.co/BUT-FIT/SE-DiCoW
+    params_b: 1.0
+    languages: "*"
+    license: Apache-2.0 (SE-DiCoW)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 6}
+    enabled: false
+    sources: [research:A6:5, compute-tiers:A6:big-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: diarization-conditioned ASR (takes diarization as input) — belongs to a cascaded A4/A6 evaluation, not a diarizer
+  - id: target-speaker-extraction
+    worker: a6_diarizen
+    env: a6_diarizen
+    kind: method
+    params: {}
+    url: https://arxiv.org/search/?query=REAL-TSE+2026
+    languages: "*"
+    license: varies
+    ship_ok: null
+    requires: {gpu: true}
+    enabled: false
+    sources: [research:A6:6]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: enrolment-based TSE on overlapped regions (REAL-TSE / USEF-TSE) — an overlap branch after diarization, not a diarizer
+  - id: dover-lap-fusion
+    worker: a6_pyannote
+    env: a6_pyannote4
+    kind: method
+    params: {}
+    url: https://github.com/desh2608/dover-lap
+    languages: "*"
+    license: mixed
+    ship_ok: null
+    requires: {gpu: true}
+    enabled: false
+    sources: [compute-tiers:A6:big]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: unconstrained pick (DiariZen + community-1 + Sortformer fused) — composition across envs, add after the parts are ranked
+  - id: diarizen-domain-finetune
+    worker: a6_diarizen
+    env: a6_diarizen
+    kind: method
+    params: {}
+    url: https://github.com/BUTSpeechFIT/DiariZen
+    languages: "*"
+    license: CC-BY-NC-4.0
+    ship_ok: false
+    requires: {gpu: true}
+    enabled: false
+    sources: [compute-tiers:A6:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: per-domain fine-tuning (16.4 → 12.7 % DER out of domain) — a training job, out of the arena's scope

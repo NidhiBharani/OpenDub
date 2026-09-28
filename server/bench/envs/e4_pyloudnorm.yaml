@@ -1,0 +1,11 @@
+name: e4_pyloudnorm
+python: ~/.opendub/envs/e4_pyloudnorm/bin/python
+description: pyloudnorm 0.1.1 (MIT) BS.1770 meter + numpy/scipy for the in-house E4 chain; CPU only
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} pyloudnorm==0.1.1 numpy==2.2.6 scipy==1.15.3 soundfile==0.13.1
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} pyloudnorm==0.1.1 numpy==2.2.6 scipy==1.15.3 soundfile==0.13.1
+check: "import pyloudnorm, numpy as np; m = pyloudnorm.Meter(48000); print(m.integrated_loudness(np.random.randn(48000 * 3, 2) * 0.1)); assert m._filters"

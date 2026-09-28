@@ -1,0 +1,14 @@
+name: d7_tagger
+python: ~/.opendub/envs/d7_tagger/bin/python
+description: "CED audio tagger (mispeech/ced-base, Apache-2.0) for the D7 event-F1 judge"
+setup:
+  x86_64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu128 torch==2.11.0 torchaudio==2.11.0"
+    - "uv pip install --python {python} 'transformers>=4.40,<5' librosa soundfile"
+  aarch64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu130 torch==2.11.0 torchaudio==2.11.0"
+    - "uv pip install --python {python} 'transformers>=4.40,<5' librosa soundfile"
+check: "import transformers, torch; assert torch.cuda.is_available()"
+notes: "CED loads with trust_remote_code; transformers <5 because the remote code predates v5."

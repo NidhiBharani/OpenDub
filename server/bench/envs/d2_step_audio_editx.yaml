@@ -1,0 +1,18 @@
+name: d2_step_audio_editx
+python: ~/.opendub/envs/d2_step_audio_editx/bin/python
+description: "Step-Audio-EditX 3B (Apache-2.0) from its repo; StepAudioTTS drives a vLLM engine"
+setup:
+  x86_64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu128 torch==2.11.0 torchaudio==2.11.0"
+    - "test -d {home}/.opendub/src/Step-Audio-EditX || git clone https://github.com/stepfun-ai/Step-Audio-EditX {home}/.opendub/src/Step-Audio-EditX && git -C {home}/.opendub/src/Step-Audio-EditX checkout a652e87052c109e26f616d60971376ff47a829d4"
+    - "uv pip install --python {python} --torch-backend cu128 -e {home}/.opendub/src/Step-Audio-EditX"
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('stepfun-ai/Step-Audio-EditX', local_dir='{home}/.opendub/src/Step-Audio-EditX/Step-Audio-EditX', revision='5fe2f8a05c2353301ad47d3c1747b262115da138')\""
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('stepfun-ai/Step-Audio-Tokenizer', local_dir='{home}/.opendub/src/Step-Audio-EditX/Step-Audio-Tokenizer')\""
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('stepfun-ai/Step-Audio-EditX-AWQ-4bit', local_dir='{home}/.opendub/src/Step-Audio-EditX/Step-Audio-EditX-AWQ-4bit')\""
+check: "import torch, vllm; assert torch.cuda.is_available()"
+notes: >-
+  x86_64 only: the repo's pyproject (python >=3.12) pulls onnxruntime-gpu, deepspeed, bitsandbytes
+  and cuda-toolkit, which have no aarch64 PyPI wheels; the candidates carry arch [x86_64]. The
+  project installs its own torch/vllm pins over the first step. 12 GB minimum / 16 GB recommended
+  (bf16): tight on Thalassa; the AWQ 4-bit checkpoint (6-8 GB) is the safe Thalassa entry.

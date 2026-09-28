@@ -1,0 +1,21 @@
+name: d8_uniss
+python: ~/.opendub/envs/d8_uniss/bin/python
+description: "UniSS (cmots/UniSS, CC-BY-4.0) from its repo; en<->zh only"
+setup:
+  x86_64:
+    - "uv venv {prefix} --python 3.10"
+    - "uv pip install --python {python} --torch-backend cu128 torch==2.11.0 torchaudio==2.11.0"
+    - "test -d {home}/.opendub/src/UniSS || git clone https://github.com/cmots/UniSS {home}/.opendub/src/UniSS && git -C {home}/.opendub/src/UniSS checkout 5fbaca9ca7a5397486b113d48187e9f1b4f03899"
+    - "cd {home}/.opendub/src/UniSS && (test -f requirements.txt && uv pip install --python {python} -r requirements.txt || uv pip install --python {python} -e .)"
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('cmots/UniSS', local_dir='{home}/.opendub/src/UniSS/pretrained_models/UniSS', revision='3f71386f9035cfc81dea6ddc4e69fa5281cb7838')\""
+  aarch64:
+    - "uv venv {prefix} --python 3.10"
+    - "uv pip install --python {python} --torch-backend cu130 torch==2.11.0 torchaudio==2.11.0"
+    - "test -d {home}/.opendub/src/UniSS || git clone https://github.com/cmots/UniSS {home}/.opendub/src/UniSS && git -C {home}/.opendub/src/UniSS checkout 5fbaca9ca7a5397486b113d48187e9f1b4f03899"
+    - "cd {home}/.opendub/src/UniSS && (test -f requirements.txt && uv pip install --python {python} -r requirements.txt || uv pip install --python {python} -e .)"
+    - "{python} -c \"from huggingface_hub import snapshot_download; snapshot_download('cmots/UniSS', local_dir='{home}/.opendub/src/UniSS/pretrained_models/UniSS', revision='3f71386f9035cfc81dea6ddc4e69fa5281cb7838')\""
+check: "import torch; assert torch.cuda.is_available()"
+notes: >-
+  The card installs with `pip install -r requirements.txt` in a python 3.10.16 conda env and runs
+  download_weight.py; the requirements file was not reachable on the default branch when checked
+  (2026-09-28), hence the fallback. en<->zh only: the candidates are disabled for en/hi/ja.

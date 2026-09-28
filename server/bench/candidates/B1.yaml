@@ -1,0 +1,268 @@
+# B1 — active speaker detection + face tracking. Sources: data/research/model-research.html
+# (article B1, ledger 1–7) and data/research/compute-tiers.html (B1 Spark / Unconstrained / API
+# picks + alternates), mirrored in docs/model-candidates-by-compute.md. Verified 2026-09-28 against
+# the repos / papers named in `notes`.
+capability: B1
+candidates:
+  # ---------------------------------------------------------------- face-only baseline
+  - id: largest-face-s3fd
+    worker: b1_asd
+    url: https://github.com/TaoRuijie/TalkNet-ASD
+    env: b1_asd
+    kind: method
+    params: {asd: none, detector: s3fd, det_scale: 0.25, det_conf: 0.9, fps: 25}
+    languages: "*"
+    license: MIT (TalkNet-ASD code incl. S3FD port)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2, disk_gb: 1, tools: [ffmpeg]}
+    baseline: true
+    sources: [research:B1:6]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      OpenDub has no B1 today (lip sync runs on whatever face is on screen); this face-only
+      heuristic — S3FD detection, shot-cut-aware IoU tracks, the largest face "speaks" — is that
+      behaviour made explicit, and the floor every ASD head must beat. VRAM estimated.
+
+  # ---------------------------------------------------------------- ASD heads (local)
+  - id: loconet-talknce
+    worker: b1_asd
+    url: https://github.com/kaistmm/TalkNCE
+    params_b: 0.035
+    env: b1_asd
+    params: {asd: loconet, detector: s3fd, repo: ~/.opendub/src/TalkNCE,
+             weights: talknce_ava_pretrained.model, fps: 25}
+    languages: "*"
+    license: MIT (TalkNCE repo + checkpoint); LoCoNet upstream has no LICENSE file
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 4, disk_gb: 2, tools: [ffmpeg]}
+    sources: [research:B1:2, compute-tiers:B1:spark]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      kaistmm/TalkNCE @4295996 (LoCoNet trained with TalkNCE, 95.5 AVA val mAP). The repo has no
+      inference script for arbitrary video; the worker's LoCoNetHead re-implements val_loader +
+      evaluate_network (3 speaker slots, 200-frame clips, VGGish log-mel) and stubs the missing
+      utils.distributed module — first run should be checked against AVA val. ~3 GB per the
+      compute-tiers card; 4 GB budgeted.
+  - id: lr-asd
+    worker: b1_asd
+    url: https://github.com/Junhua-Liao/LR-ASD
+    params_b: 0.001
+    env: b1_asd
+    params: {asd: lrasd, detector: s3fd, repo: ~/.opendub/src/LR-ASD,
+             weights: weight/finetuning_TalkSet.model, fps: 25}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2, disk_gb: 1, tools: [ffmpeg]}
+    sources: [research:B1:4, compute-tiers:B1:spark-alt]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Junhua-Liao/LR-ASD @1b6dcd2 (IJCV 2025; ~1M params, 94.45 AVA mAP). Weights in-repo; the
+      TalkSet fine-tune is the in-the-wild choice (pretrain_AVA.model also ships).
+  - id: lr-asd-ava
+    worker: b1_asd
+    url: https://github.com/Junhua-Liao/LR-ASD
+    params_b: 0.001
+    env: b1_asd
+    params: {asd: lrasd, detector: s3fd, repo: ~/.opendub/src/LR-ASD,
+             weights: weight/pretrain_AVA.model, fps: 25}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2, disk_gb: 1, tools: [ffmpeg]}
+    sources: [research:B1:4]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: LR-ASD's AVA-trained checkpoint (vs the TalkSet fine-tune above).
+  - id: talknet-asd
+    worker: b1_asd
+    url: https://github.com/TaoRuijie/TalkNet-ASD
+    env: b1_asd
+    params: {asd: talknet, detector: s3fd, repo: ~/.opendub/src/TalkNet-ASD,
+             weights: pretrain_TalkSet.model, fps: 25}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 3, disk_gb: 1, tools: [ffmpeg]}
+    sources: [research:B1:5]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      TaoRuijie/TalkNet-ASD @6d68214, the reference end-to-end demo (92.3 AVA val mAP). Same
+      front-end as the others, so differences are the ASD head.
+  - id: lr-asd-yunet
+    worker: b1_asd
+    url: https://github.com/Junhua-Liao/LR-ASD
+    params_b: 0.001
+    env: b1_asd
+    params: {asd: lrasd, detector: yunet,
+             yunet_model: ~/.opendub/weights/yunet/face_detection_yunet_2023mar.onnx,
+             repo: ~/.opendub/src/LR-ASD, weights: weight/finetuning_TalkSet.model, fps: 25}
+    languages: "*"
+    license: MIT (LR-ASD, YuNet)
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2, disk_gb: 1, tools: [ffmpeg]}
+    sources: [research:B1:6]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Front-end variant: OpenCV YuNet (MIT, opencv_zoo) instead of S3FD — the permissive detector
+      option, since SCRFD's weights are non-commercial. Download the ONNX to yunet_model first.
+  - id: lr-asd-scrfd
+    worker: b1_asd
+    url: https://github.com/Junhua-Liao/LR-ASD
+    params_b: 0.001
+    env: b1_asd
+    params: {asd: lrasd, detector: scrfd, repo: ~/.opendub/src/LR-ASD,
+             weights: weight/finetuning_TalkSet.model, fps: 25}
+    languages: "*"
+    license: MIT (LR-ASD); insightface buffalo_l (SCRFD-10GF) weights non-commercial research only
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 2, disk_gb: 1, tools: [ffmpeg]}
+    sources: [research:B1:6, compute-tiers:B1:spark]
+    verified: {license: true, languages: true, vram: false, runs: false}
+    notes: >-
+      Front-end variant with SCRFD-10GF (the research's recommended detector) via insightface
+      FaceAnalysis(buffalo_l, detection only). Needs `uv pip install insightface onnxruntime-gpu`
+      in b1_asd (not in the default recipe). ByteTrack-class association is approximated by the
+      TalkNet IoU tracker with hard cuts.
+
+  # ---------------------------------------------------------------- registered, not runnable
+  - id: gatefusion
+    worker: b1_gatefusion
+    url: https://github.com/Orpheusown/GateFusion
+    env: b1_asd
+    params: {}
+    languages: "*"
+    license: none (repo has no LICENSE)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 12}
+    enabled: false
+    sources: [research:B1:1, compute-tiers:B1:big]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      Code at github.com/Orpheusown/GateFusion but no released checkpoints and no licence (checked
+      2026-09-28); built on Whisper-large-v3 + AV-HuBERT encoders. Enable once weights appear.
+  - id: mused
+    worker: b1_mused
+    url: https://arxiv.org/abs/2404.00861
+    env: b1_asd
+    params: {}
+    languages: "*"
+    license: unknown
+    ship_ok: false
+    enabled: false
+    sources: [research:B1:3]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: MuSED (arXiv 2404.00861) — "code in due course"; no repository found 2026-09-28.
+  - id: c3asd
+    worker: b1_c3asd
+    url: https://github.com/jisoo-o/C3ASD
+    env: b1_asd
+    params: {}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    enabled: false
+    sources: [compute-tiers:B1:big-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      C3ASD (ECCV 2026) code at github.com/jisoo-o/C3ASD (MIT, built on Light-ASD); no released
+      weights found. Would slot into b1_asd like LR-ASD once a checkpoint exists.
+  - id: loconet-talknce-sam31
+    worker: b1_asd
+    url: https://huggingface.co/facebook/sam3.1
+    env: b1_asd
+    params: {asd: loconet, tracker: sam3.1}
+    languages: "*"
+    license: MIT (TalkNCE) + SAM License (facebook/sam3.1)
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 10, api_keys: [HF_TOKEN]}
+    enabled: false
+    sources: [research:B1:7, compute-tiers:B1:spark-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      SAM 3.1 Object Multiplex (HF facebook/sam3.1, gated, custom SAM License) as the tracker
+      instead of IoU chaining (supersedes the research's SAM 2 / Seg2Track note). Tracker
+      integration not written.
+  - id: loconet-talknce-ensemble
+    worker: b1_asd
+    url: https://github.com/kaistmm/TalkNCE
+    env: b1_asd
+    kind: method
+    params: {asd: loconet, multi_crop: true, tracker: sam3.1}
+    languages: "*"
+    license: MIT (TalkNCE) + SAM License
+    ship_ok: false
+    enabled: false
+    sources: [compute-tiers:B1:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      Unconstrained alternate: LoCoNet+TalkNCE over multi-crop/multi-scale inputs with SAM 3.1
+      tracks (~+0.5 mAP for ~5x compute). Needs the SAM tracker above; not written.
+  - id: aws-rekognition-faces
+    worker: b1_rekognition
+    url: https://docs.aws.amazon.com/rekognition/latest/dg/faces.html
+    env: b_api
+    kind: api
+    params: {}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [AWS_ACCESS_KEY_ID]}
+    enabled: false
+    sources: [compute-tiers:B1:api-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      AWS Rekognition / Azure Video Indexer face tracking cover only the tracking half — no
+      speaking decision — so they cannot answer the B1 question alone.
+
+  # ---------------------------------------------------------------- API VLMs
+  - id: gemini-3.1-pro
+    worker: b1_vlm
+    url: https://ai.google.dev/gemini-api/docs/models
+    env: b_api
+    kind: api
+    params: {provider: gemini, model: gemini-3.1-pro-preview, price_in_per_mtok: 2.0,
+             price_out_per_mtok: 12.0, lines_per_request: 12, max_clip_s: 900}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY], tools: [ffmpeg]}
+    sources: [compute-tiers:B1:api]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      Native video+audio input: the whole clip goes in with the line windows. Price: ai.google.dev
+      pricing 2026-09-28, $2/$12 per M tokens (≤200k prompt; $4/$18 above — not modelled).
+      Not frame-accurate per the research.
+  - id: claude-opus-5
+    worker: b1_vlm
+    url: https://docs.claude.com/en/docs/about-claude/models/overview
+    env: b_api
+    kind: api
+    params: {provider: anthropic, model: claude-opus-5, price_in_per_mtok: 5.0,
+             price_out_per_mtok: 25.0, effort: medium, frames_per_line: 2, max_tokens: 16000}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [ANTHROPIC_API_KEY], tools: [ffmpeg]}
+    sources: [compute-tiers:B1:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      Frames only (the Messages API takes images, not video/audio): stills across each line plus
+      its text — lip reading from stills, expected weak. $5/$25 per M tokens (Anthropic pricing,
+      2026-09-28). No refusal fallback, so the scored model is always Opus 5.
+  - id: gpt-6-sol
+    worker: b1_vlm
+    url: https://developers.openai.com/api/docs/models
+    env: b_api
+    kind: api
+    params: {provider: openai, model: gpt-6-sol, price_in_per_mtok: 2.0, price_out_per_mtok: 10.0,
+             frames_per_line: 2, image_detail: high}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [OPENAI_API_KEY], tools: [ffmpeg]}
+    sources: [orchestrator:gpt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: >-
+      Not named in the artifacts for B1; added as the GPT counterpart of the frames-only API
+      baseline. $2/$10 per M tokens (developers.openai.com pricing, 2026-09-28). Vision support
+      of gpt-6-sol assumed from the family, not checked on a model card.

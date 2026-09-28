@@ -1,0 +1,35 @@
+name: f4_clear
+python: ~/.opendub/envs/f4_clear/bin/python
+description: CLEAR mask-free video subtitle removal (silent-commit/CLEAR @ 3cd19a2c, Apache-2.0) on DiffSynth-Studio
+  + Wan2.1-Fun-V1.1-1.3B-Control. Pillow is included for the render step (Raqm needs libraqm/fribidi at
+  runtime, bundled in Pillow wheels).
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.11
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+  - test -d {home}/.opendub/src/CLEAR || git clone https://github.com/silent-commit/CLEAR {home}/.opendub/src/CLEAR
+  - git -C {home}/.opendub/src/CLEAR checkout 3cd19a2cfbc7
+  - grep -v -i -E '^(torch|torchvision|torchaudio)' {home}/.opendub/src/CLEAR/requirements.txt > {home}/.opendub/src/CLEAR/requirements.arena.txt
+    || true
+  - uv pip install --python {python} -r {home}/.opendub/src/CLEAR/requirements.arena.txt pillow numpy
+    huggingface-hub
+  - uv pip install --python {python} git+https://github.com/modelscope/DiffSynth-Studio.git
+  - uvx --from huggingface_hub hf download alibaba-pai/Wan2.1-Fun-V1.1-1.3B-Control --local-dir {home}/.opendub/weights/Wan2.1-Fun-V1.1-1.3B-Control
+  - uvx --from huggingface_hub hf download charlesw09/CLEAR-mask-free-video-subtitle-removal CLEAR-mask-free-subtitle-removal.pt
+    --local-dir {home}/.opendub/src/CLEAR/checkpoints
+  aarch64:
+  - uv venv {prefix} --python 3.11
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+  - test -d {home}/.opendub/src/CLEAR || git clone https://github.com/silent-commit/CLEAR {home}/.opendub/src/CLEAR
+  - git -C {home}/.opendub/src/CLEAR checkout 3cd19a2cfbc7
+  - grep -v -i -E '^(torch|torchvision|torchaudio)' {home}/.opendub/src/CLEAR/requirements.txt > {home}/.opendub/src/CLEAR/requirements.arena.txt
+    || true
+  - uv pip install --python {python} -r {home}/.opendub/src/CLEAR/requirements.arena.txt pillow numpy
+    huggingface-hub
+  - uv pip install --python {python} git+https://github.com/modelscope/DiffSynth-Studio.git
+  - uvx --from huggingface_hub hf download alibaba-pai/Wan2.1-Fun-V1.1-1.3B-Control --local-dir {home}/.opendub/weights/Wan2.1-Fun-V1.1-1.3B-Control
+  - uvx --from huggingface_hub hf download charlesw09/CLEAR-mask-free-video-subtitle-removal CLEAR-mask-free-subtitle-removal.pt
+    --local-dir {home}/.opendub/src/CLEAR/checkpoints
+check: import torch, diffsynth, PIL; assert torch.cuda.is_available()
+notes: DiffSynth-Studio is installed from git HEAD (pin a commit after the first run). The README's download
+  line names Wan2.1-T2V-1.3B; the code needs the Fun-Control model (research pass).

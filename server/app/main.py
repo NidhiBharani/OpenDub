@@ -1,6 +1,7 @@
 """OpenDub server — app factory. Serves the API under /api and the built web UI (web/dist) at /."""
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,8 +9,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from . import config
-from .api import capabilities, events, jobs, media, projects, providers, segments, versions
+from .api import (
+    capabilities,
+    events,
+    jobs,
+    media,
+    projects,
+    providers,
+    segments,
+    system,
+    versions,
+)
 from .jobs import engine
+from .providers._runtime import manager as models
 from .providers.base import load_all
 
 VERSION = "0.1.0"
@@ -21,6 +33,8 @@ async def lifespan(app: FastAPI):
     engine.start()
     yield
     await engine.shutdown()
+    # Free every model (and ask Ollama to drop LLMs we used) before the process goes away.
+    await asyncio.to_thread(models.unload_all)
 
 
 def create_app() -> FastAPI:
@@ -39,7 +53,7 @@ def create_app() -> FastAPI:
         return {"ok": True, "version": VERSION}
 
     for router in (projects.router, segments.router, jobs.router, providers.router,
-                   capabilities.router, versions.router,
+                   capabilities.router, versions.router, system.router,
                    media.router, events.router):
         app.include_router(router, prefix="/api")
 

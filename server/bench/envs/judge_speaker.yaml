@@ -1,0 +1,24 @@
+name: judge_speaker
+python: ~/.opendub/envs/judge_speaker/bin/python
+description: >-
+  Speaker-similarity judges (workers/judge_speaker_sim.py): WavLM-SV (transformers), ERes2NetV2
+  (3D-Speaker repo + ModelScope weights), ReDimNet2 (torch.hub PalabraAI/redimnet2, pinned by
+  commit in the worker), ECAPA (speechbrain), WeSpeaker ResNet293-LM, Resemblyzer. Pure PyTorch,
+  no flash-attn / custom kernels, so the same recipe works on aarch64 (Spark) with cu130 torch.
+setup:
+  x86_64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+    - uv pip install --python {python} "transformers>=4.46,<5" speechbrain==1.0.3 "modelscope>=1.20" soundfile numpy huggingface_hub resemblyzer==0.1.4 "wespeaker @ git+https://github.com/wenet-e2e/wespeaker.git"
+    - test -d {home}/.opendub/src/3D-Speaker || git clone https://github.com/modelscope/3D-Speaker {home}/.opendub/src/3D-Speaker
+    - git -C {home}/.opendub/src/3D-Speaker checkout 065629c313eaf1a01c65c640c46d77e61e9607b4
+  aarch64:
+    - uv venv {prefix} --python 3.12
+    - uv pip install --python {python} torch==2.11.0 torchaudio==2.11.0 --index-url https://download.pytorch.org/whl/cu130
+    - uv pip install --python {python} "transformers>=4.46,<5" speechbrain==1.0.3 "modelscope>=1.20" soundfile numpy huggingface_hub resemblyzer==0.1.4 "wespeaker @ git+https://github.com/wenet-e2e/wespeaker.git"
+    - test -d {home}/.opendub/src/3D-Speaker || git clone https://github.com/modelscope/3D-Speaker {home}/.opendub/src/3D-Speaker
+    - git -C {home}/.opendub/src/3D-Speaker checkout 065629c313eaf1a01c65c640c46d77e61e9607b4
+check: "import torch, transformers, speechbrain, modelscope, soundfile; assert torch.cuda.is_available()"
+notes: >-
+  resemblyzer pulls webrtcvad (needs a C compiler). wespeaker is installed from git (not on PyPI);
+  pin a commit once verified. ReDimNet2 / ECAPA / WavLM weights download on first use.

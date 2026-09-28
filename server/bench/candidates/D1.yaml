@@ -1,0 +1,508 @@
+# D1 — zero-shot cross-lingual voice cloning.
+# Rows from both research artifacts: data/research/model-research.html ledger (research:D1:<rank>)
+# and data/research/compute-tiers.html picks (compute-tiers:D1:spark|big|api, alternates *-alt),
+# docs/model-candidates-by-compute.md and plan §7 (plan:§7:D1).
+# requires places each row: vram ≤ 15 → Thalassa (x86_64 16 GB) and Spark; vram > 16 → Spark only;
+# arch [x86_64] where deps have no aarch64 wheels; kind api → API keys. d_unwired = registered only.
+capability: D1
+candidates:
+- id: f5-v1-base
+  worker: d1_f5_tts
+  env: server
+  kind: local
+  params:
+    model: F5TTS_v1_Base
+    languages: [en, zh]
+  languages: [en, zh]
+  license: CC-BY-NC-4.0
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 3, disk_gb: 2}
+  sources: ['plan:§7:D1']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: Stock F5-TTS v1 Base (en/zh vocab); single take. The app provider adds Whisper verification +
+    speed retries (see the best-of-N row).
+  url: https://huggingface.co/SWivid/F5-TTS
+  params_b: 0.34
+  baseline: true
+- id: f5-hindi-small
+  worker: d1_f5_tts
+  env: server
+  kind: local
+  params:
+    model: F5TTS_Small
+    ckpt_file: hf://SPRINGLab/F5-Hindi-24KHz/model_2500000.safetensors
+    vocab_file: hf://SPRINGLab/F5-Hindi-24KHz/vocab.txt
+    languages: [hi]
+  languages: [hi]
+  license: CC-BY-4.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 2, disk_gb: 1}
+  sources: ['plan:§7:D1']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'SPRINGLab F5-Hindi-24KHz (F5TTS_Small config, as in the app provider''s placeholder). Non-Devanagari
+    reference transcripts are outside its vocab: see the translit row.'
+  url: https://huggingface.co/SPRINGLab/F5-Hindi-24KHz
+  params_b: 0.16
+  baseline: true
+- id: f5-hindi-small-translit
+  worker: d1_f5_tts
+  env: server
+  kind: local
+  params:
+    model: F5TTS_Small
+    ckpt_file: hf://SPRINGLab/F5-Hindi-24KHz/model_2500000.safetensors
+    vocab_file: hf://SPRINGLab/F5-Hindi-24KHz/vocab.txt
+    languages: [hi]
+    ref_text_mode: translit
+    translit_base_url: http://localhost:11434/v1
+    translit_model: gemma3:12b
+  languages: [hi]
+  license: CC-BY-4.0
+  ship_ok: true
+  requires:
+    gpu: true
+    vram_gb: 2
+    disk_gb: 1
+    tools: [ollama]
+  sources: ['plan:§7:D1']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'SPRINGLab F5-Hindi-24KHz (F5TTS_Small config, as in the app provider''s placeholder). Non-Devanagari
+    reference transcripts are outside its vocab: see the translit row. Reference transcript spelled in
+    Devanagari by a local LLM (Ollama gemma3:12b), the provider''s translit option; needs `ollama` running.'
+  url: https://huggingface.co/SPRINGLab/F5-Hindi-24KHz
+  params_b: 0.16
+- id: f5-v1-bestof5
+  worker: d3_best_of_n
+  env: server
+  kind: method
+  params:
+    inner:
+      worker: d1_f5_tts
+      params:
+        model: F5TTS_v1_Base
+        languages: [en, zh]
+    n: 5
+    verifier: {env: server, model: large-v3-turbo, compute_type: float16}
+    accept_cer: 0.1
+    window: 0.1
+    early_stop: false
+    keep_takes: true
+  languages: [en, zh]
+  license: CC-BY-NC-4.0
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 5, disk_gb: 2}
+  sources: ['plan:§7:D1']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Method: N takes (item seed + k) re-ranked by a large-v3-turbo verifier (not the reporting large-v3/Qwen3/MMS
+    panel) + duration fit. VRAM = inner + ~2 GB verifier. Closest arena analogue of the app''s verified
+    F5 (5 takes, Whisper re-read).'
+  url: https://huggingface.co/SWivid/F5-TTS
+  params_b: 0.34
+- id: qwen3-tts-1.7b-base
+  worker: d1_qwen3_tts
+  env: d1_qwen3_tts
+  kind: local
+  params: {model: Qwen/Qwen3-TTS-12Hz-1.7B-Base, revision: fd4b254389122332181a7c3db7f27e918eec64e3, mode: clone,
+    dtype: bfloat16, attn: sdpa}
+  languages: [zh, en, ja, ko, de, fr, ru, pt, es, it]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 6.5, disk_gb: 5.25}
+  sources: ['research:D1:1', 'compute-tiers:D1:spark-alt']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'No Hindi. SDPA attention (no FA3 on sm_120; FA2 optional). VRAM estimated from params (compute-tiers:
+    ~6 GB bf16 for 1.7B). Research primary (Sept 3); the only D1 model with published GB10 numbers.'
+  url: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base
+  params_b: 1.7
+- id: qwen3-tts-0.6b-base
+  worker: d1_qwen3_tts
+  env: d1_qwen3_tts
+  kind: local
+  params: {model: Qwen/Qwen3-TTS-12Hz-0.6B-Base, revision: 5d83992436eae1d760afd27aff78a71d676296fc, mode: clone,
+    dtype: bfloat16, attn: sdpa}
+  languages: [zh, en, ja, ko, de, fr, ru, pt, es, it]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 3.5, disk_gb: 2.5}
+  sources: ['research:D1:1']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'No Hindi. SDPA attention (no FA3 on sm_120; FA2 optional). VRAM estimated from params (compute-tiers:
+    ~6 GB bf16 for 1.7B).'
+  url: https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base
+  params_b: 0.6
+- id: voxcpm2
+  worker: d1_voxcpm
+  env: d1_voxcpm
+  kind: local
+  params: {model: openbmb/VoxCPM2, revision: 32279effe8c19989596f05d353d1447f51d9e915, mode: clone, cfg_value: 2.0,
+    inference_timesteps: 10}
+  languages: [ar, my, zh, da, nl, en, fi, fr, de, el, he, hi, id, it, ja, km, ko, lo, ms, 'no', pl, pt,
+    ru, es, sw, sv, tl, th, tr, vi]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 9, disk_gb: 6}
+  sources: ['research:D1:2', 'compute-tiers:D1:spark-alt']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: ~8 GB on a 4090 per the README; 48 kHz output; no language argument (the model reads the script).
+    prompt_wav + prompt_text + reference_wav (README max-similarity setting).
+  url: https://huggingface.co/openbmb/VoxCPM2
+  params_b: 2.0
+- id: fish-s2-pro
+  worker: d1_fish_speech
+  env: d1_fish_speech
+  kind: local
+  params: {checkpoint_dir: checkpoints/s2-pro, temperature: 0.7, top_p: 0.7}
+  languages: [zh, en, ja, ko, es, pt, ar, ru, fr, de, sv, it, tr, 'no', nl, cy, eu, ca, da, gl, ta, hu,
+    fi, pl, et, hi, la, ur, th, vi, jw, bn, yo, sl, cs, sw, nn, he, ms, uk, id, kk, bg, lv, my, tl, sk,
+    ne, fa, af, el, bo, hr, ro, sn, mi, yi, am, be, km, is, az, sd, br, sq, ps, mn, ht, ml, sr, sa, te,
+    ka, bs, pa, lt, kn, si, hy, mr, as, gu, fo]
+  license: Fish-Audio-Research-License (NC)
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 24, disk_gb: 12}
+  sources: ['research:D1:3', 'compute-tiers:D1:spark']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'fishaudio/s2-pro @1de9996. Docs recommend ≥24 GB → Spark. SGLang fast path unverified on aarch64/sm_121:
+    plain PyTorch api_server. Compute-tiers Spark pick.'
+  url: https://huggingface.co/fishaudio/s2-pro
+  params_b: 4.56
+- id: fish-s2-pro-bestof32
+  worker: d3_best_of_n
+  env: d1_fish_speech
+  kind: method
+  params:
+    inner:
+      worker: d1_fish_speech
+      params: {checkpoint_dir: checkpoints/s2-pro}
+    n: 32
+    verifier: {env: server, model: large-v3-turbo, compute_type: float16}
+    accept_cer: 0.1
+    window: 0.1
+    early_stop: false
+    keep_takes: true
+  languages: [zh, en, ja, ko, es, pt, ar, ru, fr, de, sv, it, tr, 'no', nl, cy, eu, ca, da, gl, ta, hu,
+    fi, pl, et, hi, la, ur, th, vi, jw, bn, yo, sl, cs, sw, nn, he, ms, uk, id, kk, bg, lv, my, tl, sk,
+    ne, fa, af, el, bo, hr, ro, sn, mi, yi, am, be, km, is, az, sd, br, sq, ps, mn, ht, ml, sr, sa, te,
+    ka, bs, pa, lt, kn, si, hy, mr, as, gu, fo]
+  license: Fish-Audio-Research-License (NC)
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 27, disk_gb: 12}
+  sources: ['compute-tiers:D1:big']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'Method: N takes (item seed + k) re-ranked by a large-v3-turbo verifier (not the reporting large-v3/Qwen3/MMS
+    panel) + duration fit. VRAM = inner + ~2 GB verifier. Compute-tiers ''Unconstrained'' pick (S2 at
+    N=32 with cross-family re-ranking).'
+  url: https://huggingface.co/fishaudio/s2-pro
+  params_b: 4.56
+- id: confucius4-tts
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'Weights reported released (CC BY 4.0, NetEase Youdao, 2026-08) but no inference API was
+      verified; add a worker once the repo is checked.'}
+  languages: '*'
+  license: CC-BY-4.0
+  ship_ok: true
+  requires: {}
+  enabled: false
+  sources: ['research:D1:4']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Weights reported released (CC BY 4.0, NetEase Youdao, 2026-08) but no inference API was verified;
+    add a worker once the repo is checked.
+  url: https://github.com/netease-youdao
+- id: indextts-2.5
+  worker: d1_indextts
+  env: d1_indextts
+  kind: local
+  params: {version: '2.5'}
+  languages: [zh, en, ja, es, ar]
+  license: bilibili-model-license
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 8, disk_gb: 12}
+  sources: ['research:D1:5']
+  verified: {license: false, languages: true, vram: false, runs: false}
+  notes: 'IndexTTS 2.5 (2026-08-10, 0.8B): lang ZH/EN/JA/ES/AR, no Hindi. bilibili Model Use License:
+    commercial terms need reading → ship_ok false. VRAM estimated (T2S + S2M + BigVGAN + w2v-BERT + Qwen
+    emo).'
+  url: https://huggingface.co/IndexTeam/IndexTTS-2.5
+  params_b: 0.8
+- id: dots-tts
+  worker: d_unwired
+  env: server
+  kind: local
+  params: {why: 'dots.tts (2B, Apache-2.0, evaluate-only in the research ledger): repo and inference API
+      not verified; no worker yet.'}
+  languages: '*'
+  license: Apache-2.0
+  ship_ok: true
+  requires: {}
+  enabled: false
+  sources: ['research:D1:6']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: 'dots.tts (2B, Apache-2.0, evaluate-only in the research ledger): repo and inference API not
+    verified; no worker yet.'
+  url: https://huggingface.co/models?search=dots.tts
+  params_b: 2.0
+- id: minimax-speech-2.8-hd
+  worker: d1_minimax
+  env: server
+  kind: api
+  params: {model: speech-2.8-hd, mode: clone}
+  languages: [en, hi, ja, zh, ko, es, fr, de, pt, it, ru, ar]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [MINIMAX_API_KEY]
+  sources: ['research:D1:7', 'compute-tiers:D1:api-alt']
+  verified: {license: false, languages: true, vram: false, runs: false}
+  notes: T2A fields verified on platform.minimax.io; clone endpoints and 2.8 prices not re-verified.
+  url: https://platform.minimax.io/docs/api-reference/speech-t2a-http
+- id: minimax-speech-2.8-turbo
+  worker: d1_minimax
+  env: server
+  kind: api
+  params: {model: speech-2.8-turbo, mode: clone}
+  languages: [en, hi, ja, zh, ko, es, fr, de, pt, it, ru, ar]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [MINIMAX_API_KEY]
+  sources: ['research:D1:7']
+  verified: {license: false, languages: true, vram: false, runs: false}
+  notes: T2A fields verified on platform.minimax.io; clone endpoints and 2.8 prices not re-verified.
+  url: https://platform.minimax.io/docs/api-reference/speech-t2a-http
+- id: elevenlabs-v3
+  worker: d1_elevenlabs
+  env: server
+  kind: api
+  params: {model: eleven_v3, mode: clone, output_format: pcm_24000}
+  languages: [en, hi, ja, zh, ko, de, fr, es, it, pt, ru, ar, ta, te, bn, pl, nl, tr, sv, id, fil, uk,
+    vi, cs, ro, el, hu]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [ELEVENLABS_API_KEY]
+  sources: ['research:D1:8', 'compute-tiers:D1:api-alt']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Mirrors app/providers/tts/elevenlabs.py; IVC voices are deleted at job end. Prices in _cost_usd
+    are estimates.
+  url: https://elevenlabs.io/docs/api-reference/text-to-speech/convert
+- id: elevenlabs-multilingual-v2
+  worker: d1_elevenlabs
+  env: server
+  kind: api
+  params: {model: eleven_multilingual_v2, mode: clone, output_format: pcm_24000}
+  languages: [en, ja, zh, de, hi, fr, ko, pt, it, es, id, nl, tr, fil, pl, sv, bg, ro, ar, cs, el, fi,
+    hr, ms, sk, da, ta, uk, ru]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [ELEVENLABS_API_KEY]
+  sources: ['plan:§7:D1']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Mirrors app/providers/tts/elevenlabs.py; IVC voices are deleted at job end. Prices in _cost_usd
+    are estimates. Today's tts.elevenlabs default model.
+  url: https://elevenlabs.io/docs/api-reference/text-to-speech/convert
+- id: moss-tts-v1.5-8b
+  worker: d1_moss_tts
+  env: d1_moss_tts
+  kind: local
+  params:
+    model: OpenMOSS-Team/MOSS-TTS-v1.5
+    revision: cdd3b911b1585e3f2dbc7775ef10f9926f58850a
+    mode: clone
+    dtype: bfloat16
+    attn: sdpa
+    languages: &id001 [zh, yue, en, ar, cs, da, de, nl, es, fr, fi, el, he, hi, hu, ja, it, ko, mk, ms,
+      ru, fa, pl, pt, sv, ro, sw, tl, th, tr, vi]
+  languages: *id001
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 20, disk_gb: 19.678}
+  sources: ['compute-tiers:D1:big-alt']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 8.49B params (HF safetensors total); VRAM = bf16 weights + codec, estimated. ~17 GB bf16 → Spark.
+    Loses to smaller siblings on SIM per the artifact.
+  url: https://huggingface.co/OpenMOSS-Team/MOSS-TTS-v1.5
+  params_b: 8.49
+- id: moss-tts-local-v1.5-4b
+  worker: d1_moss_tts
+  env: d1_moss_tts
+  kind: local
+  params:
+    model: OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5
+    revision: be7766a6735b98bd793f7c79fb720b4d0f5d13b8
+    mode: clone
+    dtype: bfloat16
+    attn: sdpa
+    languages: &id002 [zh, yue, en, ar, cs, da, de, nl, es, fr, fi, el, he, hi, hu, ja, it, ko, mk, ms,
+      ru, fa, pl, pt, sv, ro, sw, tl, th, tr, vi]
+  languages: *id002
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 11, disk_gb: 11.01}
+  sources: ['compute-tiers:D3:spark-alt']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 4.55B params (HF safetensors total); VRAM = bf16 weights + codec, estimated.
+  url: https://huggingface.co/OpenMOSS-Team/MOSS-TTS-Local-Transformer-v1.5
+  params_b: 4.55
+- id: higgs-audio-v3-4b
+  worker: d1_higgs_audio
+  env: d1_higgs_audio
+  kind: local
+  params: {model: bosonai/higgs-tts-3-4b, revision: 239f63fb7b02b1aa085f98d9efae5e35cc5523e8, server: vllm-omni,
+    gpu_memory_utilization: 0.85}
+  languages: [en, hi, ja, zh, ko, de, fr, es, it, pt, ru, ar, ta, te, bn]
+  license: Boson Higgs TTS 3 Research and Non-Commercial License
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 24, disk_gb: 12}
+  sources: ['compute-tiers:D1:big-alt']
+  verified: {license: true, languages: false, vram: false, runs: false}
+  notes: '100+ languages per the card (listed: the in-scope subset). Served by vLLM-Omni (the card cites
+    ≥24 GB reported, 40 GB for SGLang-Omni) → Spark. Request fields from the repo''s AGENTS.md; not run
+    yet.'
+  url: https://huggingface.co/bosonai/higgs-tts-3-4b
+  params_b: 4.0
+- id: chatterbox-multilingual
+  worker: d1_chatterbox
+  env: d1_chatterbox
+  kind: local
+  params: {mode: tts, t3_model: v3, exaggeration: 0.5, cfg_weight: 0.5}
+  languages: [ar, da, de, el, en, es, fi, fr, he, hi, it, ja, ko, ms, nl, 'no', pl, pt, ru, sv, sw, tr,
+    zh]
+  license: MIT
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 5, disk_gb: 4}
+  sources: ['plan:§7:D1', 'research:D4:3']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: chatterbox-tts 0.1.7 installed --no-deps over torch 2.11 (it pins torch 2.6, no sm_120 kernels).
+  url: https://github.com/resemble-ai/chatterbox
+  params_b: 0.5
+- id: cosyvoice3-0.5b
+  worker: d2_cosyvoice3
+  env: d2_cosyvoice3
+  kind: local
+  params: {model_dir: pretrained_models/Fun-CosyVoice3-0.5B, mode: auto}
+  languages: [zh, en, ja, ko, de, es, fr, it, ru]
+  license: Apache-2.0
+  ship_ok: true
+  requires: {gpu: true, vram_gb: 5, disk_gb: 4}
+  sources: ['research:D2:6']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: Cross-lingual path for foreign references, zero-shot for same-language; ja text converted to
+    katakana (pyopenjtalk) as the example requires. No Hindi.
+  url: https://huggingface.co/FunAudioLLM/Fun-CosyVoice3-0.5B-2512
+  params_b: 0.5
+- id: indicf5
+  worker: d4_indicf5
+  env: d4_indicf5
+  kind: local
+  params: {model: ai4bharat/IndicF5, revision: ba85abedf18dc479a447eaa0eccbd76ab78a47d5}
+  languages: [as, bn, gu, hi, kn, ml, mr, or, pa, ta, te]
+  license: MIT
+  ship_ok: true
+  requires:
+    gpu: true
+    vram_gb: 3
+    disk_gb: 2
+    api_keys: [HF_TOKEN]
+  sources: ['research:D4:2']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: Gated repo (HF_TOKEN).
+  url: https://huggingface.co/ai4bharat/IndicF5
+  params_b: 0.4
+- id: omnivoice
+  worker: d4_omnivoice
+  env: d4_omnivoice
+  kind: local
+  params: {model: k2-fsa/OmniVoice, revision: c5fdb5ccb189668d56333f77ba2629f4cd7535f4, mode: clone, num_step: 32}
+  languages: '*'
+  license: code Apache-2.0; weights CC-BY-NC
+  ship_ok: false
+  requires: {gpu: true, vram_gb: 3, disk_gb: 2}
+  sources: ['research:D4:6']
+  verified: {license: false, languages: true, vram: false, runs: false}
+  notes: 600+ languages per the card; language inferred from text (no documented language arg).
+  url: https://huggingface.co/k2-fsa/OmniVoice
+  params_b: 0.61
+- id: step-audio-editx
+  worker: d2_step_audio_editx
+  env: d2_step_audio_editx
+  kind: local
+  params: {mode: clone}
+  languages: [zh, en, ja, ko]
+  license: Apache-2.0
+  ship_ok: true
+  requires:
+    gpu: true
+    vram_gb: 15
+    disk_gb: 12
+    arch: [x86_64]
+  sources: ['research:D2:2']
+  verified: {license: true, languages: true, vram: false, runs: false}
+  notes: 'x86_64 only (onnxruntime-gpu/deepspeed deps). 12–16 GB: tight on Thalassa.'
+  url: https://huggingface.co/stepfun-ai/Step-Audio-EditX
+  params_b: 3.0
+- id: qwen-audio-3.0-tts-plus
+  worker: d1_dashscope
+  env: server
+  kind: api
+  params: {backend: dashscope, mode: clone, model: qwen-audio-3.0-tts-plus, enroll_target_model: qwen-audio-3.0-tts-plus}
+  languages: [zh, en, ja, ko, de, fr, ru, pt, es, it]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [DASHSCOPE_API_KEY]
+  sources: ['compute-tiers:D1:api']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Compute-tiers API pick. DashScope model id and voice-enrollment target are unverified (OpenRouter
+    exposes it without cloning) → disabled until checked in the console.
+  url: https://openrouter.ai/qwen/qwen-audio-3.0-tts-plus
+  enabled: false
+- id: cartesia-sonic-3.6
+  worker: d1_cartesia
+  env: server
+  kind: api
+  params: {model: sonic-3.6-2026-08-27, mode: clone}
+  languages: [en, hi, ja, zh, ko, de, fr, es, it, pt, ru, ar, ta, te, bn]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [CARTESIA_API_KEY]
+  sources: ['compute-tiers:D4:api']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Sonic 3.6 (44 languages, $49/M chars per Cartesia, 2026-08). Clone endpoint not re-verified.
+  url: https://docs.cartesia.ai/build-with-cartesia/tts-models/latest
+- id: fish-audio-api-s2.1-pro
+  worker: d1_fish_api
+  env: server
+  kind: api
+  params: {model: s2.1-pro}
+  languages: [zh, en, ja, ko, es, pt, ar, ru, fr, de, sv, it, tr, 'no', nl, cy, eu, ca, da, gl, ta, hu,
+    fi, pl, et, hi, la, ur, th, vi, jw, bn, yo, sl, cs, sw, nn, he, ms, uk, id, kk, bg, lv, my, tl, sk,
+    ne, fa, af, el, bo, hr, ro, sn, mi, yi, am, be, km, is, az, sd, br, sq, ps, mn, ht, ml, sr, sa, te,
+    ka, bs, pa, lt, kn, si, hy, mr, as, gu, fo]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [FISH_AUDIO_API_KEY]
+  sources: ['research:D1:3']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Inline references are msgpack-only (docs.fish.audio); price not re-verified.
+  url: https://docs.fish.audio/api-reference/endpoint/openapi-v1/text-to-speech
+- id: resemble-clone
+  worker: d1_resemble
+  env: server
+  kind: api
+  params:
+    voices: {}
+  languages: [en]
+  license: proprietary API
+  ship_ok: true
+  requires:
+    api_keys: [RESEMBLE_API_KEY]
+  sources: ['task:api-list']
+  verified: {license: false, languages: false, vram: false, runs: false}
+  notes: Per-item instant cloning over the API is not wired (rapid clones are made in the Resemble app);
+    disabled.
+  url: https://docs.resemble.ai
+  enabled: false

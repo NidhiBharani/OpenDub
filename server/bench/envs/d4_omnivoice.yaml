@@ -1,0 +1,13 @@
+name: d4_omnivoice
+python: ~/.opendub/envs/d4_omnivoice/bin/python
+description: "OmniVoice (k2-fsa) via omnivoice 0.2.1 (transformers ≥5.3)"
+setup:
+  x86_64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu128 torch==2.11.0 torchaudio==2.11.0"
+    - "uv pip install --python {python} omnivoice==0.2.1"
+  aarch64:
+    - "uv venv {prefix} --python 3.12"
+    - "uv pip install --python {python} --torch-backend cu130 torch==2.11.0 torchaudio==2.11.0"
+    - "uv pip install --python {python} omnivoice==0.2.1"
+check: "import omnivoice, torch; assert torch.cuda.is_available()"

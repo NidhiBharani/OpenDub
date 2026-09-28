@@ -1,0 +1,190 @@
+# G4 — emotion-consistency judge, ranked by SRCC with human emotion labels / EMOS
+# (spec: specs/g4.py). Local judges: workers/judge_emotion.py (env judge_emotion).
+capability: G4
+candidates:
+  - id: hubert-large-superb-er
+    worker: judge_emotion
+    env: judge_emotion
+    kind: local
+    params: {model: hf-classifier, classifier: superb/hubert-large-superb-er}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 1.5}
+    baseline: true
+    url: https://huggingface.co/superb/hubert-large-superb-er
+    params_b: 0.317
+    sources: [app:pipeline/emotion.py]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: What OpenDub uses today (4-class IEMOCAP SER); posterior cosine of take vs source.
+  - id: emotion2vec-plus-large
+    worker: judge_emotion
+    env: judge_emotion
+    kind: local
+    params: {model: emotion2vec, avd: false}
+    languages: "*"
+    license: emotion2vec model licence (see card)
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 2}
+    url: https://huggingface.co/emotion2vec/emotion2vec_plus_large
+    params_b: 0.3
+    sources: [research:G4:2, compute-tiers:G4:spark]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: >-
+      Utterance-embedding cosine. The 2026 "False Resonance" audit found this near chance across
+      a content/language change; ranked here to confirm on our data.
+  - id: emotion2vec-plus-large-posterior
+    worker: judge_emotion
+    env: judge_emotion
+    kind: local
+    params: {model: emotion2vec, avd: false, score: emo_post_sim_emotion2vec}
+    languages: "*"
+    license: emotion2vec model licence (see card)
+    ship_ok: null
+    requires: {gpu: true, vram_gb: 2}
+    url: https://huggingface.co/emotion2vec/emotion2vec_plus_large
+    params_b: 0.3
+    sources: [research:G4:2, compute-tiers:G4:spark]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: The categorical second opinion (9-class posterior cosine) rather than the embedding.
+  - id: odyssey-wavlm-avd
+    worker: judge_emotion
+    env: judge_emotion
+    kind: local
+    params: {model: odyssey-avd}
+    languages: "*"
+    license: MIT
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 2}
+    url: https://huggingface.co/3loi/SER-Odyssey-Baseline-WavLM-Multi-Attributes
+    params_b: 0.317
+    sources: [research:G4:1, compute-tiers:G4:spark]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      Primary pick: arousal/dominance/valence regression (MSP-Podcast); score = −Euclidean A/V/D
+      distance. Output order per card: arousal, dominance, valence (~0..1).
+  - id: audio-flamingo-3-emotion
+    worker: g6_audio_flamingo
+    env: g6_audio_flamingo
+    kind: local
+    params: {model: nvidia/audio-flamingo-3-hf, task: emotion}
+    languages: "*"
+    license: NVIDIA OneWay Noncommercial
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 20, disk_gb: 18}
+    url: https://huggingface.co/nvidia/audio-flamingo-3-hf
+    params_b: 8
+    sources: [research:G4:4, compute-tiers:G4:big-alt]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: >-
+      Best audio-only emotion accuracy of six audited LALM judges (0.68). "Same feeling" 1..5,
+      both orders averaged, clips joined with silence (one audio per request). VRAM estimated.
+  - id: qwen3-omni-30b-a3b-emotion
+    worker: g6_qwen3_omni
+    env: g6_qwen3_omni
+    kind: local
+    params: {model: Qwen/Qwen3-Omni-30B-A3B-Instruct, task: emotion}
+    languages: "*"
+    license: Apache-2.0
+    ship_ok: true
+    requires: {gpu: true, vram_gb: 80, disk_gb: 70}
+    url: https://huggingface.co/Qwen/Qwen3-Omni-30B-A3B-Instruct
+    params_b: 30.5
+    sources: [research:G4:4]
+    verified: {license: true, languages: false, vram: false, runs: false}
+    notes: 'Spark only (BF16). Audit: 0.35 audio-only emotion accuracy (Instruct).'
+  - id: gemini-3.7-flash-emotion
+    worker: g6_gemini
+    env: g6_api
+    kind: api
+    params: {model: gemini-3.7-flash, task: emotion, prices: {in: 0.75, out: 3.75}}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [GEMINI_API_KEY]}
+    url: https://ai.google.dev/gemini-api/docs/models
+    sources: [compute-tiers:G4:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: The VMC2026 organisers' EMOS baseline class; both A/B orders averaged.
+  - id: gpt-audio-1.5-emotion
+    worker: g6_openai
+    env: g6_api
+    kind: api
+    params: {model: gpt-audio-1.5, task: emotion,
+             prices: {text_in: 2.5, audio_in: 32.0, out: 10.0}}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [OPENAI_API_KEY]}
+    url: https://developers.openai.com/api/docs/models/gpt-audio-1.5
+    sources: [compute-tiers:G4:api-alt]
+    verified: {license: true, languages: false, vram: true, runs: false}
+    notes: 'Audit: 0.29 audio-only emotion accuracy; independent-vendor reference.'
+  - id: hume-expression-prosody
+    worker: g4_hume
+    env: g6_api
+    kind: api
+    params: {model: prosody}
+    languages: "*"
+    license: proprietary API
+    ship_ok: true
+    requires: {api_keys: [HUME_API_KEY]}
+    enabled: false
+    url: https://dev.hume.ai/docs/expression-measurement/overview
+    sources: [compute-tiers:G4:api]
+    verified: {license: false, languages: false, vram: true, runs: false}
+    notes: API pick (prosody emotion vectors → cosine); worker not written (API shape unverified).
+  - id: vmc2026-t02-ensemble
+    worker: judge_emotion
+    env: judge_emotion
+    kind: method
+    params: {model: ensemble}
+    languages: "*"
+    license: mixed
+    ship_ok: null
+    enabled: false
+    url: https://arxiv.org/abs/2609.13792
+    sources: [compute-tiers:G4:spark-alt, compute-tiers:G4:big]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: VoiceMOS 2026 T2 winner (EMOS UTT-SRCC 0.758); no released weights.
+  - id: emobox-backbones
+    worker: judge_emotion
+    env: judge_emotion
+    kind: method
+    params: {model: emobox}
+    languages: "*"
+    license: open source (verify)
+    ship_ok: null
+    enabled: false
+    url: https://github.com/emo-box/EmoBox
+    sources: [research:G4:3, compute-tiers:G4:spark-alt, compute-tiers:G4:big-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: A benchmark harness (10 backbones), not a judge; its ensemble is a possible later method.
+  - id: cross-lingual-ser
+    worker: judge_emotion
+    env: judge_emotion
+    kind: local
+    params: {model: cross-lingual-ser}
+    languages: "*"
+    license: varies
+    ship_ok: null
+    enabled: false
+    url: https://arxiv.org/list/eess.AS/recent
+    sources: [research:G4:5]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: Research direction (zero-shot cross-lingual SER, Deep-WCCN); no checkpoint to register.
+  - id: audio-flamingo-next-emotion
+    worker: g6_audio_flamingo
+    env: g6_audio_flamingo
+    kind: local
+    params: {model: nvidia/audio-flamingo-next, task: emotion}
+    languages: "*"
+    license: NVIDIA OneWay Noncommercial
+    ship_ok: false
+    requires: {gpu: true, vram_gb: 20}
+    enabled: false
+    url: https://arxiv.org/abs/2604.10905
+    params_b: 8
+    sources: [compute-tiers:G4:big, compute-tiers:G6:spark-alt]
+    verified: {license: false, languages: false, vram: false, runs: false}
+    notes: HF id and transformers support not verified; enable once the checkpoint is confirmed.

@@ -1,0 +1,23 @@
+name: f2_keep
+python: ~/.opendub/envs/f2_keep/bin/python
+description: KEEP (jnjaby/KEEP @ f382730e; NTU S-Lab 1.0). Upstream diffusers==0.11.0; torch 2.11 here.
+setup:
+  x86_64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu128
+  - test -d {home}/.opendub/src/KEEP || git clone https://github.com/jnjaby/KEEP {home}/.opendub/src/KEEP
+  - git -C {home}/.opendub/src/KEEP checkout f382730e329d
+  - grep -v -i -E '^(torch|torchvision|torchaudio|dlib)' {home}/.opendub/src/KEEP/requirements.txt > {home}/.opendub/src/KEEP/requirements.arena.txt
+  - uv pip install --python {python} -r {home}/.opendub/src/KEEP/requirements.arena.txt
+  - cd {home}/.opendub/src/KEEP && {python} basicsr/setup.py develop || true
+  aarch64:
+  - uv venv {prefix} --python 3.10
+  - uv pip install --python {python} torch==2.11.0 torchvision==0.26.0 --index-url https://download.pytorch.org/whl/cu130
+  - test -d {home}/.opendub/src/KEEP || git clone https://github.com/jnjaby/KEEP {home}/.opendub/src/KEEP
+  - git -C {home}/.opendub/src/KEEP checkout f382730e329d
+  - grep -v -i -E '^(torch|torchvision|torchaudio|dlib)' {home}/.opendub/src/KEEP/requirements.txt > {home}/.opendub/src/KEEP/requirements.arena.txt
+  - uv pip install --python {python} -r {home}/.opendub/src/KEEP/requirements.arena.txt
+  - cd {home}/.opendub/src/KEEP && {python} basicsr/setup.py develop || true
+check: import torch; assert torch.cuda.is_available()
+notes: Weights (KEEP-b76feb75.pth, gmflow, facelib, RealESRGAN) download from the v1.0.0 release on first
+  run. The bundled basicsr may need `python basicsr/setup.py develop` (attempted, non- fatal).
